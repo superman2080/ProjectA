@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9b64260b213e4e14e84340a3983374d9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 322644
+  packageName: CombatGirls_KatanaCharacterPack
+  packageVersion: 1.1
+  assetPath: Assets/CombatGirlsCharacterPack/School_Katana_Girl/Animations/School_Katana_Controller.controller
+  uploadId: 838896
