@@ -52,5 +52,12 @@ namespace PatternSpace
         }
 
         public void ResetBusy() => isBusy = false;
+
+        /// <summary>통과 노드 자동 인식용 — 실제 포인터 이벤트 없이 Down() 상태를 강제한다.</summary>
+        public void ForceDown()
+        {
+            if (!isBusy)
+                Down();
+        }
     }
 }
