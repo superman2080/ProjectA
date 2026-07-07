@@ -420,6 +420,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &334565901
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -571,7 +575,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
@@ -648,6 +652,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &396077966
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -994,6 +1002,58 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &839471554
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 839471556}
+  - component: {fileID: 839471555}
+  m_Layer: 0
+  m_Name: Pool
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &839471555
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 839471554}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba349329f29dd3940b32de0f2394c5ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Pool
+  prefabs:
+    _serializedList:
+    - Key: 1
+      Value: {fileID: 8175177067743443316, guid: c2dd3f3462b866f49b849342fe4055ad, type: 3}
+  initialSizes:
+    _serializedList:
+    - Key: 1
+      Value: 9
+--- !u!4 &839471556
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 839471554}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &858772856
 GameObject:
   m_ObjectHideFlags: 0
@@ -1046,6 +1106,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &858772859
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1240,6 +1304,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1349266778
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1330,6 +1398,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1406144276
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1420,6 +1492,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1515332015
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1499,6 +1575,7 @@ RectTransform:
   - {fileID: 1683529889}
   - {fileID: 334565899}
   - {fileID: 1406144274}
+  - {fileID: 1707306252}
   - {fileID: 1144124593}
   m_Father: {fileID: 373627360}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1534,7 +1611,17 @@ MonoBehaviour:
   perfectWindow: 0.05
   goodWindow: 0.1
   lineFadeDuration: 0.2
-  keyboardInputTimeout: 0.1
+  keyboardInputTimeout: 0.25
+  fallingNodeParent: {fileID: 1707306252}
+  fallSpawnPositionY: 1850
+  fallingNodeColorPalette:
+  - {r: 0.95, g: 0.3, b: 0.3, a: 1}
+  - {r: 0.3, g: 0.65, b: 0.95, a: 1}
+  - {r: 0.4, g: 0.85, b: 0.4, a: 1}
+  - {r: 0.95, g: 0.8, b: 0.25, a: 1}
+  - {r: 0.75, g: 0.45, b: 0.95, a: 1}
+  - {r: 0.95, g: 0.55, b: 0.2, a: 1}
+  debugTestPattern: {fileID: 11400000, guid: 2a409232febb2834ebee72883fbf3941, type: 2}
 --- !u!114 &1565592731
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1637,6 +1724,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1624571022
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1727,6 +1818,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1683529891
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1765,6 +1860,41 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1683529888}
   m_CullTransparentMesh: 1
+--- !u!1 &1707306251
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1707306252}
+  m_Layer: 0
+  m_Name: FallingNodeParent
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1707306252
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1707306251}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1565592729}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &2075055065
 GameObject:
   m_ObjectHideFlags: 0
@@ -1817,6 +1947,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InGame.Point
   index: 0
   handler: {fileID: 0}
+  image: {fileID: 0}
+  perfectColor: {r: 0, g: 0, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &2075055068
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1866,3 +2000,4 @@ SceneRoots:
   - {fileID: 690579360}
   - {fileID: 392694030}
   - {fileID: 170896941}
+  - {fileID: 839471556}
