@@ -15,8 +15,6 @@ namespace PatternSpace
     public class PatternData
     {
         [Range(0, 8)] public int index;
-        [Min(0)] public float inputTime;
-        [Min(0)] public float visibleExposureDuration = 0.5f;
     }
 
     [CreateAssetMenu(fileName = "Pattern", menuName = "Scriptable Objects/Pattern")]
@@ -30,10 +28,13 @@ namespace PatternSpace
         private PatternData nowPattern;
 
         public int ExpectedPointIndex => nowPattern.index;
-        public float ExpectedTime => nowPattern.inputTime;
+        public float ExpectedTime => inputTimes[index];
 
         public int CurrentIndex => index;
         private int index;
+
+        /// <summary>노드별 실제 입력 시각(초, 패턴 시작 기준 상대시간). 곡 재생 시각에 맞춰 <see cref="SetInputTimes"/>로 주입된다.</summary>
+        private float[] inputTimes;
 
         public event Action OnInput;
         public event Action OnExit;
@@ -58,6 +59,22 @@ namespace PatternSpace
                 }
             }
         }
+
+        /// <summary>노드별 실제 입력 시각(패턴 시작 기준 상대시간, 초)을 주입한다. <see cref="Initialize"/> 전에 호출해야 한다.</summary>
+        public void SetInputTimes(IReadOnlyList<float> times)
+        {
+            if (times.Count != patternDatas.Length)
+            {
+                Debug.LogError($"[Pattern] '{name}' 입력 시각 개수({times.Count})가 노드 개수({patternDatas.Length})와 다릅니다.", this);
+                return;
+            }
+
+            inputTimes = new float[times.Count];
+            for (int i = 0; i < times.Count; i++)
+                inputTimes[i] = times[i];
+        }
+
+        public float GetInputTime(int position) => inputTimes[position];
 
         public void Initialize()
         {

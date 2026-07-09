@@ -26,12 +26,14 @@ public class PatternHandler : MonoBehaviour
 #if UNITY_EDITOR
     [Header("Debug (Editor Only)")]
     [SerializeField] private Pattern debugTestPattern;
+    [SerializeField] private float[] debugInputTimes;
+    [SerializeField] private float[] debugExposureDurations;
 
     [ContextMenu("Debug: Set Test Pattern")]
     private void DebugSetTestPattern()
     {
         if (debugTestPattern != null)
-            SetPattern(debugTestPattern);
+            SetPattern(debugTestPattern, debugInputTimes, null, debugExposureDurations);
     }
 #endif
 
@@ -74,9 +76,7 @@ public class PatternHandler : MonoBehaviour
     void Start()
     {
         inputHandler = gameObject.GetComponent<InputHandler>();
-        canvas = GetComponentInParent<Canvas>();
-        canvasCamera = canvas != null ? canvas.worldCamera : null;
-        screenTopY = ComputeScreenTopY();
+        EnsureLayoutInitialized();
 
         foreach (var point in patternPoints)
         {
@@ -137,7 +137,13 @@ public class PatternHandler : MonoBehaviour
         }
     }
 
-    public void SetPattern(Pattern pattern)
+    private const float DefaultExposureDuration = 0.5f;
+
+    /// <summary>
+    /// <paramref name="spawnTimes"/>가 주어지면(채보 재생 경로) 이미 구운 스폰 시각을 그대로 사용하고,
+    /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)로 <see cref="ComputeFallDuration"/>을 그 자리에서 계산한다.
+    /// </summary>
+    public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null)
     {
         if (nowPattern != null)
             nowPattern.OnExit -= HandlePatternComplete;
@@ -145,7 +151,15 @@ public class PatternHandler : MonoBehaviour
         ClearFallingNodes();
         ResetPointColors();
 
+        if (inputTimes == null || inputTimes.Count != pattern.AllData.Count)
+        {
+            Debug.LogError($"[PatternHandler] '{pattern.name}' 입력 시각 개수({inputTimes?.Count ?? 0})가 노드 개수({pattern.AllData.Count})와 다릅니다. 패턴을 설정하지 않습니다.", this);
+            nowPattern = null;
+            return;
+        }
+
         nowPattern = pattern;
+        nowPattern.SetInputTimes(inputTimes);
         nowPattern.Initialize();
         nowPattern.OnExit += HandlePatternComplete;
         patternStartTime = Time.time;
@@ -156,9 +170,23 @@ public class PatternHandler : MonoBehaviour
         for (int i = 0; i < nowPattern.AllData.Count; i++)
         {
             var data = nowPattern.AllData[i];
-            float duration = ComputeFallDuration(data.index, data.visibleExposureDuration);
-            float spawnTime = patternStartTime + data.inputTime - duration;
-            scheduledSpawns.Add(new ScheduledSpawn { position = i, spawnTime = spawnTime, fallDuration = duration });
+            float spawnOffset;
+            float fallDuration;
+
+            if (spawnTimes != null && i < spawnTimes.Count)
+            {
+                spawnOffset = spawnTimes[i];
+                fallDuration = nowPattern.GetInputTime(i) - spawnOffset;
+            }
+            else
+            {
+                float exposureDuration = exposureDurations != null && i < exposureDurations.Count ? exposureDurations[i] : DefaultExposureDuration;
+                fallDuration = ComputeFallDuration(data.index, exposureDuration);
+                spawnOffset = nowPattern.GetInputTime(i) - fallDuration;
+            }
+
+            float spawnTime = patternStartTime + spawnOffset;
+            scheduledSpawns.Add(new ScheduledSpawn { position = i, spawnTime = spawnTime, fallDuration = fallDuration });
         }
     }
 
@@ -170,14 +198,24 @@ public class PatternHandler : MonoBehaviour
         return WorldToLocal(fallingNodeParent, topWorld).y;
     }
 
+    /// <summary>씬/캔버스 참조가 아직 없으면(에디터에서 Play 모드 없이 굽는 툴이 호출하는 경우 포함) 초기화한다.</summary>
+    private void EnsureLayoutInitialized()
+    {
+        if (canvas != null) return;
+        canvas = GetComponentInParent<Canvas>();
+        canvasCamera = canvas != null ? canvas.worldCamera : null;
+        screenTopY = ComputeScreenTopY();
+    }
+
     /// <summary>
     /// 생성 위치(fallSpawnPositionY, fallingNodeParent 로컬 좌표 기준 절대 Y, 사용자가 직접 설정)는 모든 행에서
     /// 동일하게 유지하되, 화면 실제 경계(screenTopY) 밖에서 시작하는 상단 행 노드는 화면 밖 구간이 길어 노출
-    /// 시간이 짧아지므로, 경계 안쪽 구간(visibleDistance)만 exposureDuration(PatternData별 설정값) 동안
+    /// 시간이 짧아지므로, 경계 안쪽 구간(visibleDistance)만 exposureDuration 동안
     /// 이동하도록 전체 낙하 시간을 역산한다 — 결과적으로 행마다 낙하 속도가 달라진다.
     /// </summary>
-    private float ComputeFallDuration(int pointIndex, float exposureDuration)
+    public float ComputeFallDuration(int pointIndex, float exposureDuration)
     {
+        EnsureLayoutInitialized();
         Vector3 worldPosition = patternPoints[pointIndex].transform.position;
         Vector2 targetLocalPos = WorldToLocal(fallingNodeParent, worldPosition);
 
