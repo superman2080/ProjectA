@@ -5,7 +5,6 @@ using UnityEngine;
 
 public enum PoolKey
 {
-    SpellProjectile,
     FallingNode,
 }
 

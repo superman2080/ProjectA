@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(RectTransform))]
-public class FallingNodeView : Poolable
+public class FallingNodeView : MonoBehaviour, IPoolable
 {
     [SerializeField] private Image background;
     [SerializeField] private TMP_Text indexLabel;
@@ -44,20 +44,20 @@ public class FallingNodeView : Poolable
         pendingFallDuration = fallDuration;
     }
 
-    public override void OnSpawn()
+    public void OnSpawn()
     {
-        base.OnSpawn();
+        gameObject.SetActive(true);
 
         if (fallRoutine != null)
             StopCoroutine(fallRoutine);
         fallRoutine = StartCoroutine(FallRoutine(pendingTarget, pendingSpawnPositionY, pendingFallDuration));
     }
 
-    public override void OnDespawn()
+    public void OnDespawn()
     {
         StopFalling();
         OnArrived = null;
-        base.OnDespawn();
+        gameObject.SetActive(false);
     }
 
     private IEnumerator FallRoutine(Vector2 targetLocalPos, float spawnPositionY, float fallDuration)
