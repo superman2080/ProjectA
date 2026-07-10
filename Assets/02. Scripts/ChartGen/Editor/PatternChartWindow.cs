@@ -153,18 +153,27 @@ namespace ChartGen
 
             foreach (var group in groups)
             {
-                var draft = new ChartEntryDraft
+                var chunkSizes = OnsetChunkSplitter.Split(group.Count, library.AvailableNodeCounts);
+                int offset = 0;
+
+                foreach (int size in chunkSizes)
                 {
-                    template = library.GetRandomTemplate(group.Count),
-                    onsetTimes = group.ToArray(),
-                    exposureDurations = Enumerable.Repeat(defaultExposureDuration, group.Count).ToArray(),
-                };
+                    var chunkOnsets = group.GetRange(offset, size).ToArray();
+                    offset += size;
 
-                if (draft.template == null)
-                    Debug.LogWarning($"[PatternChartWindow] 노드 {group.Count}개짜리 그룹에 배정할 템플릿이 없습니다. (온셋 시각: {group[0]:F2}s~)");
+                    var draft = new ChartEntryDraft
+                    {
+                        template = library.GetNextTemplate(size),
+                        onsetTimes = chunkOnsets,
+                        exposureDurations = Enumerable.Repeat(defaultExposureDuration, size).ToArray(),
+                    };
 
-                RecomputeSpawnTimes(draft);
-                drafts.Add(draft);
+                    if (draft.template == null)
+                        Debug.LogWarning($"[PatternChartWindow] 노드 {size}개짜리 청크에 배정할 템플릿이 없습니다. (온셋 시각: {chunkOnsets[0]:F2}s~)");
+
+                    RecomputeSpawnTimes(draft);
+                    drafts.Add(draft);
+                }
             }
         }
 
@@ -389,7 +398,16 @@ namespace ChartGen
 
             if (isNew)
             {
-                string path = EditorUtility.SaveFilePanelInProject("SongChart 저장", "SongChart", "asset", "SongChart를 저장할 위치를 선택하세요.");
+                string defaultFolder = "Assets/04. Datas/Song";
+                if (!AssetDatabase.IsValidFolder(defaultFolder))
+                {
+                    if (!AssetDatabase.IsValidFolder("Assets/04. Datas"))
+                        AssetDatabase.CreateFolder("Assets", "04. Datas");
+                    AssetDatabase.CreateFolder("Assets/04. Datas", "Song");
+                }
+                string songName = clip != null ? clip.name : "SongChart";
+                string defaultName = $"{songName}_Lv{level}";
+                string path = EditorUtility.SaveFilePanelInProject("SongChart 저장", defaultName, "asset", "SongChart를 저장할 위치를 선택하세요.", defaultFolder);
                 if (string.IsNullOrEmpty(path)) return;
 
                 AssetDatabase.CreateAsset(target, path);
