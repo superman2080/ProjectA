@@ -34,7 +34,12 @@
       "WebSearch",
       "mcp__UnityMCP__manage_asset",
       "mcp__UnityMCP__run_tests",
-      "mcp__UnityMCP__get_test_job"
+      "mcp__UnityMCP__get_test_job",
+      "Bash(mkdir -p ChartGen ChartPlayback FallingNode KeyboardInput KeyboardStroke PatternLine PatternPassThrough PatternSplit Guides)",
+      "Bash(mv Plan_ChartGen.md Research_ChartGen.md ChartGen/)",
+      "Bash(mv Plan_ChartPlayback.md Research_ChartPlayback.md ChartPlayback/)",
+      "Bash(mv Plan_FallingNode.md Research_FallingNode.md FallingNode/)",
+      "Bash(mv Plan_KeyboardInput.md Research_KeyboardInput.md KeyboardInput/)"
     ]
   }
 }
