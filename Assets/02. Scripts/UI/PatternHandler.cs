@@ -16,7 +16,6 @@ public class PatternHandler : MonoBehaviour
 
     [Header("Line")]
     [SerializeField] private float lineFadeDuration = 0.2f;
-    [SerializeField] private float keyboardInputTimeout = 0.5f;
 
     [Header("Falling Node")]
     [SerializeField] private RectTransform fallingNodeParent;
@@ -32,8 +31,9 @@ public class PatternHandler : MonoBehaviour
     [ContextMenu("Debug: Set Test Pattern")]
     private void DebugSetTestPattern()
     {
-        if (debugTestPattern != null)
-            SetPattern(debugTestPattern, debugInputTimes, null, debugExposureDurations);
+        if (debugTestPattern == null || debugInputTimes == null || debugInputTimes.Length == 0)
+            return;
+        SetPattern(debugTestPattern, debugInputTimes, null, debugExposureDurations);
     }
 #endif
 
@@ -47,7 +47,7 @@ public class PatternHandler : MonoBehaviour
     private Canvas canvas;
     private Camera canvasCamera;
     private bool isKeyboardStroke;
-    private float lastKeyboardInputTime;
+    private float strokeDeadline;
 
     private struct ScheduledSpawn
     {
@@ -104,7 +104,6 @@ public class PatternHandler : MonoBehaviour
 
     private void OnKeyboardInput(int index)
     {
-        lastKeyboardInputTime = Time.time;
         patternPoints[index].ForceDown();
     }
 
@@ -116,8 +115,7 @@ public class PatternHandler : MonoBehaviour
 
         if (isKeyboardStroke)
         {
-            // 일정 시간 키 입력이 없으면 패턴(스트로크) 완성으로 간주하고 종료
-            if (Time.time - lastKeyboardInputTime >= keyboardInputTimeout)
+            if (nowPattern == null || Time.time > strokeDeadline)
                 EndDrag();
             return;
         }
@@ -163,6 +161,8 @@ public class PatternHandler : MonoBehaviour
         nowPattern.Initialize();
         nowPattern.OnExit += HandlePatternComplete;
         patternStartTime = Time.time;
+        int lastNodeIndex = nowPattern.AllData.Count - 1;
+        strokeDeadline = patternStartTime + nowPattern.GetInputTime(lastNodeIndex) + goodWindow;
         allCorrect = true;
         lineRenderer?.SetCorrectState(true);
 

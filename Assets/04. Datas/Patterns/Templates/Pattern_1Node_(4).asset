@@ -10,9 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: Pattern_3Node_LShape
+  m_Name: Pattern_1Node_(4)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
-  - index: 0
-  - index: 3
-  - index: 6
+  - index: 4

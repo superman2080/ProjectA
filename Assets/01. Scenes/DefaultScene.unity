@@ -1007,6 +1007,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 41147332724689493, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3339181199289428052, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4463611659493065476, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8269001631454303563, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -1047,6 +1059,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8452091366363992238, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_Avatar
+      value: 
+      objectReference: {fileID: 9000000, guid: b02f7765ace5dff4a866b767512e4a05, type: 3}
+    - target: {fileID: 8452091366363992238, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 589ddccdb3e791c4cad42424d8fa4a96, type: 2}
+    - target: {fileID: 8452091366363992238, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8758011989475053553, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
       propertyPath: m_Name
       value: School_Katana_FullBody-Magica cloth2
@@ -1066,6 +1090,7 @@ GameObject:
   m_Component:
   - component: {fileID: 690579360}
   - component: {fileID: 690579359}
+  - component: {fileID: 690579361}
   m_Layer: 0
   m_Name: CinemachineCamera
   m_TagString: Untagged
@@ -1131,6 +1156,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1136364601}
   m_LocalEulerAnglesHint: {x: 3, y: 0, z: 0}
+--- !u!114 &690579361
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690579358}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineBasicMultiChannelPerlin
+  NoiseProfile: {fileID: 11400000, guid: 007d1cfde2ec9064e984eb2c9c2b1947, type: 2}
+  PivotOffset: {x: 0, y: 0, z: 0}
+  AmplitudeGain: 0.1
+  FrequencyGain: 0
+  m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &691198527
 GameObject:
   m_ObjectHideFlags: 0
@@ -1893,7 +1935,7 @@ MonoBehaviour:
   - {r: 0.95, g: 0.8, b: 0.25, a: 1}
   - {r: 0.75, g: 0.45, b: 0.95, a: 1}
   - {r: 0.95, g: 0.55, b: 0.2, a: 1}
-  debugTestPattern: {fileID: 11400000, guid: 2a409232febb2834ebee72883fbf3941, type: 2}
+  debugTestPattern: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
   debugInputTimes: []
   debugExposureDurations: []
 --- !u!114 &1565592731
