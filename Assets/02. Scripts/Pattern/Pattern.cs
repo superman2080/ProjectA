@@ -17,27 +17,17 @@ namespace PatternSpace
         [Range(0, 8)] public int index;
     }
 
+    /// <summary>
+    /// 패턴의 '모양 원본' 에셋. 진행 상태(입력 시각, 현재 위치 등)는 갖지 않는다 —
+    /// 그것은 <see cref="ActivePattern"/>이 들고 있으며, 그래야 같은 템플릿을 쓰는 두 패턴이
+    /// 동시에 살아 있어도 서로의 상태를 덮어쓰지 않는다.
+    /// </summary>
     [CreateAssetMenu(fileName = "Pattern", menuName = "Scriptable Objects/Pattern")]
     public class Pattern : ScriptableObject
     {
         [SerializeField] private PatternData[] patternDatas;
 
         public IReadOnlyList<PatternData> AllData => patternDatas;
-
-        public PatternData NowPattern => nowPattern;
-        private PatternData nowPattern;
-
-        public int ExpectedPointIndex => nowPattern.index;
-        public float ExpectedTime => inputTimes[index];
-
-        public int CurrentIndex => index;
-        private int index;
-
-        /// <summary>노드별 실제 입력 시각(초, 패턴 시작 기준 상대시간). 곡 재생 시각에 맞춰 <see cref="SetInputTimes"/>로 주입된다.</summary>
-        private float[] inputTimes;
-
-        public event Action OnInput;
-        public event Action OnExit;
 
         public NodeType GetNodeType(int position)
         {
@@ -58,42 +48,6 @@ namespace PatternSpace
                     Debug.LogError($"[Pattern] '{name}'에 중복된 인덱스 {data.index}가 있습니다.", this);
                 }
             }
-        }
-
-        /// <summary>노드별 실제 입력 시각(패턴 시작 기준 상대시간, 초)을 주입한다. <see cref="Initialize"/> 전에 호출해야 한다.</summary>
-        public void SetInputTimes(IReadOnlyList<float> times)
-        {
-            if (times.Count != patternDatas.Length)
-            {
-                Debug.LogError($"[Pattern] '{name}' 입력 시각 개수({times.Count})가 노드 개수({patternDatas.Length})와 다릅니다.", this);
-                return;
-            }
-
-            inputTimes = new float[times.Count];
-            for (int i = 0; i < times.Count; i++)
-                inputTimes[i] = times[i];
-        }
-
-        public float GetInputTime(int position) => inputTimes[position];
-
-        public void Initialize()
-        {
-            index = 0;
-            nowPattern = patternDatas[0];
-        }
-
-        public void Input()
-        {
-            OnInput?.Invoke();
-            Next();
-        }
-
-        private void Next()
-        {
-            if (index < patternDatas.Length - 1)
-                nowPattern = patternDatas[++index];
-            else
-                OnExit?.Invoke();
         }
     }
 }

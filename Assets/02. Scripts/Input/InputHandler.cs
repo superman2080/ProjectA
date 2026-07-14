@@ -2,11 +2,12 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>키보드 1~9 입력을 인덱스(0~8) 이벤트로 변환해 발행한다.</summary>
 public class InputHandler : MonoBehaviour
 {
+    private const int PointCount = 9;
+
     private IngameInputs inputActions;
-    public bool[] Inputs => inputs;
-    private bool[] inputs = new bool[9];
 
     public event Action<int> OnKeyPressed;
 
@@ -18,16 +19,11 @@ public class InputHandler : MonoBehaviour
     void Start()
     {
         var playerMap = inputActions.Player.Get();
-        for (int i = 0; i < inputs.Length; i++)
+        for (int i = 0; i < PointCount; i++)
         {
             int index = i;
             InputAction action = playerMap.FindAction($"Input{i + 1}");
-            action.performed += (ctx) =>
-            {
-                inputs[index] = true;
-                OnKeyPressed?.Invoke(index);
-            };
-            action.canceled += (ctx) => inputs[index] = false;
+            action.performed += (ctx) => OnKeyPressed?.Invoke(index);
         }
         inputActions.Player.Enable();
     }
@@ -37,7 +33,4 @@ public class InputHandler : MonoBehaviour
         inputActions.Player.Disable();
         inputActions.Dispose();
     }
-
-    void Update() { }
 }
-

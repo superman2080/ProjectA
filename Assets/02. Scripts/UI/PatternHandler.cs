@@ -17,6 +17,13 @@ public class PatternHandler : MonoBehaviour
     [Header("Line")]
     [SerializeField] private float lineFadeDuration = 0.2f;
 
+    [Header("Hit Area")]
+    [Range(0.1f, 1f)][SerializeField] private float inactiveHitAreaRatio = 0.5f;
+
+    [Header("Guide Line")]
+    [SerializeField] private PatternLineRenderer guideLineRenderer;
+    [SerializeField] private float guideFadeDuration = 0.2f;
+
     [Header("Falling Node")]
     [SerializeField] private RectTransform fallingNodeParent;
     [SerializeField] private float fallSpawnPositionY = 500f;
@@ -37,27 +44,45 @@ public class PatternHandler : MonoBehaviour
     }
 #endif
 
+    /// <summary>스트로크(마우스 드래그 또는 키보드 연속 입력) 진행 중 여부.</summary>
     public bool IsDragging { get; private set; }
 
-    private Pattern nowPattern;
-    private float patternStartTime;
-    private bool allCorrect;
+    /// <summary>마우스로 끌고 있는 중인지. Point가 '지나가며 입력'을 인정할지 판단하는 데 쓴다 — 키보드 스트로크 중 마우스 호버는 입력이 아니다.</summary>
+    public bool IsMouseDragging => IsDragging && !isKeyboardStroke;
+
+    /// <summary>
+    /// 살아 있는 패턴들(투입 순서). 채보는 다음 패턴의 노드를 이전 패턴이 끝나기 전에 스폰해야 하므로
+    /// 여러 패턴이 동시에 '연출 중'일 수 있다. 반면 입력(판정) 시각은 서로 겹치지 않으므로
+    /// 판정 대상(<see cref="JudgeTarget"/>)은 언제나 선두 하나뿐이다.
+    /// </summary>
+    private readonly List<ActivePattern> activePatterns = new List<ActivePattern>();
+
+    /// <summary>현재 입력을 받는 패턴. 선두 패턴이 완료/만료되면 즉시 다음 패턴으로 승계된다.</summary>
+    private ActivePattern JudgeTarget => activePatterns.Count > 0 ? activePatterns[0] : null;
 
     private readonly List<int> connectedIndices = new List<int>();
+    private readonly bool[] hitAreaUsage = new bool[9];
     private Canvas canvas;
     private Camera canvasCamera;
     private bool isKeyboardStroke;
-    private float strokeDeadline;
 
     private struct ScheduledSpawn
     {
+        public ActivePattern owner;
         public int position;
         public float spawnTime;
         public float fallDuration; // 이 노드가 실제로 낙하하는 데 걸리는 시간(행마다 노출 시간을 맞추기 위해 개별 계산됨)
     }
 
+    private struct ActiveNode
+    {
+        public ActivePattern owner;
+        public int position;
+        public FallingNodeView view;
+    }
+
     private readonly List<ScheduledSpawn> scheduledSpawns = new List<ScheduledSpawn>();
-    private readonly Dictionary<int, FallingNodeView> activeFallingNodes = new Dictionary<int, FallingNodeView>();
+    private readonly List<ActiveNode> activeFallingNodes = new List<ActiveNode>();
     private int spawnCounter;
     private float screenTopY;
 
@@ -78,14 +103,17 @@ public class PatternHandler : MonoBehaviour
         inputHandler = gameObject.GetComponent<InputHandler>();
         EnsureLayoutInitialized();
 
-        foreach (var point in patternPoints)
+        for (int i = 0; i < patternPoints.Length; i++)
         {
-            point.OnPointDown += OnPointPressed;
-            point.OnPointUp += OnPointReleased;
+            patternPoints[i].Initialize(i, this); // 배열 순서가 Point 인덱스의 진실의 원천이다
+            patternPoints[i].OnPointDown += OnPointPressed;
+            patternPoints[i].OnPointUp += OnPointReleased;
         }
 
         if (inputHandler != null)
             inputHandler.OnKeyPressed += OnKeyboardInput;
+
+        RefreshJudgeTargetVisuals();
 
         DebugSetTestPattern();
     }
@@ -109,21 +137,23 @@ public class PatternHandler : MonoBehaviour
 
     void Update()
     {
+        ExpireOverduePatterns();
         ProcessFallingNodeSpawns();
 
         if (!IsDragging) return;
 
         if (isKeyboardStroke)
         {
-            if (nowPattern == null || Time.time > strokeDeadline)
-                EndDrag();
+            var target = JudgeTarget;
+            if (target == null || Time.time > target.Deadline)
+                EndStroke();
             return;
         }
 
         // 포인트 밖에서 마우스를 뗀 경우 드래그 종료
         if (!(Mouse.current != null && Mouse.current.leftButton.isPressed))
         {
-            EndDrag();
+            EndStroke();
             return;
         }
 
@@ -135,59 +165,86 @@ public class PatternHandler : MonoBehaviour
         }
     }
 
+    /// <summary>입력 시한(마지막 입력 시각 + goodWindow)이 지난 패턴을 종료한다. 남은 노드는 미입력이므로 전체 정답 보너스를 취소한다.</summary>
+    private void ExpireOverduePatterns()
+    {
+        while (JudgeTarget != null && Time.time > JudgeTarget.Deadline)
+        {
+            var expired = JudgeTarget;
+            if (!expired.IsComplete)
+                expired.MarkIncorrect();
+
+            CompletePattern(expired);
+        }
+    }
+
     private const float DefaultExposureDuration = 0.5f;
 
     /// <summary>
+    /// 패턴을 큐에 추가한다. 진행 중인 패턴이 있어도 <b>파기하지 않고</b>, 새 패턴의 노드 스폰만 즉시 예약한다.
+    /// 판정 대상은 선두 패턴이 완료/만료될 때 승계된다.
+    ///
     /// <paramref name="spawnTimes"/>가 주어지면(채보 재생 경로) 이미 구운 스폰 시각을 그대로 사용하고,
     /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)로 <see cref="ComputeFallDuration"/>을 그 자리에서 계산한다.
     /// </summary>
     public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null)
     {
-        if (nowPattern != null)
-            nowPattern.OnExit -= HandlePatternComplete;
-
-        ClearFallingNodes();
-        ResetPointColors();
-
         if (inputTimes == null || inputTimes.Count != pattern.AllData.Count)
         {
             Debug.LogError($"[PatternHandler] '{pattern.name}' 입력 시각 개수({inputTimes?.Count ?? 0})가 노드 개수({pattern.AllData.Count})와 다릅니다. 패턴을 설정하지 않습니다.", this);
-            nowPattern = null;
             return;
         }
 
-        nowPattern = pattern;
-        nowPattern.SetInputTimes(inputTimes);
-        nowPattern.Initialize();
-        nowPattern.OnExit += HandlePatternComplete;
-        patternStartTime = Time.time;
-        int lastNodeIndex = nowPattern.AllData.Count - 1;
-        strokeDeadline = patternStartTime + nowPattern.GetInputTime(lastNodeIndex) + goodWindow;
-        allCorrect = true;
-        lineRenderer?.SetCorrectState(true);
+        // StartTime은 '투입 시각'으로 고정한다 — inputTimes/spawnTimes가 이 시점 기준 상대시간이므로,
+        // 나중에 판정 대상으로 승계될 때 다시 잡으면 판정 시각이 통째로 밀린다.
+        var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow);
 
-        spawnCounter = 0;
-        for (int i = 0; i < nowPattern.AllData.Count; i++)
+        for (int i = 0; i < active.NodeCount; i++)
         {
-            var data = nowPattern.AllData[i];
+            int pointIndex = active.GetPointIndex(i);
             float spawnOffset;
             float fallDuration;
 
             if (spawnTimes != null && i < spawnTimes.Count)
             {
                 spawnOffset = spawnTimes[i];
-                fallDuration = nowPattern.GetInputTime(i) - spawnOffset;
+                fallDuration = active.GetInputTime(i) - spawnOffset;
             }
             else
             {
                 float exposureDuration = exposureDurations != null && i < exposureDurations.Count ? exposureDurations[i] : DefaultExposureDuration;
-                fallDuration = ComputeFallDuration(data.index, exposureDuration);
-                spawnOffset = nowPattern.GetInputTime(i) - fallDuration;
+                fallDuration = ComputeFallDuration(pointIndex, exposureDuration);
+                spawnOffset = active.GetInputTime(i) - fallDuration;
             }
 
-            float spawnTime = patternStartTime + spawnOffset;
-            scheduledSpawns.Add(new ScheduledSpawn { position = i, spawnTime = spawnTime, fallDuration = fallDuration });
+            scheduledSpawns.Add(new ScheduledSpawn
+            {
+                owner = active,
+                position = i,
+                spawnTime = active.StartTime + spawnOffset,
+                fallDuration = fallDuration
+            });
         }
+
+        bool becomesJudgeTarget = activePatterns.Count == 0;
+        activePatterns.Add(active);
+
+        if (becomesJudgeTarget)
+            RefreshJudgeTargetVisuals();
+    }
+
+    /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 낙하 노드를 정리한다.</summary>
+    public void ClearAllPatterns()
+    {
+        for (int i = activeFallingNodes.Count - 1; i >= 0; i--)
+            ReleaseFallingNode(activeFallingNodes[i].view);
+        activeFallingNodes.Clear();
+        scheduledSpawns.Clear();
+        activePatterns.Clear();
+
+        ResetPointColors();
+        TriggerLineFadeOut();
+        RefreshJudgeTargetVisuals();
     }
 
     /// <summary>루트 Canvas의 실제 화면 상단 경계를 fallingNodeParent 로컬 좌표로 변환한다 (Canvas는 Screen Space Overlay라 이 경계 밖은 Mask 없이도 실제로 렌더링되지 않는다).</summary>
@@ -244,24 +301,33 @@ public class PatternHandler : MonoBehaviour
     private void OnPointPressed(int index)
     {
         if (!IsDragging)
-        {
-            connectedIndices.Clear();
-            isKeyboardStroke = !(Mouse.current != null && Mouse.current.leftButton.isPressed);
-            if (isKeyboardStroke)
-                lineRenderer?.ClearLiveEndPoint();
-        }
+            BeginStroke();
 
-        IsDragging = true;
+        // 이번 패턴에서 이미 입력된 Point는 무시한다 (드래그 재진입 / 통과 노드 중복 방지).
+        // connectedIndices는 패턴이 끝날 때마다 클리어되므로, 다음 패턴에서 같은 Point를 다시 쓸 수 있다.
+        // (예전에는 이 역할을 Point.isBusy가 했는데, 그건 스트로크가 끝나야만 풀려 패턴 경계에서 입력이 삼켜졌다.)
+        if (connectedIndices.Contains(index))
+            return;
 
         if (connectedIndices.Count > 0)
         {
             int passIndex = GetPassThroughIndex(connectedIndices[^1], index);
-            if (passIndex != -1 && !connectedIndices.Contains(passIndex))
-                patternPoints[passIndex].ForceDown();
+            if (passIndex != -1)
+                patternPoints[passIndex].ForceDown(); // 재귀적으로 이 메서드를 다시 타며 위 가드로 중복이 걸러진다
         }
 
         AppendPointToLine(index);
         AddPattern(index);
+    }
+
+    private void BeginStroke()
+    {
+        IsDragging = true;
+        connectedIndices.Clear();
+
+        isKeyboardStroke = !(Mouse.current != null && Mouse.current.leftButton.isPressed);
+        if (isKeyboardStroke)
+            lineRenderer?.ClearLiveEndPoint();
     }
 
     /// <summary>3x3 격자에서 a→b 직선이 정확히 통과하는 다른 노드의 인덱스를 반환한다. 없으면 -1.</summary>
@@ -278,26 +344,78 @@ public class PatternHandler : MonoBehaviour
 
     private void OnPointReleased(int index)
     {
-        EndDrag();
+        EndStroke();
     }
 
-    private void EndDrag()
+    private void EndStroke()
     {
         IsDragging = false;
+
         foreach (var p in patternPoints)
-        {
-            p.ResetBusy();
             p.ResetColor();
-        }
 
         lineRenderer?.ClearLiveEndPoint();
-        TriggerLineFadeOut();
+        TriggerLineFadeOut(); // connectedIndices도 여기서 클리어된다
     }
 
-    private void ResetPointColors()
+    /// <summary>가이드라인·판정 영역·라인 색을 현재 판정 대상 패턴 기준으로 다시 적용한다. 판정 대상이 없으면 전부 원상복구한다.</summary>
+    private void RefreshJudgeTargetVisuals()
     {
-        foreach (var p in patternPoints)
-            p.ResetColor();
+        var target = JudgeTarget;
+
+        ApplyHitAreas(target?.Template);
+
+        if (target != null)
+        {
+            ShowGuideLine(target.Template);
+            lineRenderer?.SetCorrectState(true);
+        }
+        else
+        {
+            HideGuideLine();
+        }
+    }
+
+    /// <summary>패턴이 지나갈 Point들을 순서대로 잇는 가이드 경로를 표시한다.</summary>
+    private void ShowGuideLine(Pattern pattern)
+    {
+        if (guideLineRenderer == null) return;
+
+        var localPoints = new List<Vector2>(pattern.AllData.Count);
+        foreach (var data in pattern.AllData)
+            localPoints.Add(WorldToLocal(guideLineRenderer.rectTransform, patternPoints[data.index].transform.position));
+
+        guideLineRenderer.SetPoints(localPoints);
+    }
+
+    private void HideGuideLine()
+    {
+        if (guideLineRenderer == null) return;
+
+        guideLineRenderer.FadeOutAndClear(guideFadeDuration);
+    }
+
+    /// <summary>
+    /// 판정 대상 패턴에 포함되지 않은 Point의 판정 영역을 <see cref="inactiveHitAreaRatio"/>만큼 축소한다.
+    /// <paramref name="pattern"/>이 null이면(판정 대상 없는 대기 구간) 9개 모두 원래 크기로 복구한다.
+    /// </summary>
+    private void ApplyHitAreas(Pattern pattern)
+    {
+        if (pattern == null)
+        {
+            foreach (var p in patternPoints)
+                p.ResetHitArea();
+            return;
+        }
+
+        for (int i = 0; i < hitAreaUsage.Length; i++)
+            hitAreaUsage[i] = false;
+
+        foreach (var data in pattern.AllData)
+            hitAreaUsage[data.index] = true;
+
+        for (int i = 0; i < patternPoints.Length; i++)
+            patternPoints[i].SetHitAreaRatio(hitAreaUsage[i] ? 1f : inactiveHitAreaRatio);
     }
 
     private void AppendPointToLine(int index)
@@ -330,52 +448,54 @@ public class PatternHandler : MonoBehaviour
         return localPoint;
     }
 
+    /// <summary>라인을 페이드아웃시키고 '이번 패턴에서 입력된 Point' 기록을 비운다 — 이 기록이 중복 입력 방지의 진실의 원천이다.</summary>
     private void TriggerLineFadeOut()
     {
-        if (lineRenderer == null || connectedIndices.Count == 0) return;
+        if (connectedIndices.Count == 0) return;
 
-        lineRenderer.FadeOutAndClear(lineFadeDuration);
+        lineRenderer?.FadeOutAndClear(lineFadeDuration);
         connectedIndices.Clear();
     }
 
     public void AddPattern(int index)
     {
-        if (nowPattern == null) return;
+        var target = JudgeTarget;
+        if (target == null) return;
 
         // 틀린 인덱스는 보너스만 취소하고 계속 진행
-        if (index != nowPattern.ExpectedPointIndex)
+        if (index != target.ExpectedPointIndex)
         {
-            allCorrect = false;
+            target.MarkIncorrect();
             lineRenderer?.SetCorrectState(false);
             patternPoints[index].SetJudgementColor(JudgementResult.Miss);
             return;
         }
 
-        float expectedTime = patternStartTime + nowPattern.ExpectedTime;
-        float delta = Mathf.Abs(Time.time - expectedTime);
+        float delta = Mathf.Abs(Time.time - target.ExpectedTime);
         JudgementResult result = Judge(delta);
 
         if (result == JudgementResult.Miss)
         {
-            allCorrect = false;
+            target.MarkIncorrect();
             lineRenderer?.SetCorrectState(false);
         }
 
         patternPoints[index].SetJudgementColor(result);
 
-        int position = nowPattern.CurrentIndex;
-        NodeType nodeType = nowPattern.GetNodeType(position);
+        int position = target.CurrentPosition;
+        NodeType nodeType = target.GetNodeType(position);
         Vector3 worldPosition = patternPoints[index].transform.position;
 
-        if (activeFallingNodes.TryGetValue(position, out var fallingNode))
-        {
-            ReleaseFallingNode(fallingNode);
-            activeFallingNodes.Remove(position);
-        }
+        ReleaseNodeOf(target, position);
 
         OnJudged?.Invoke(result, index);
         OnFallingNodeResolved?.Invoke(index, nodeType, worldPosition, result);
-        nowPattern.Input();
+
+        target.Advance();
+
+        // 마지막 노드가 판정된 그 자리에서 완료 처리 → 다음 패턴을 같은 프레임에 즉시 승계한다.
+        if (target.IsComplete)
+            CompletePattern(target);
     }
 
     private JudgementResult Judge(float delta)
@@ -385,13 +505,28 @@ public class PatternHandler : MonoBehaviour
         return JudgementResult.Miss;
     }
 
-    private void HandlePatternComplete()
+    /// <summary>패턴을 종료하고 그 패턴에 속한 노드를 즉시 회수한 뒤, 다음 패턴을 판정 대상으로 승계한다.</summary>
+    private void CompletePattern(ActivePattern pattern)
     {
-        nowPattern.OnExit -= HandlePatternComplete;
-        OnPatternComplete?.Invoke(allCorrect);
-        nowPattern = null;
+        activePatterns.Remove(pattern);
+        ClearNodesOf(pattern);
+
+        OnPatternComplete?.Invoke(pattern.AllCorrect);
+
+        // 키보드 스트로크는 여기서 끝낸다. 마우스 드래그는 끊지 않는다 —
+        // 다음 패턴으로 이어 긋는 중일 수 있고, connectedIndices는 아래에서 어차피 비워지므로 이어져도 안전하다.
+        if (IsDragging && isKeyboardStroke)
+            EndStroke();
+
+        ResetPointColors(); // 판정 색(Perfect/Good/Miss)이 다음 패턴까지 남지 않도록 되돌린다
         TriggerLineFadeOut();
-        ClearFallingNodes();
+        RefreshJudgeTargetVisuals();
+    }
+
+    private void ResetPointColors()
+    {
+        foreach (var p in patternPoints)
+            p.ResetColor();
     }
 
     private void ProcessFallingNodeSpawns()
@@ -400,42 +535,40 @@ public class PatternHandler : MonoBehaviour
         {
             if (Time.time < scheduledSpawns[i].spawnTime) continue;
 
-            SpawnFallingNode(scheduledSpawns[i].position, scheduledSpawns[i].fallDuration);
+            SpawnFallingNode(scheduledSpawns[i].owner, scheduledSpawns[i].position, scheduledSpawns[i].fallDuration);
             scheduledSpawns.RemoveAt(i);
         }
     }
 
-    private void SpawnFallingNode(int position, float duration)
+    private void SpawnFallingNode(ActivePattern owner, int position, float duration)
     {
-        var data = nowPattern.AllData[position];
+        int pointIndex = owner.GetPointIndex(position);
         Color color = fallingNodeColorPalette != null && fallingNodeColorPalette.Length > 0
             ? fallingNodeColorPalette[spawnCounter % fallingNodeColorPalette.Length]
             : Color.white;
         spawnCounter++;
 
-        Vector3 worldPosition = patternPoints[data.index].transform.position;
+        Vector3 worldPosition = patternPoints[pointIndex].transform.position;
         Vector2 targetLocalPos = WorldToLocal(fallingNodeParent, worldPosition);
-        NodeType nodeType = nowPattern.GetNodeType(position);
+        NodeType nodeType = owner.GetNodeType(position);
 
         var node = Pool.Instance.Get<FallingNodeView>(PoolKey.FallingNode, n =>
         {
             n.transform.SetParent(fallingNodeParent, false);
-            n.Initialize(data.index + 1, color, nodeType, targetLocalPos, fallSpawnPositionY, duration);
+            n.Initialize(pointIndex + 1, color, nodeType, targetLocalPos, fallSpawnPositionY, duration);
         });
         node.OnArrived += HandleFallingNodeArrived;
 
-        activeFallingNodes[position] = node;
+        activeFallingNodes.Add(new ActiveNode { owner = owner, position = position, view = node });
 
-        OnFallingNodeSpawned?.Invoke(data.index, nodeType, worldPosition);
+        OnFallingNodeSpawned?.Invoke(pointIndex, nodeType, worldPosition);
     }
 
     private void HandleFallingNodeArrived(FallingNodeView node)
     {
         node.OnArrived -= HandleFallingNodeArrived;
 
-        int position = FindPositionForNode(node);
-        if (position >= 0)
-            activeFallingNodes.Remove(position);
+        RemoveNodeEntry(node);
 
         Vector3 worldPosition = patternPoints[node.PointIndex].transform.position;
         OnFallingNodeMissedArrival?.Invoke(node.PointIndex, node.Type, worldPosition);
@@ -443,24 +576,52 @@ public class PatternHandler : MonoBehaviour
         Pool.Instance.Return(PoolKey.FallingNode, node);
     }
 
-    private int FindPositionForNode(FallingNodeView node)
+    private void RemoveNodeEntry(FallingNodeView node)
     {
-        foreach (var kvp in activeFallingNodes)
-            if (kvp.Value == node) return kvp.Key;
-        return -1;
+        for (int i = 0; i < activeFallingNodes.Count; i++)
+        {
+            if (activeFallingNodes[i].view != node) continue;
+
+            activeFallingNodes.RemoveAt(i);
+            return;
+        }
+    }
+
+    /// <summary>판정된 노드 하나를 회수한다.</summary>
+    private void ReleaseNodeOf(ActivePattern owner, int position)
+    {
+        for (int i = 0; i < activeFallingNodes.Count; i++)
+        {
+            if (activeFallingNodes[i].owner != owner || activeFallingNodes[i].position != position) continue;
+
+            ReleaseFallingNode(activeFallingNodes[i].view);
+            activeFallingNodes.RemoveAt(i);
+            return;
+        }
+    }
+
+    /// <summary>패턴 완료/만료 시 그 패턴에 속한 낙하 노드와 남은 스폰 예약을 즉시 정리한다.</summary>
+    private void ClearNodesOf(ActivePattern owner)
+    {
+        for (int i = activeFallingNodes.Count - 1; i >= 0; i--)
+        {
+            if (activeFallingNodes[i].owner != owner) continue;
+
+            ReleaseFallingNode(activeFallingNodes[i].view);
+            activeFallingNodes.RemoveAt(i);
+        }
+
+        for (int i = scheduledSpawns.Count - 1; i >= 0; i--)
+        {
+            if (scheduledSpawns[i].owner != owner) continue;
+
+            scheduledSpawns.RemoveAt(i);
+        }
     }
 
     private void ReleaseFallingNode(FallingNodeView node)
     {
         node.OnArrived -= HandleFallingNodeArrived;
         Pool.Instance.Return(PoolKey.FallingNode, node);
-    }
-
-    private void ClearFallingNodes()
-    {
-        foreach (var node in activeFallingNodes.Values)
-            ReleaseFallingNode(node);
-        activeFallingNodes.Clear();
-        scheduledSpawns.Clear();
     }
 }

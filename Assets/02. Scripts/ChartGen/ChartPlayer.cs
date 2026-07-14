@@ -66,6 +66,9 @@ namespace ChartGen
 
             audioSource.Stop();
             pendingEntries?.Clear();
+
+            if (patternHandler != null)
+                patternHandler.ClearAllPatterns();
         }
 
         private IEnumerator PlayRoutine()
