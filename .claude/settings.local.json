@@ -39,7 +39,10 @@
       "Bash(mv Plan_ChartGen.md Research_ChartGen.md ChartGen/)",
       "Bash(mv Plan_ChartPlayback.md Research_ChartPlayback.md ChartPlayback/)",
       "Bash(mv Plan_FallingNode.md Research_FallingNode.md FallingNode/)",
-      "Bash(mv Plan_KeyboardInput.md Research_KeyboardInput.md KeyboardInput/)"
+      "Bash(mv Plan_KeyboardInput.md Research_KeyboardInput.md KeyboardInput/)",
+      "Bash(git commit -q -m '@ *)",
+      "Bash(git commit *)",
+      "mcp__UnityMCP__manage_packages"
     ]
   }
 }
