@@ -32,9 +32,24 @@ namespace PatternSpace
         [Tooltip("패턴을 전 노드 Good/Perfect로 완주했을 때 캐릭터가 재생할 애니메이션 클립. 비우면 무연출.")]
         [SerializeField] private AnimationClip successAnimationClip;
 
+        [Tooltip("성공 애니메이션의 시작 오프셋(초). 선딜레이 제거용.")]
+        [SerializeField] private float animationStartOffset = 0f;
+
+        [Tooltip("성공 애니메이션의 재생 지속 시간(초). 후딜레이 제거용. 0 이하면 클립 끝까지 재생.")]
+        [SerializeField] private float animationDuration = 0f;
+
+        [Tooltip("이 패턴 베기의 기본 배속(하한). 패턴 입력 구간이 짧으면 자동으로 더 배속된다.")]
+        [SerializeField] private float animationSpeed = 1f;
+
         public IReadOnlyList<PatternData> AllData => patternDatas;
 
         public AnimationClip SuccessAnimationClip => successAnimationClip;
+
+        public float AnimationStartOffset => animationStartOffset;
+
+        public float AnimationDuration => animationDuration;
+
+        public float AnimationSpeed => Mathf.Max(animationSpeed, 0.01f);
 
         public NodeType GetNodeType(int position)
         {

@@ -36,6 +36,9 @@ namespace PatternSpace
         /// <summary>마지막 노드의 이상적 도달 시각(절대). ExpectedTime은 CurrentPosition 기준이라 완료 후엔 범위를 벗어나므로 별도로 제공한다.</summary>
         public float LastNodeTime => StartTime + inputTimes[inputTimes.Length - 1];
 
+        /// <summary>첫 노드의 입력 절대시각. 성공 애니 조기 시작 예약 시 시작 하한(첫 노드보다 앞서지 않도록)으로 쓴다.</summary>
+        public float FirstNodeTime => StartTime + inputTimes[0];
+
         public ActivePattern(Pattern template, System.Collections.Generic.IReadOnlyList<float> inputTimes, float startTime, float goodWindow)
         {
             Template = template;

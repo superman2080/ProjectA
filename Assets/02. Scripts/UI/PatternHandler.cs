@@ -140,6 +140,11 @@ public class PatternHandler : MonoBehaviour
 
     public event Action<JudgementResult, int> OnJudged;
     public event Action<PatternCompletionInfo> OnPatternComplete; // 패턴 완료(완주/만료) 순간의 페이로드. 성공/실패·타이밍·다음 패턴 정보를 담는다.
+
+    /// <summary>판정 대상이 선두가 되는 순간(최초 투입/승계). 캐릭터 액션이 성공 애니 조기 시작을 예약하는 데 쓴다.</summary>
+    public event Action<JudgeTargetInfo> OnJudgeTargetBegan;
+    /// <summary>판정 대상의 AllCorrect가 처음 깨지는 순간(오답/타이밍Miss 공통, 패턴당 1회). 힛 애니 재생·성공 애니 취소에 쓴다.</summary>
+    public event Action OnJudgeTargetFirstMiss;
     /// <summary>확장 포인트: 새 노드가 라인에 연결될 때마다 (index, 월드 좌표) 전달.</summary>
     public event Action<int, Vector3> OnNodeConnected;
 
@@ -286,7 +291,18 @@ public class PatternHandler : MonoBehaviour
         activePatterns.Add(active);
 
         if (becomesJudgeTarget)
+        {
             RefreshJudgeTargetVisuals();
+            RaiseJudgeTargetBegan();
+        }
+    }
+
+    /// <summary>현재 판정 대상이 있으면 "판정 대상 시작" 이벤트를 발행한다(없으면 아무것도 안 함).</summary>
+    private void RaiseJudgeTargetBegan()
+    {
+        var target = JudgeTarget;
+        if (target != null)
+            OnJudgeTargetBegan?.Invoke(new JudgeTargetInfo(target.Template, target.FirstNodeTime, target.LastNodeTime));
     }
 
     /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 낙하 노드를 정리한다.</summary>
@@ -521,7 +537,9 @@ public class PatternHandler : MonoBehaviour
         // 틀린 인덱스는 보너스만 취소하고 계속 진행
         if (index != target.ExpectedPointIndex)
         {
+            bool wasCorrect = target.AllCorrect;
             target.MarkIncorrect();
+            if (wasCorrect) OnJudgeTargetFirstMiss?.Invoke();
             lineRenderer?.SetCorrectState(false);
             patternPoints[index].SetJudgementColor(JudgementResult.Miss);
             return;
@@ -536,7 +554,9 @@ public class PatternHandler : MonoBehaviour
 
         if (result == JudgementResult.Miss)
         {
+            bool wasCorrect = target.AllCorrect;
             target.MarkIncorrect();
+            if (wasCorrect) OnJudgeTargetFirstMiss?.Invoke();
             lineRenderer?.SetCorrectState(false);
         }
 
@@ -584,6 +604,7 @@ public class PatternHandler : MonoBehaviour
         ResetPointColors(); // 판정 색(Perfect/Good/Miss)이 다음 패턴까지 남지 않도록 되돌린다
         TriggerLineFadeOut();
         RefreshJudgeTargetVisuals();
+        RaiseJudgeTargetBegan(); // 승계된 다음 판정 대상의 성공 애니 예약 (다음이 없으면 no-op)
     }
 
     private void ResetPointColors()

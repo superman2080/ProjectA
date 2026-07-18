@@ -3,35 +3,80 @@
 ## 게임 개요
 리듬액션게임. 핸드폰 잠금 패턴처럼 생긴 **패턴인풋**(3x3 = 9개 노드 배치) 위에 노드가 떨어지고, 플레이어가 핸드폰 잠금 패턴처럼 노드를 이어 그어서 처리하는 방식.
 
+전체 흐름: **곡 선택 → 채보(SongChart) 재생 → 패턴이 순차적으로 투입되며 노드 낙하 → 플레이어가 타이밍에 맞춰 이어 긋기 → 판정(Perfect/Good/Miss) → 이펙트·캐릭터 액션 연출.**
+
+데이터 흐름 한 눈에:
+```
+SongSelectManager ─(GameSession.SelectedChart)→ ChartPlayer ─(SetPattern)→ PatternHandler
+                                                                              │
+                          ┌───────────────────────────────────────────────────┤ (이벤트 발행)
+                          ▼                       ▼                            ▼
+                   EffectManager          CharacterActionPlayer          FallingNodeView(낙하)
+                   (판정/완성 이펙트)        (베기/피격 애니메이션)         (Pool로 재사용)
+```
+
 ## 폴더 구조
 
 ```
 Assets/
 ├── 01. Scenes/
-│   └── DefaultScene.unity       # 메인 개발 씬
+│   └── DefaultScene.unity          # 메인 게임플레이 씬 (곡 선택 씬은 별도)
 ├── 02. Scripts/
 │   ├── Input/
-│   │   ├── InputHandler.cs      # 키보드 1~9 입력 수신, bool[9] inputs 관리
-│   │   └── IngameInputs.cs      # Unity Input System 자동생성 래퍼 (수정 금지)
+│   │   ├── InputHandler.cs          # 키보드 1~9 입력 → 인덱스(0~8) 이벤트 발행
+│   │   └── IngameInputs.cs          # Input System 자동생성 래퍼 (수정 금지)
 │   ├── Pattern/
-│   │   ├── Pattern.cs           # ScriptableObject - 패턴 데이터 및 진행 상태
+│   │   ├── Pattern.cs               # ScriptableObject - 패턴 '모양 원본'(+NodeType, PatternData)
+│   │   ├── ActivePattern.cs         # 재생 중 패턴 하나의 런타임 상태
+│   │   ├── JudgementResult.cs       # enum: Perfect/Good/Miss
+│   │   ├── PatternCompletionInfo.cs # 패턴 완료 이벤트 페이로드(struct)
 │   │   └── Handler/
-│   │       └── Point.cs         # 개별 노드(포인트) 동작 - 클릭 이벤트 처리
-│   └── UI/
-│       └── PatternHandler.cs    # 패턴인풋 전체 관리 (9개 Point 보유)
-└── IngameInputs.inputactions    # Input System 액션 에셋
+│   │       └── Point.cs             # 개별 노드(포인트) - 입력 이벤트 발행 전용
+│   ├── UI/
+│   │   ├── PatternHandler.cs        # 패턴인풋 전체 관리(판정·큐·노드 스폰의 중심 허브)
+│   │   ├── PatternLineRenderer.cs   # 입력 라인 / 가이드 캡슐 렌더러
+│   │   ├── FallingNodeView.cs       # 낙하 노드 뷰(IPoolable)
+│   │   └── Editor/
+│   │       └── PatternHandlerEditor.cs # 디버그 입력 커스텀 인스펙터(에디터 전용)
+│   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
+│   │   ├── SongChart.cs             # ScriptableObject - 곡+채보 데이터
+│   │   ├── ChartPlayer.cs           # 오디오 시각에 맞춰 SetPattern 흘려보내는 재생 글루
+│   │   ├── Core/                    # OnsetDetector, BeatGrid, OnsetGrouper 등 분석 코어(asmdef)
+│   │   ├── Editor/                  # PatternChartWindow(굽기 툴), PatternTemplateLibrary
+│   │   └── Tests/                   # 코어 유닛테스트(asmdef)
+│   ├── Character/
+│   │   └── CharacterActionPlayer.cs # 패턴 완료 시 베기/피격 애니메이션 재생
+│   ├── Effect/                      # Canvas 이펙트 시스템
+│   │   ├── EffectManager.cs         # 이펙트 유일 관리 지점(PatternHandler 이벤트 구독)
+│   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
+│   │   ├── CanvasEffectView.cs      # 개별 이펙트 뷰
+│   │   └── AmbientEffectController.cs # 배경 앰비언트 강도 조절
+│   ├── Statemachine/                # 범용 FSM/HFSM (StateMachine<T>, StateBase, Composite)
+│   ├── Pool/
+│   │   ├── Pool.cs                  # PoolKey 기반 오브젝트 풀(Singleton)
+│   │   └── IPoolable.cs             # OnSpawn/OnDespawn 인터페이스
+│   ├── Util/
+│   │   └── Singleton.cs             # MonoBehaviour 싱글톤 베이스
+│   ├── GameSession.cs               # 씬 간 SelectedChart 전달(DontDestroyOnLoad 싱글톤)
+│   └── SongSelectManager.cs         # 곡 선택 → GameSession 등록 → 씬 전환
+├── 04. Datas/
+│   ├── Patterns/Templates/          # Pattern 에셋(모양 원본)
+│   └── Song/                        # SongChart 에셋
+└── docs/                            # Research/Plan 설계 문서(주제별) + !Guides(사용 가이드)
 ```
 
-## 핵심 개념
+---
 
-### 패턴인풋
+## 핵심 시스템
+
+### 1. 패턴인풋
 - 3x3 격자로 배치된 9개의 Point (Point_1 ~ Point_9)
 - 포인트 간 중심 간격: **150px**
 - 배치 좌표 (AnchoredPosition, 중심 기준):
   - Point_1: (-150, -150) / Point_2: (0, -150) / Point_3: (150, -150)
   - Point_4: (-150, 0)    / Point_5: (0, 0)     / Point_6: (150, 0)
   - Point_7: (-150, 150)  / Point_8: (0, 150)   / Point_9: (150, 150)
-- 인덱스는 0~8 (Point_1 = index 0)
+- 인덱스는 0~8 (Point_1 = index 0). 인덱스는 `PatternHandler.Initialize(i, this)`로 `patternPoints` **배열 순서에서 주입**된다(게임오브젝트 이름을 파싱하지 않는다).
 
 #### 판정 영역과 시각 표현의 분리
 - **Point 본체**(100x100): Image가 투명(알파 0) + `raycastTarget = true` → **판정(레이캐스트) 영역 전용**
@@ -42,61 +87,102 @@ Assets/
 - 진행 중인 패턴이 지나갈 Point들을 순서대로 잇는 **반투명 캡슐 경로**를 표시해, 노드가 낙하하는 동안 패턴 모양을 미리 볼 수 있게 한다.
 - 구현: `PatternLineRenderer`의 `capsuleMode` 옵션 (별도 클래스 없음). 씬 오브젝트는 `PointBackground/PatternGuideLine`.
 - 인스펙터 조정 항목: `lineWidth`(캡슐 두께=원 지름), `normalColor`(채움), `outlineWidth`, `outlineColor`, `capSegments`.
-- 표시/소멸: `PatternHandler.SetPattern()`에서 생성(노드 스폰보다 먼저), `HandlePatternComplete()`에서 페이드아웃.
+- 표시/소멸: `PatternHandler.SetPattern()`에서 생성(노드 스폰보다 먼저), 패턴 완료 시 페이드아웃.
 - **렌더 순서 규칙**: 가이드는 `PointBackground`의 **첫 자식**(Point/노드/입력 라인 아래), 실제 입력 라인 `PatternLine`은 **마지막 자식**(맨 위).
 - 상세: `docs/PatternGuideLine/`
 
 #### 동적 판정 영역 축소 (조작감)
 - 진행 중인 패턴에 **포함되지 않은** Point는 판정 영역이 축소된다 (`PatternHandler.inactiveHitAreaRatio`, 기본 0.5 → 100x100이 실질 50x50).
 - 구현: `Point.SetHitAreaRatio(ratio)`가 `hitGraphic.raycastPadding`을 조정 (RectTransform과 자식 Visual은 불변).
-- 적용/복구 시점: `PatternHandler.SetPattern()`에서 축소, `HandlePatternComplete()`(패턴 종료) 및 패턴 없는 대기 구간에서 9개 모두 복구.
+- 적용/복구 시점: `SetPattern()`에서 축소, 패턴 종료 및 패턴 없는 대기 구간에서 9개 모두 복구.
 - `raycastPadding`은 마우스/터치 경로에만 영향을 준다. 키보드 입력(`ForceDown`)과 통과 노드 자동 인식은 레이캐스트를 거치지 않아 영향받지 않는다.
 - 상세: `docs/PointHitArea/`
 
-### 주요 클래스
+#### 통과 노드 자동 인식
+- 3x3 격자에서 a→b로 직선을 그을 때 정확히 가운데를 지나는 노드가 있으면(예: 1→3은 2를 통과) 자동으로 입력 처리한다.
+- 구현: `PatternHandler.GetPassThroughIndex(a, b)` → 통과 노드에 `ForceDown()`. 상세: `docs/PatternPassThrough/`
 
-**`InputHandler`** (`Assets/02. Scripts/Input/InputHandler.cs`)
-- 키보드 1~9 입력을 `bool[] inputs` (length 9)로 관리
-- `IngameInputs.Player` 액션맵을 루프로 바인딩 (Input1~Input9)
-- `Inputs` 프로퍼티로 외부 접근
+### 2. 판정 시스템
+- `PatternHandler`가 판정을 담당한다. 윈도우(초): `perfectWindow`=0.05, `goodWindow`=0.10.
+- `AddPattern(int index)`가 입력을 판정한다:
+  - **오답 인덱스**: `AllCorrect`만 취소하고 Miss 색 표시, 진행하지 않음(패턴 정체).
+  - **정답 인덱스**: `delta = |Time.time - ExpectedTime|` → `Judge(delta)`로 Perfect/Good/Miss 결정. 정답 노드 위 "타이밍 Miss"는 진행(`Advance`)된다.
+- 판정 결과 `JudgementResult`(Perfect/Good/Miss)는 색상·이펙트·캐릭터 액션의 분기 키로 쓰인다.
 
-**`Pattern`** (`Assets/02. Scripts/Pattern/Pattern.cs`) - ScriptableObject
-- **모양 원본 에셋일 뿐, 진행 상태를 갖지 않는다.** `PatternData[]`(인덱스 0~8의 나열)과 `GetNodeType()`만 제공.
-- 진행 상태를 에셋에 두면, 같은 템플릿을 쓰는 두 패턴이 동시에 살아 있을 때 서로의 상태를 덮어쓴다.
+### 3. 패턴 데이터 모델
+**`Pattern`** (ScriptableObject, `PatternSpace`) — 패턴의 **'모양 원본'**. 진행 상태를 갖지 않는다.
+- `PatternData[]`(각 `index` 0~8의 나열), `GetNodeType(position)`(0=Start, 마지막=End, 그 외=Progress), `SuccessAnimationClip`(완주 성공 시 캐릭터가 재생할 베기 클립. '모양에 종속된 정적 데이터'라 에셋에 두어도 원칙과 충돌하지 않는다).
+- 진행 상태를 에셋에 두면 같은 템플릿을 쓰는 두 패턴이 동시에 살아 있을 때 서로의 상태를 덮어쓴다 → 그래서 상태는 `ActivePattern`으로 분리.
 
-**`ActivePattern`** (`Assets/02. Scripts/Pattern/ActivePattern.cs`) - 일반 C# 클래스
-- 재생 중인 패턴 하나의 **런타임 상태**: `Template`, `StartTime`, 입력 시각, `CurrentPosition`, `AllCorrect`, `Deadline`
-- `StartTime`은 **큐 투입 시각**으로 고정한다. 입력 시각이 이 시점 기준 상대시간이므로, 판정 대상으로 승계될 때 다시 잡으면 타이밍이 밀린다.
-- `Deadline` = 마지막 입력 시각 + `goodWindow`. 이 시각을 넘기면 만료 처리(미완료면 `AllCorrect = false`).
+**`ActivePattern`** (일반 C# 클래스) — 재생 중인 패턴 하나의 **런타임 상태**.
+- `Template`, `StartTime`, 노드별 입력 시각, `CurrentPosition`, `AllCorrect`, `Deadline`, `ExpectedPointIndex`, `ExpectedTime`, `LastNodeTime`.
+- `StartTime`은 **큐 투입 시각(SetPattern 호출 시각)으로 고정**한다. 입력 시각이 이 시점 기준 상대시간이라, 판정 대상으로 승계될 때 다시 잡으면 타이밍이 통째로 밀린다.
+- `Deadline` = 마지막 입력 시각 + `goodWindow`. 넘기면 만료 처리(미완료면 `AllCorrect=false`).
 
 #### 패턴 겹침 규칙 (중요)
 - 채보는 **다음 패턴의 노드를 이전 패턴이 끝나기 전에 스폰**해야 한다 (스폰 리드타임 ≈1.0초 > 엔트리 간 입력 간격 최소 0.4초). 실제 채보의 95%가 겹친다.
-- 반면 **입력(판정) 시각은 겹치지 않는다.** 따라서 `PatternHandler`는 여러 패턴을 **큐**로 들고 있되(연출/스폰 대상), **판정 대상(`JudgeTarget`)은 언제나 선두 하나**다.
-- `SetPattern()`은 진행 중인 패턴을 **파기하지 않고 큐에 추가**만 한다. 판정 대상은 선두 패턴이 **완료되거나 만료될 때 같은 프레임에 즉시 승계**된다.
-- 낙하 노드는 패턴별로 소유자를 추적하며, 패턴이 완료/만료되면 그 패턴의 노드만 즉시 회수한다.
+- 반면 **입력(판정) 시각은 겹치지 않는다.** 따라서 `PatternHandler`는 여러 패턴을 **큐(`activePatterns`)**로 들고 있되(연출/스폰 대상), **판정 대상(`JudgeTarget`)은 언제나 선두 하나**다.
+- `SetPattern()`은 진행 중인 패턴을 **파기하지 않고 큐에 추가**만 한다. 판정 대상은 선두 패턴이 **완료/만료될 때 같은 프레임에 즉시 승계**된다.
+- 낙하 노드는 패턴별 소유자(`owner`)를 추적하며, 패턴이 완료/만료되면 그 패턴의 노드만 즉시 회수한다.
 - 상세: `docs/PatternOverlap/`
 
-**`Point`** (`Assets/02. Scripts/Pattern/Handler/Point.cs`)
-- `IPointerDownHandler`, `IPointerUpHandler`, `IPointerEnterHandler` 구현
-- **입력을 알리기만 한다** — `OnPointDown(index)` / `OnPointUp(index)` 이벤트 발행. 중복 판정은 하지 않는다.
-- 인덱스는 `PatternHandler.Initialize(i, this)`로 **`patternPoints` 배열 순서에서 주입**된다 (게임오브젝트 이름을 파싱하지 않는다).
-
 #### 입력 계층 규칙 (중요)
-- **중복 입력 방지의 진실의 원천은 `PatternHandler.connectedIndices` 하나다.** 이미 입력된 Point는 `OnPointPressed`의 가드에서 걸러진다.
-  - 이 기록은 **패턴이 끝날 때마다 클리어**되므로, 다음 패턴에서 같은 Point를 다시 쓸 수 있다.
-  - 예전엔 `Point.isBusy`가 같은 역할을 중복으로 했는데, 그건 스트로크가 끝나야만 풀려서 **패턴 경계에서 입력이 삼켜졌다**(키보드·마우스 모두). `isBusy`는 제거됐다.
-- **`IsDragging`과 `IsMouseDragging`을 구분한다.** `IsDragging`은 키보드 스트로크 중에도 true다.
-  - `Point.OnPointerEnter`(지나가며 입력)는 반드시 **`IsMouseDragging`**을 봐야 한다. `IsDragging`을 보면 키보드 입력 중 마우스를 올리기만 해도 입력으로 처리된다.
-- 키보드 스트로크는 패턴이 완료/만료될 때 종료된다. **마우스 드래그는 패턴 경계에서 끊지 않는다** — 다음 패턴으로 이어 그을 수 있어야 한다.
+- **중복 입력 방지의 진실의 원천은 `PatternHandler.connectedIndices` 하나다.** 이미 입력된 Point는 `OnPointPressed`의 가드에서 걸러진다. 이 기록은 **패턴이 끝날 때마다 클리어**되어 다음 패턴에서 같은 Point를 다시 쓸 수 있다. (예전 `Point.isBusy`는 스트로크가 끝나야 풀려 패턴 경계에서 입력을 삼켜 제거됨.)
+- **`IsDragging`과 `IsMouseDragging`을 구분한다.** `IsDragging`은 키보드 스트로크 중에도 true다. `Point.OnPointerEnter`(지나가며 입력)는 반드시 **`IsMouseDragging`**을 봐야 한다(안 그러면 키보드 입력 중 마우스 호버만으로 입력됨).
+- 키보드 스트로크는 패턴 완료/만료 시 종료된다. **마우스 드래그는 패턴 경계에서 끊지 않는다**(다음 패턴으로 이어 그을 수 있어야 함).
 - 상세: `docs/KeyboardInputStuck/`
 
-**`PatternHandler`** (`Assets/02. Scripts/UI/PatternHandler.cs`)
-- `Point[9]` 배열 보유
-- `refIndex`: 현재 눌린 포인트 수 추적
-- `AddPattern(int index)`: 미구현 - 패턴 입력 처리 로직 작성 예정
+### 4. 낙하 노드 시스템
+- `FallingNodeView`(IPoolable): `Pool`(PoolKey.FallingNode)로 재사용. 스폰 시각에 나타나 목표 Point로 낙하, 도착 시 `OnArrived` 발행.
+- `PatternHandler`가 스폰을 스케줄링(`scheduledSpawns`)하고 활성 노드(`activeFallingNodes`)를 소유자별로 추적한다.
+- **낙하 속도(행별 상이)**: 생성 Y(`fallSpawnPositionY`)는 모든 행 공통이지만, 화면 경계 밖에서 시작하는 상단 행은 노출시간이 짧아지므로 **화면 안쪽 구간만 `exposureDuration` 동안** 이동하도록 전체 낙하시간을 역산(`ComputeFallDuration`).
+- 판정된 노드는 즉시 회수, 미입력으로 자연 도착한 노드는 `OnFallingNodeMissedArrival` 발행 후 회수. 상세: `docs/FallingNode/`
+
+### 5. 채보 시스템 (ChartGen)
+- **`SongChart`**(ScriptableObject): `song`(AudioClip), `level`, `bpm`, `beatOffset`, `entries[]`. 각 `SongChartEntry`는 `template`(Pattern), `onsetTimes`(판정 절대시각), `exposureDurations`(노출시간), `spawnTimes`(스폰 절대시각 스냅샷).
+- **`ChartPlayer`**: `GameSession.SelectedChart`(없으면 `debugChart`)를 오디오 재생 시각에 맞춰 순차적으로 `PatternHandler.SetPattern`에 흘려보낸다. `audioSource.time >= spawnTimes[0]`이 되면 해당 엔트리를 투입. 재생 가이드: `docs/!Guides/Guide_ChartPlayback.md`
+- **굽기 툴**: `Tools/Pattern Chart Tool`(`PatternChartWindow`) — 음원을 온셋 분석(`ChartGen.Core`)해 채보를 굽거나 기존 SongChart를 편집/저장. 가이드: `docs/!Guides/Guide_PatternChartTool.md`. `Core`/`Tests`는 각각 asmdef 보유.
+
+### 6. 캐릭터 액션 (CharacterActionPlayer)
+- `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.SuccessAnimationClip`), 실패면 공용 피격(Hit) 클립**을 번갈아 재생.
+- `AnimatorOverrideController`로 단일 슬롯(`Attack`) 스테이트의 placeholder 클립을 런타임에 덮어쓴 뒤 그 스테이트를 `CrossFadeInFixedTime`으로 재생. Attack Layer는 휴지 시 웨이트 0, 재생 중 1, 종료 후 0으로 페이드.
+- **겹침 방지 배속**: 다음 패턴까지의 여유(`NextLastNodeTime`)보다 클립이 길면 `AttackSpeed`로 압축하되 `maxAttackSpeed`(기본 2.5) 상한. 상한으로도 안 담기면 다음 액션 CrossFade가 현재 액션을 끊는다(의도된 동작). 상세: `docs/CharacterAction/`
+
+### 7. 이펙트 시스템 (Effect)
+- **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**
+- **`EffectCatalog`**: `EffectTrigger` enum(Perfect/Good/Miss/PatternCompleteFull/PatternComplete/NodeConnected) + `EffectEntry`(트리거→프리팹+풀 크기). **이펙트 추가 = 카탈로그에 한 줄 추가**(코드 수정 없음). 프리팹 비면 무연출.
+- 프리팹별 자체 풀 큐로 관리. 배경 앰비언트는 상시 루프 인스턴스로 배치하고 `SetIntensity`로 강도 조절. 상세: `docs/CanvasEffect/`
+
+### 8. 디버그 입력 (에디터 전용)
+- `PatternHandler`의 `#if UNITY_EDITOR` 블록 + `PatternHandlerEditor` 커스텀 인스펙터. **빌드에는 포함되지 않는다.**
+- **수동 강제 입력**: F1/F2/F3(인스펙터에서 변경 가능) 또는 Force 버튼으로 판정 대상의 다음 노드를 Perfect/Good/Miss로 강제 입력. `DebugForceInput(result)`가 `ExpectedPointIndex`에 `ForceDown()` → 기존 입력 파이프라인 재사용, `AddPattern`은 `result = debugForcedResult ?? Judge(delta)`로만 분기.
+- **자동 Perfect(오토플레이) 토글**: 켜면 각 노드의 도달 타이밍(`ExpectedTime`)마다 자동 Perfect 처리되어 패턴이 저절로 진행.
+- 인스펙터: On/Off 마스터 토글, 키 매핑, 마지막 사용 모드 색상 하이라이트, Force 버튼. 마스터가 꺼지면 전부 무반응. 상세: `docs/DebugInput/`
+
+### 9. 씬 전환 / 곡 선택
+- **`SongSelectManager`**: 곡 선택 씬에서 버튼으로 `SelectChart(chart)` → `GameSession.SelectedChart`에 등록 후 `DefaultScene` 로드.
+- **`GameSession`**(Singleton, DontDestroyOnLoad): 씬을 넘어 `SelectedChart`를 전달. `ChartPlayer`가 읽어 사용.
+
+### 10. 인프라
+- **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
+- **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
+- **`StateMachine<T>`**(범용 FSM/HFSM): Enum 키/인스턴스로 전환, 조건 기반 자동 전환(`RegisterCondition`), AnyState 전환, HFSM용 `CompositeStateBase`. *현재 게임플레이 루프에 직접 배선돼 있진 않은 범용 유틸.*
+
+---
+
+## 이벤트 확장 포인트 (`PatternHandler`)
+새 연출/시스템은 아래 이벤트만 구독해 붙인다(PatternHandler 본체 수정 없이 확장).
+- `OnJudged(JudgementResult, int index)` — 판정 발생.
+- `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (CharacterActionPlayer, EffectManager가 구독)
+- `OnNodeConnected(int index, Vector3 world)` — 노드가 라인에 연결.
+- `OnFallingNodeSpawned / OnFallingNodeResolved / OnFallingNodeMissedArrival` — 낙하 노드의 스폰/판정/미입력 도착.
 
 ## 네임스페이스
-- `PatternSpace`: `Pattern`, `PatternData`, `Point` 클래스가 속함
+- `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`
+- `ChartGen`: `SongChart`, `SongChartEntry`, `ChartPlayer`, 분석 코어/에디터
+- 그 외(`PatternHandler`, `EffectManager`, `CharacterActionPlayer`, `GameSession`, `Singleton`, `Pool` 등)는 전역 네임스페이스
+
+---
 
 ## ⚠️ 개발 파이프라인 (가장 중요 — 반드시 준수)
 
