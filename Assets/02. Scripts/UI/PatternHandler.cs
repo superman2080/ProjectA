@@ -35,12 +35,64 @@ public class PatternHandler : MonoBehaviour
     [SerializeField] private float[] debugInputTimes;
     [SerializeField] private float[] debugExposureDurations;
 
+    [Header("Debug Input (Editor Only)")]
+    [SerializeField] private bool debugInputEnabled = false; // 마스터 On/Off (수동·자동 모두 이 스위치에 종속)
+    [SerializeField] private Key debugPerfectKey = Key.F1;
+    [SerializeField] private Key debugGoodKey = Key.F2;
+    [SerializeField] private Key debugMissKey = Key.F3;
+    [SerializeField] private bool debugAutoPerfect = false; // 자동 Perfect(오토플레이) 토글 상태
+
+    /// <summary>디버그 강제 입력 시 <see cref="AddPattern"/>이 이 값을 사용해 판정을 대체한다. 세팅→ForceDown→즉시 클리어.</summary>
+    private JudgementResult? debugForcedResult;
+
+    /// <summary>인스펙터 하이라이트용: 마지막으로 발동한 디버그 판정 모드.</summary>
+    private JudgementResult? debugLastUsedMode;
+    public JudgementResult? DebugLastUsedMode => debugLastUsedMode;
+
     [ContextMenu("Debug: Set Test Pattern")]
     private void DebugSetTestPattern()
     {
         if (debugTestPattern == null || debugInputTimes == null || debugInputTimes.Length == 0)
             return;
         SetPattern(debugTestPattern, debugInputTimes, null, debugExposureDurations);
+    }
+
+    /// <summary>판정 대상의 다음 노드를 <paramref name="forced"/> 판정으로 강제 입력한다. 기존 입력 파이프라인을 그대로 재사용한다.</summary>
+    public void DebugForceInput(JudgementResult forced)
+    {
+        if (!debugInputEnabled) return;
+
+        var target = JudgeTarget;
+        if (target == null) return;
+
+        int index = target.ExpectedPointIndex;
+        debugForcedResult = forced;
+        debugLastUsedMode = forced;
+        patternPoints[index].ForceDown(); // OnPointPressed → AddPattern 경로를 그대로 탄다
+        debugForcedResult = null;         // 실제 유저 입력에 잔류 영향이 없도록 즉시 클리어
+    }
+
+    /// <summary><see cref="Update"/> 맨 앞에서 호출. 디버그 수동 키/자동 Perfect를 처리한다(기존 로직 흐름은 유지).</summary>
+    private void ProcessDebugInput()
+    {
+        if (!debugInputEnabled) return;
+
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current[debugPerfectKey].wasPressedThisFrame)
+                DebugForceInput(JudgementResult.Perfect);
+            if (Keyboard.current[debugGoodKey].wasPressedThisFrame)
+                DebugForceInput(JudgementResult.Good);
+            if (Keyboard.current[debugMissKey].wasPressedThisFrame)
+                DebugForceInput(JudgementResult.Miss);
+        }
+
+        if (debugAutoPerfect)
+        {
+            var target = JudgeTarget;
+            if (target != null && Time.time >= target.ExpectedTime)
+                DebugForceInput(JudgementResult.Perfect); // 도달 타이밍에 맞춰 프레임당 1노드씩 자동 진행
+        }
     }
 #endif
 
@@ -137,6 +189,10 @@ public class PatternHandler : MonoBehaviour
 
     void Update()
     {
+#if UNITY_EDITOR
+        ProcessDebugInput();
+#endif
+
         ExpireOverduePatterns();
         ProcessFallingNodeSpawns();
 
@@ -472,7 +528,11 @@ public class PatternHandler : MonoBehaviour
         }
 
         float delta = Mathf.Abs(Time.time - target.ExpectedTime);
+#if UNITY_EDITOR
+        JudgementResult result = debugForcedResult ?? Judge(delta);
+#else
         JudgementResult result = Judge(delta);
+#endif
 
         if (result == JudgementResult.Miss)
         {
