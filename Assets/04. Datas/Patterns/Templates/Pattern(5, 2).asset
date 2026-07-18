@@ -10,14 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: Pattern(8, 5, 2, 1)
+  m_Name: Pattern(5, 2)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
-  - index: 8
-  - index: 5
-  - index: 2
+  - index: 4
   - index: 1
-  successAnimationClip: {fileID: 7400000, guid: a6b99cef9f425c348a21ad001ad7001d, type: 2}
-  animationStartOffset: 1.3842106
-  animationDuration: 2.6157894
-  animationSpeed: 3
+  successAnimationClip: {fileID: 7400000, guid: 3018d76508e966246bd3728ff5bda677, type: 2}
+  animationStartOffset: 0
+  animationDuration: 1.4055663
+  animationSpeed: 2

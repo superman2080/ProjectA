@@ -1,0 +1,12 @@
+{
+    "asset": "9d8e2396d838e8e42954b7528f1a849a",
+    "fileName": "019f756f-5c69-7fff-84df-640dab13edb7.fbx",
+    "prompt": "A rapid biped character animation, a vertical downward katana slash, followed instantly by a diagonal upward return slash. No preparation delay, extremely short recovery, high-speed attack motion focusing on the slashes.",
+    "negativePrompt": "",
+    "model": "uthana-text-to-motion-3",
+    "modelName": "Uthana Text to Motion 3.0",
+    "customSeed": 1105134262,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "isTrimmed": false
+}

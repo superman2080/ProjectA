@@ -2,6 +2,8 @@
   "dependencies": {
     "com.coffee.ui-particle": "https://github.com/mob-sakai/ParticleEffectForUGUI.git",
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
+    "com.unity.ai.assistant": "2.15.0-pre.2",
+    "com.unity.ai.inference": "2.6.1",
     "com.unity.ai.navigation": "2.0.11",
     "com.unity.burst": "1.8.28",
     "com.unity.cinemachine": "3.1.7",

@@ -1,0 +1,12 @@
+{
+    "asset": "6e6fb4c9e25034f4da0046de610e4916",
+    "fileName": "019f756f-6f2f-7f11-b1f8-d20ad4788858.fbx",
+    "prompt": "A fast biped character animation, a dynamic + (cross) shape sword slash with a katana. The character slashes vertically downwards and then horizontally immediately, forming a + shape in the air. Minimal start and end transition, focusing purely on the explosive slash motion.",
+    "negativePrompt": "",
+    "model": "uthana-text-to-motion-3",
+    "modelName": "Uthana Text to Motion 3.0",
+    "customSeed": 944015968,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "isTrimmed": false
+}

@@ -15,4 +15,6 @@ MonoBehaviour:
   patternDatas:
   - index: 4
   successAnimationClip: {fileID: 7400000, guid: fb7ef5a3cb39a614aaacc329ed5a4dcf, type: 2}
-  successImpactNormalizedTime: 0.35
+  animationStartOffset: 0.15
+  animationDuration: 0.7
+  animationSpeed: 2

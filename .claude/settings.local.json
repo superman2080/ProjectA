@@ -42,7 +42,8 @@
       "Bash(mv Plan_KeyboardInput.md Research_KeyboardInput.md KeyboardInput/)",
       "Bash(git commit -q -m '@ *)",
       "Bash(git commit *)",
-      "mcp__UnityMCP__manage_packages"
+      "mcp__UnityMCP__manage_packages",
+      "mcp__UnityMCP__execute_menu_item"
     ]
   }
 }

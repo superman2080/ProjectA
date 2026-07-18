@@ -3726,7 +3726,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1404bd336f06bb4896e619a752d18f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChartGen.ChartPlayer
-  debugChart: {fileID: 11400000, guid: 29986f97fa376834fa50d19c05b1546b, type: 2}
+  debugChart: {fileID: 11400000, guid: 20e067469aa0be549951c1c44cd08f9f, type: 2}
   audioSource: {fileID: 854156977}
   patternHandler: {fileID: 1565592730}
   countdownDuration: 3
@@ -4274,15 +4274,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterActionPlayer
   handler: {fileID: 1565592730}
   animator: {fileID: 1203060750}
-  attackStateName: Attack
+  attackStateAName: Attack_A
+  attackStateBName: Attack_B
   attackLayerName: Attack Layer
-  placeholderClip: {fileID: 7400000, guid: b286c5239db57e24aac24ca9f7e4dc2e, type: 2}
+  placeholderA: {fileID: 7400000, guid: e9ed28e5ea148cf4e90b5d38b87cc06d, type: 2}
+  placeholderB: {fileID: 7400000, guid: 7ba618c80b1f0e34cb62f9614af91ec9, type: 2}
   attackSpeedParam: AttackSpeed
   hitClips:
-  - {fileID: 8338732804319002307, guid: 36fe30ba832ef4c42ac1961245b8cfbf, type: 3}
-  - {fileID: 4847251598158998154, guid: 2cddf4c6d5df01948bf2b017240556a5, type: 3}
+  - {fileID: 110800000, guid: 36fe30ba832ef4c42ac1961245b8cfbf, type: 3}
+  - {fileID: 110800000, guid: 2cddf4c6d5df01948bf2b017240556a5, type: 3}
   crossFadeDuration: 0.05
-  maxAttackSpeed: 2.5
+  maxAttackSpeed: 3.5
   layerFadeOutDuration: 0.08
 --- !u!1 &1310662437
 GameObject:
@@ -4826,12 +4828,14 @@ MonoBehaviour:
   - {r: 0.95, g: 0.8, b: 0.25, a: 1}
   - {r: 0.75, g: 0.45, b: 0.95, a: 1}
   - {r: 0.95, g: 0.55, b: 0.2, a: 1}
-  debugTestPattern: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+  debugTestPattern: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
   debugInputTimes:
   - 1
   - 1.4
   - 1.8
+  - 2.2
   debugExposureDurations:
+  - 0.5
   - 0.5
   - 0.5
   - 0.5

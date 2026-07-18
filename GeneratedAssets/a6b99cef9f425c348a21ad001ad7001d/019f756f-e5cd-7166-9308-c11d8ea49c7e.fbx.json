@@ -1,0 +1,12 @@
+{
+    "asset": "a6b99cef9f425c348a21ad001ad7001d",
+    "fileName": "019f756f-e5cd-7166-9308-c11d8ea49c7e.fbx",
+    "prompt": "A quick biped character animation, wild flurry slashes with a katana. Multiple rapid slashes horizontally and vertically in a furious combination. Starting and ending extremely fast, keeping the action tightly framed around the continuous sword slashes.",
+    "negativePrompt": "",
+    "model": "uthana-text-to-motion-3",
+    "modelName": "Uthana Text to Motion 3.0",
+    "customSeed": 1586759101,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "isTrimmed": false
+}
