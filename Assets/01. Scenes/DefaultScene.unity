@@ -4835,6 +4835,11 @@ MonoBehaviour:
   - 0.5
   - 0.5
   - 0.5
+  debugInputEnabled: 1
+  debugPerfectKey: 94
+  debugGoodKey: 95
+  debugMissKey: 96
+  debugAutoPerfect: 1
 --- !u!114 &1565592731
 MonoBehaviour:
   m_ObjectHideFlags: 0

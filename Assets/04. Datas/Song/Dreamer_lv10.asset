@@ -23,8 +23,8 @@ MonoBehaviour:
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 1.7886363
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 1.7590643
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 3.2
     - 3.6000001
@@ -34,24 +34,24 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 2.2408164
-    - 2.5886364
-    - 2.9230769
+    - 2.2026882
+    - 2.5590644
+    - 2.9070513
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 4.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 3.3886366
+    - 3.3590646
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 6.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 5.3886366
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 5.3590646
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 6.8
     - 7.2000003
@@ -61,17 +61,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 5.8408165
-    - 6.188637
-    - 6.523077
+    - 5.8026886
+    - 6.159065
+    - 6.5070515
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 9.2
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 8.188636
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 8.159064
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 9.6
     - 10
@@ -81,9 +81,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 8.640817
-    - 8.988636
-    - 9.323077
+    - 8.559065
+    - 8.9590645
+    - 9.359065
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 10.8
@@ -96,18 +96,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 9.723077
-    - 10.188636
-    - 10.640817
-    - 11.040816
+    - 9.707051
+    - 10.159064
+    - 10.602689
+    - 11.002688
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 12.400001
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 11.388637
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 11.359065
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 12.8
     - 13.2
@@ -117,24 +117,24 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 11.8408165
-    - 12.188636
-    - 12.523077
+    - 11.707051
+    - 12.159064
+    - 12.602689
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 14
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 12.988636
+    - 12.9590645
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 15.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 14.588636
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 14.559065
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 16
     - 16.4
@@ -144,9 +144,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 15.040816
-    - 15.388636
-    - 15.723078
+    - 14.907051
+    - 15.359064
+    - 15.80269
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 17.2
@@ -159,17 +159,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 16.123077
-    - 16.588636
-    - 17.040817
-    - 17.440815
+    - 16.107052
+    - 16.559065
+    - 17.002687
+    - 17.402687
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 18.800001
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 17.788637
+    - 17.759066
   - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 19.2
@@ -180,9 +180,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 18.240818
-    - 18.588636
-    - 18.923077
+    - 18.202688
+    - 18.559065
+    - 18.907051
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 20.4
@@ -195,18 +195,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 19.323076
-    - 19.788637
-    - 20.240818
-    - 20.640816
+    - 19.30705
+    - 19.759066
+    - 20.202688
+    - 20.602688
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 22
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 20.988636
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 20.959064
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 22.4
     - 22.800001
@@ -216,9 +216,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 21.440815
-    - 21.788637
-    - 22.123077
+    - 21.402687
+    - 21.759066
+    - 22.107052
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 23.6
@@ -231,18 +231,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 22.523077
-    - 22.988636
-    - 23.440815
-    - 23.840816
+    - 22.507051
+    - 22.959064
+    - 23.402687
+    - 23.802689
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 25.2
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 24.188637
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 24.159065
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 25.6
     - 26
@@ -252,9 +252,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 24.640816
-    - 24.988636
-    - 25.323076
+    - 24.559065
+    - 24.959064
+    - 25.359064
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 26.800001
@@ -267,17 +267,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 25.723078
-    - 26.188637
-    - 26.640816
-    - 27.040817
+    - 25.707052
+    - 26.159065
+    - 26.602688
+    - 27.002687
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 28.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 27.388636
+    - 27.359064
   - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 28.800001
@@ -288,24 +288,24 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 27.840816
-    - 28.188637
-    - 28.523077
+    - 27.707052
+    - 28.159065
+    - 28.602688
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 30
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 28.988636
+    - 28.959064
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 32
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 30.988636
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 30.959064
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 32.4
     - 32.8
@@ -315,9 +315,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 31.440819
-    - 31.788635
-    - 32.123077
+    - 31.307053
+    - 31.759064
+    - 32.20269
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 33.600002
@@ -330,18 +330,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 32.52308
-    - 32.988636
-    - 33.44082
-    - 33.840816
+    - 32.507053
+    - 32.959064
+    - 33.40269
+    - 33.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 35.2
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 34.188637
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 34.159065
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 35.600002
     - 36
@@ -351,9 +351,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 34.64082
-    - 34.988636
-    - 35.32308
+    - 34.60269
+    - 34.959064
+    - 35.307053
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 36.8
@@ -366,18 +366,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 35.723076
-    - 36.188637
-    - 36.64082
-    - 37.040817
+    - 35.70705
+    - 36.159065
+    - 36.60269
+    - 37.00269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 38.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 37.388638
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 37.359066
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 38.8
     - 39.2
@@ -387,9 +387,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 37.840816
-    - 38.188637
-    - 38.52308
+    - 37.80269
+    - 38.159065
+    - 38.507053
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 40
@@ -402,18 +402,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 38.923077
-    - 39.388638
-    - 39.840816
-    - 40.240818
+    - 38.90705
+    - 39.359066
+    - 39.80269
+    - 40.20269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 41.600002
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 40.58864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 40.559067
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 42
     - 42.4
@@ -423,9 +423,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 41.040817
-    - 41.388638
-    - 41.723076
+    - 40.959064
+    - 41.359066
+    - 41.759064
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 43.2
@@ -438,18 +438,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 42.123077
-    - 42.58864
-    - 43.040817
-    - 43.44082
+    - 42.10705
+    - 42.559067
+    - 43.00269
+    - 43.40269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 44.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 43.788635
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 43.759064
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 45.2
     - 45.600002
@@ -459,9 +459,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 44.240818
-    - 44.58864
-    - 44.923077
+    - 44.10705
+    - 44.559067
+    - 45.00269
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 46.4
@@ -474,18 +474,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 45.32308
-    - 45.788635
-    - 46.240818
-    - 46.64082
+    - 45.307053
+    - 45.759064
+    - 46.20269
+    - 46.60269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 48
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 46.988636
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 46.959064
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 48.4
     - 48.8
@@ -495,9 +495,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 47.44082
-    - 47.788635
-    - 48.123077
+    - 47.307053
+    - 47.759064
+    - 48.20269
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 49.600002
@@ -510,17 +510,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 48.52308
-    - 48.988636
-    - 49.44082
-    - 49.840816
+    - 48.507053
+    - 48.959064
+    - 49.40269
+    - 49.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 51.2
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 50.188637
+    - 50.159065
   - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 51.600002
@@ -531,9 +531,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 50.64082
-    - 50.988636
-    - 51.32308
+    - 50.60269
+    - 50.959064
+    - 51.307053
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 52.8
@@ -546,18 +546,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 51.723076
-    - 52.188637
-    - 52.64082
-    - 53.040817
+    - 51.70705
+    - 52.159065
+    - 52.60269
+    - 53.00269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 54.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 53.388638
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 53.359066
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 54.8
     - 55.2
@@ -567,9 +567,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 53.840816
-    - 54.188637
-    - 54.52308
+    - 53.80269
+    - 54.159065
+    - 54.507053
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 56
@@ -582,18 +582,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 54.923077
-    - 55.388638
-    - 55.840816
-    - 56.240818
+    - 54.90705
+    - 55.359066
+    - 55.80269
+    - 56.20269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 57.600002
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 56.58864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 56.559067
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 58
     - 58.4
@@ -603,9 +603,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 57.040817
-    - 57.388638
-    - 57.723076
+    - 56.959064
+    - 57.359066
+    - 57.759064
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 59.2
@@ -618,17 +618,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 58.123077
-    - 58.58864
-    - 59.040817
-    - 59.44082
+    - 58.10705
+    - 58.559067
+    - 59.00269
+    - 59.40269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 60.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 59.788635
+    - 59.759064
   - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 61.2
@@ -639,9 +639,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 60.240818
-    - 60.58864
-    - 60.923077
+    - 60.10705
+    - 60.559067
+    - 61.00269
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 62.4
@@ -654,18 +654,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 61.32308
-    - 61.788635
-    - 62.240818
-    - 62.64082
+    - 61.307053
+    - 61.759064
+    - 62.20269
+    - 62.60269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 64
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 62.988636
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 62.959064
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 64.4
     - 64.8
@@ -675,9 +675,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 63.44082
-    - 63.78864
-    - 64.123085
+    - 63.307053
+    - 63.759068
+    - 64.20269
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 65.6
@@ -690,18 +690,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 64.52308
-    - 64.98864
-    - 65.44082
-    - 65.84082
+    - 64.50705
+    - 64.95906
+    - 65.40269
+    - 65.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 67.200005
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 66.188644
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 66.159065
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 67.6
     - 68
@@ -711,24 +711,24 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 66.640816
-    - 66.98864
-    - 67.32308
+    - 66.602684
+    - 66.95906
+    - 67.30705
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 68.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 67.78864
+    - 67.75906
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 70
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 68.98864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 68.95906
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 70.4
     - 70.8
@@ -738,24 +738,24 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 69.44082
-    - 69.78864
-    - 70.123085
+    - 69.40269
+    - 69.75906
+    - 70.107056
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 71.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 70.58864
+    - 70.55906
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 73.200005
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 72.188644
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 72.159065
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 73.6
     - 74
@@ -765,9 +765,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 72.640816
-    - 72.98864
-    - 73.32308
+    - 72.55906
+    - 72.95906
+    - 73.35906
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 74.8
@@ -780,18 +780,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 73.72308
-    - 74.188644
-    - 74.640816
-    - 75.04082
+    - 73.707054
+    - 74.159065
+    - 74.602684
+    - 75.002686
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 76.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 75.38864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 75.35906
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 76.8
     - 77.200005
@@ -801,9 +801,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 75.84082
-    - 76.188644
-    - 76.52308
+    - 75.707054
+    - 76.159065
+    - 76.602684
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 78
@@ -816,18 +816,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 76.92308
-    - 77.38864
-    - 77.84082
-    - 78.24082
+    - 76.90705
+    - 77.35906
+    - 77.80269
+    - 78.20269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 79.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 78.58864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 78.55906
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 80
     - 80.4
@@ -837,9 +837,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 79.04082
-    - 79.38864
-    - 79.72308
+    - 78.90705
+    - 79.35906
+    - 79.80269
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 81.200005
@@ -852,17 +852,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 80.123085
-    - 80.58864
-    - 81.04082
-    - 81.44082
+    - 80.107056
+    - 80.55906
+    - 81.002686
+    - 81.40269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 82.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 81.78864
+    - 81.75906
   - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 83.200005
@@ -873,9 +873,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 82.24082
-    - 82.58864
-    - 82.92308
+    - 82.20269
+    - 82.55906
+    - 82.90705
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 84.4
@@ -888,18 +888,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 83.32308
-    - 83.78864
-    - 84.24082
-    - 84.640816
+    - 83.30705
+    - 83.75906
+    - 84.20269
+    - 84.602684
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 86
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 84.98864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 84.95906
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 86.4
     - 86.8
@@ -909,9 +909,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 85.44082
-    - 85.78864
-    - 86.123085
+    - 85.40269
+    - 85.75906
+    - 86.107056
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 87.6
@@ -924,18 +924,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 86.52308
-    - 86.98864
-    - 87.44082
-    - 87.84082
+    - 86.50705
+    - 86.95906
+    - 87.40269
+    - 87.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 89.200005
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 88.188644
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 88.159065
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 89.6
     - 90
@@ -945,9 +945,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 88.640816
-    - 88.98864
-    - 89.32308
+    - 88.55906
+    - 88.95906
+    - 89.35906
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 90.8
@@ -960,17 +960,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 89.72308
-    - 90.188644
-    - 90.640816
-    - 91.04082
+    - 89.707054
+    - 90.159065
+    - 90.602684
+    - 91.002686
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 92.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 91.38864
+    - 91.35906
   - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 92.8
@@ -981,9 +981,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 91.84082
-    - 92.188644
-    - 92.52308
+    - 91.707054
+    - 92.159065
+    - 92.602684
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 94
@@ -996,18 +996,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 92.92308
-    - 93.38864
-    - 93.84082
-    - 94.24082
+    - 92.90705
+    - 93.35906
+    - 93.80269
+    - 94.20269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 95.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 94.58864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 94.55906
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 96
     - 96.4
@@ -1017,9 +1017,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 95.04082
-    - 95.38864
-    - 95.72308
+    - 94.90705
+    - 95.35906
+    - 95.80269
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 97.200005
@@ -1032,18 +1032,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 96.123085
-    - 96.58864
-    - 97.04082
-    - 97.44082
+    - 96.107056
+    - 96.55906
+    - 97.002686
+    - 97.40269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 98.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 97.78864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 97.75906
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 99.200005
     - 99.6
@@ -1053,9 +1053,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 98.24082
-    - 98.58864
-    - 98.92308
+    - 98.20269
+    - 98.55906
+    - 98.90705
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 100.4
@@ -1068,18 +1068,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 99.32308
-    - 99.78864
-    - 100.24082
-    - 100.640816
+    - 99.30705
+    - 99.75906
+    - 100.20269
+    - 100.602684
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 102
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 100.98864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 100.95906
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 102.4
     - 102.8
@@ -1089,9 +1089,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 101.44082
-    - 101.78864
-    - 102.123085
+    - 101.40269
+    - 101.75906
+    - 102.107056
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 103.6
@@ -1104,18 +1104,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 102.52308
-    - 102.98864
-    - 103.44082
-    - 103.84082
+    - 102.50705
+    - 102.95906
+    - 103.40269
+    - 103.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 105.200005
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 104.188644
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 104.159065
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
     onsetTimes:
     - 105.6
     - 106
@@ -1125,9 +1125,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 104.640816
-    - 104.98864
-    - 105.32308
+    - 104.55906
+    - 104.95906
+    - 105.35906
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 106.8
@@ -1140,18 +1140,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 105.72308
-    - 106.188644
-    - 106.640816
-    - 107.04082
+    - 105.707054
+    - 106.159065
+    - 106.602684
+    - 107.002686
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 108.4
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 107.38864
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    - 107.35906
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
     onsetTimes:
     - 108.8
     - 109.200005
@@ -1161,9 +1161,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 107.84082
-    - 108.188644
-    - 108.52308
+    - 107.707054
+    - 108.159065
+    - 108.602684
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 110
@@ -1176,18 +1176,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 108.92308
-    - 109.38864
-    - 109.84082
-    - 110.24082
+    - 108.90705
+    - 109.35906
+    - 109.80269
+    - 110.20269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 111.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 110.58864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 110.55906
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
     onsetTimes:
     - 112
     - 112.4
@@ -1197,9 +1197,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 111.04082
-    - 111.38864
-    - 111.72308
+    - 110.90705
+    - 111.35906
+    - 111.80269
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 113.200005
@@ -1212,17 +1212,17 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 112.123085
-    - 112.58864
-    - 113.04082
-    - 113.44082
+    - 112.107056
+    - 112.55906
+    - 113.002686
+    - 113.40269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 114.8
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 113.78864
+    - 113.75906
   - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 115.200005
@@ -1233,9 +1233,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 114.24082
-    - 114.58864
-    - 114.92308
+    - 114.20269
+    - 114.55906
+    - 114.90705
   - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 116.4
@@ -1248,18 +1248,18 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 115.32308
-    - 115.78864
-    - 116.24082
-    - 116.640816
+    - 115.30705
+    - 115.75906
+    - 116.20269
+    - 116.602684
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 118
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 116.98864
-  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    - 116.95906
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
     onsetTimes:
     - 118.4
     - 118.8
@@ -1269,9 +1269,9 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 117.44082
-    - 117.78864
-    - 118.123085
+    - 117.40269
+    - 117.75906
+    - 118.107056
   - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 119.6
@@ -1284,21 +1284,21 @@ MonoBehaviour:
     - 0.5
     - 0.5
     spawnTimes:
-    - 118.52308
-    - 118.98864
-    - 119.44082
-    - 119.84082
+    - 118.50705
+    - 118.95906
+    - 119.40269
+    - 119.80269
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 121.6
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 120.58864
+    - 120.55906
   - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
     onsetTimes:
     - 122
     exposureDurations:
     - 0.5
     spawnTimes:
-    - 120.98864
+    - 120.95906
