@@ -10,9 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: Pattern_3Node_(0, 4, 8)
+  m_Name: Pattern(6, 3, 0, 1)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
+  - index: 6
+  - index: 3
   - index: 0
-  - index: 4
-  - index: 8
+  - index: 1
+  successAnimationClip: {fileID: 7400000, guid: 0c1c95d6350e91740ab3b2a1869a3a4e, type: 2}
+  successImpactNormalizedTime: 0.35

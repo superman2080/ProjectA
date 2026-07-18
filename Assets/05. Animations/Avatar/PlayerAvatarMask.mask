@@ -135,3 +135,7 @@ AvatarMask:
     m_Weight: 1
   - m_Path: root/pelvis/thigh_r/thigh_twist_01_r
     m_Weight: 1
+  - m_Path: root/add_weapon_r
+    m_Weight: 1
+  - m_Path: root/add_weapon_l
+    m_Weight: 1

@@ -87,7 +87,7 @@ public class PatternHandler : MonoBehaviour
     private float screenTopY;
 
     public event Action<JudgementResult, int> OnJudged;
-    public event Action<bool> OnPatternComplete; // bool: 전체 정답 시 true (보너스 점수)
+    public event Action<PatternCompletionInfo> OnPatternComplete; // 패턴 완료(완주/만료) 순간의 페이로드. 성공/실패·타이밍·다음 패턴 정보를 담는다.
     /// <summary>확장 포인트: 새 노드가 라인에 연결될 때마다 (index, 월드 좌표) 전달.</summary>
     public event Action<int, Vector3> OnNodeConnected;
 
@@ -511,7 +511,10 @@ public class PatternHandler : MonoBehaviour
         activePatterns.Remove(pattern);
         ClearNodesOf(pattern);
 
-        OnPatternComplete?.Invoke(pattern.AllCorrect);
+        // Remove가 먼저 실행됐으므로 이 시점의 선두(activePatterns[0])가 곧 다음 대기 패턴이다.
+        // 다음 패턴이 없으면(채보상 공백) -1f → 겹침 방지 속도 제약 없음.
+        float nextLastNodeTime = activePatterns.Count > 0 ? activePatterns[0].LastNodeTime : -1f;
+        OnPatternComplete?.Invoke(new PatternCompletionInfo(pattern.AllCorrect, pattern.Template, pattern.LastNodeTime, nextLastNodeTime));
 
         // 키보드 스트로크는 여기서 끝낸다. 마우스 드래그는 끊지 않는다 —
         // 다음 패턴으로 이어 긋는 중일 수 있고, connectedIndices는 아래에서 어차피 비워지므로 이어져도 안전하다.

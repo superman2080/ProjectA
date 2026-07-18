@@ -158,13 +158,13 @@ public class EffectManager : MonoBehaviour
         Play(EffectTrigger.NodeConnected, worldPosition);
     }
 
-    private void HandlePatternComplete(bool allCorrect)
+    private void HandlePatternComplete(PatternCompletionInfo info)
     {
         Vector3 worldPosition = patternCompleteAnchor != null
             ? patternCompleteAnchor.position
             : (overlayLayer != null ? overlayLayer.position : transform.position);
 
-        Play(allCorrect ? EffectTrigger.PatternCompleteFull : EffectTrigger.PatternComplete, worldPosition);
+        Play(info.AllCorrect ? EffectTrigger.PatternCompleteFull : EffectTrigger.PatternComplete, worldPosition);
     }
 
     // ─────────────────────────── 앰비언트 ───────────────────────────

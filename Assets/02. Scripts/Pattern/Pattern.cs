@@ -27,7 +27,14 @@ namespace PatternSpace
     {
         [SerializeField] private PatternData[] patternDatas;
 
+        // 이 필드는 '모양에 종속된 정적 데이터'다(진행 상태가 아니라). 그래서 이 에셋에 두어도
+        // "Pattern은 모양 원본일 뿐 진행 상태를 갖지 않는다"는 원칙과 충돌하지 않는다.
+        [Tooltip("패턴을 전 노드 Good/Perfect로 완주했을 때 캐릭터가 재생할 애니메이션 클립. 비우면 무연출.")]
+        [SerializeField] private AnimationClip successAnimationClip;
+
         public IReadOnlyList<PatternData> AllData => patternDatas;
+
+        public AnimationClip SuccessAnimationClip => successAnimationClip;
 
         public NodeType GetNodeType(int position)
         {

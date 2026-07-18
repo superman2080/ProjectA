@@ -33,6 +33,9 @@ namespace PatternSpace
         /// <summary>마지막 노드의 입력 시한(절대시각). 이 시각을 넘기면 만료 처리한다.</summary>
         public float Deadline { get; }
 
+        /// <summary>마지막 노드의 이상적 도달 시각(절대). ExpectedTime은 CurrentPosition 기준이라 완료 후엔 범위를 벗어나므로 별도로 제공한다.</summary>
+        public float LastNodeTime => StartTime + inputTimes[inputTimes.Length - 1];
+
         public ActivePattern(Pattern template, System.Collections.Generic.IReadOnlyList<float> inputTimes, float startTime, float goodWindow)
         {
             Template = template;
