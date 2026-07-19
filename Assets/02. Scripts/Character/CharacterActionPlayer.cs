@@ -216,7 +216,10 @@ public class CharacterActionPlayer : MonoBehaviour
         animator.SetLayerWeight(attackLayerIndex, 1f);
         actionEndTime = Time.time + dur / Mathf.Max(speed, 0.01f);
 
-        animator.CrossFadeInFixedTime(targetStateHash, crossFadeDuration, attackLayerIndex, startOffset);
+        // CrossFadeInFixedTime의 fixedTimeOffset은 '클립 초'가 아니라 스테이트 speed가 곱해지는 '스테이트 재생 초'로 해석된다.
+        // AttackSpeed를 먼저 걸어둔 상태이므로 startOffset(클립 초)을 speed로 나눠 넘겨야 실제 클립상 startOffset 지점에서 시작한다.
+        // (보정하지 않으면 startOffset*speed 지점에서 시작해 클립 끝에 조기 도달 → Exit Time 전이로 애니가 중간에 끊긴다.)
+        animator.CrossFadeInFixedTime(targetStateHash, crossFadeDuration, attackLayerIndex, startOffset / Mathf.Max(speed, 0.01f));
 
         useSlotA = !useSlotA;
     }
