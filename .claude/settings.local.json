@@ -43,7 +43,8 @@
       "Bash(git commit -q -m '@ *)",
       "Bash(git commit *)",
       "mcp__UnityMCP__manage_packages",
-      "mcp__UnityMCP__execute_menu_item"
+      "mcp__UnityMCP__execute_menu_item",
+      "Bash(git check-ignore *)"
     ]
   }
 }
