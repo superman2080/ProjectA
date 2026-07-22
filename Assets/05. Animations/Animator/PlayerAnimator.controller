@@ -76,6 +76,12 @@ AnimatorController:
     m_DefaultInt: 0
     m_DefaultBool: 0
     m_Controller: {fileID: 9100000}
+  - m_Name: ReleaseSpeed
+    m_Type: 1
+    m_DefaultFloat: 1
+    m_DefaultInt: 0
+    m_DefaultBool: 0
+    m_Controller: {fileID: 9100000}
   m_AnimatorLayers:
   - serializedVersion: 5
     m_Name: Running Layer
@@ -117,14 +123,14 @@ AnimatorState:
   m_IKOnFeet: 0
   m_WriteDefaultValues: 1
   m_Mirror: 0
-  m_SpeedParameterActive: 0
+  m_SpeedParameterActive: 1
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
   m_Motion: {fileID: 7400000, guid: f5f067eefaa69b446a380402844ba888, type: 2}
-  m_Tag: 
-  m_SpeedParameter: 
-  m_MirrorParameter: 
+  m_Tag:
+  m_SpeedParameter: ReleaseSpeed
+  m_MirrorParameter:
   m_CycleOffsetParameter: 
   m_TimeParameter: 
 --- !u!1107 &1694643294644245851
@@ -150,7 +156,7 @@ AnimatorStateMachine:
   m_EntryTransitions: []
   m_StateMachineTransitions: {}
   m_StateMachineBehaviours: []
-  m_AnyStatePosition: {x: 90, y: 0, z: 0}
+  m_AnyStatePosition: {x: 70, y: -60, z: 0}
   m_EntryPosition: {x: -170, y: 220, z: 0}
   m_ExitPosition: {x: 800, y: 120, z: 0}
   m_ParentStateMachinePosition: {x: 800, y: 20, z: 0}
@@ -214,7 +220,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: -8420468234553786229, guid: 86adc231f3b69cd45872593372d18283, type: 3}
+  m_Motion: {fileID: -1829247268468314838, guid: a09958e9c1b0b7747a0a6e8b24e31099, type: 3}
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: 
@@ -234,9 +240,9 @@ AnimatorStateTransition:
   m_Mute: 0
   m_IsExit: 0
   serializedVersion: 3
-  m_TransitionDuration: 0.15
+  m_TransitionDuration: 0.15000033
   m_TransitionOffset: 0
-  m_ExitTime: 1
+  m_ExitTime: 0.84513295
   m_HasExitTime: 1
   m_HasFixedDuration: 1
   m_InterruptionSource: 0
@@ -256,9 +262,9 @@ AnimatorStateTransition:
   m_Mute: 0
   m_IsExit: 0
   serializedVersion: 3
-  m_TransitionDuration: 0.15
+  m_TransitionDuration: 0.14999998
   m_TransitionOffset: 0
-  m_ExitTime: 1
+  m_ExitTime: 0.8389382
   m_HasExitTime: 1
   m_HasFixedDuration: 1
   m_InterruptionSource: 0
