@@ -3902,7 +3902,7 @@ MonoBehaviour:
   audioSource: {fileID: 854156977}
   patternHandler: {fileID: 1565592730}
   countdownDuration: 3
-  playOnStart: 0
+  playOnStart: 1
 --- !u!82 &854156977
 AudioSource:
   m_ObjectHideFlags: 0
@@ -4454,14 +4454,16 @@ MonoBehaviour:
   attackSpeedParam: AttackSpeed
   releaseStateName: Release
   releaseSpeedParam: ReleaseSpeed
+  releaseClip: {fileID: 7400000, guid: f5f067eefaa69b446a380402844ba888, type: 2}
   hitClips:
   - {fileID: 110800000, guid: 36fe30ba832ef4c42ac1961245b8cfbf, type: 3}
   - {fileID: 110800000, guid: 2cddf4c6d5df01948bf2b017240556a5, type: 3}
   attackCrossFadeDuration: 0.15
-  comboLinkWindow: 1
-  recoveryHoldDuration: 0.25
+  comboLinkWindow: 3
+  recoveryHoldDuration: 0
   blendOutDuration: 0.3
   releaseDuration: 0.5
+  releaseCrossFadeDuration: 0.1
   layerBlendInDuration: 0.08
   maxAttackSpeed: 3.5
 --- !u!1 &1310662437

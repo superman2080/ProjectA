@@ -130,6 +130,15 @@
   - 1차 수정(전이 방향으로 판별)은 **불충분했다.** `CrossFade` 호출 다음 프레임에도 `IsInTransition`이 아직 false일 수 있어 같은 오탐이 재현됐다(`t=1.09`에 동일 로그).
   - 2차 수정(채택): `attackStateObserved` — **이번 액션의 공격 스테이트에 실제로 진입한 것을 관측한 뒤부터만** Release를 마무리로 인정한다. 애니메이터의 프레임 지연에 의존하지 않는다.
 
+- [x] **Step 11 — Release를 트림 끝에 맞춰 시작 (회귀 수정)**
+  - **증상**: 트림 끝과 클립 끝이 다른 클립(9개 중 8개)에서 Release가 **뒤늦게** 튀어나온다.
+  - **원인 1 — 애니메이터**: `Attack→Release` 전이가 `ExitTime` 기반이라 **클립 전체가 끝나야** 발동한다. 트림 끝 이후 tail이 1.1~3.2초 남아 있어 그만큼 늦다.
+  - **원인 2 — 코드(내가 만든 회귀)**: Step 10의 `UpdateReleaseState()`가 스테이트를 폴링해 "Release 재생 중"이면 웨이트를 유지했다. 그런데 그 시점엔 **이미 blend-out이 끝나 웨이트가 0이고 Run이 나오고 있었다.** `ApplyBlendIn()`이 호출되면서 `blendInStartTime`이 한참 과거라 보간이 즉시 완료 → **웨이트가 1로 튀어 Release가 갑자기 등장**했다.
+  - **수정**: 스테이트 폴링을 버리고 **트림 끝에서 직접 `CrossFadeInFixedTime(Release)`** 한다. 재생 시간이 `releaseDuration`으로 고정되므로 종료 시각도 시간 계산으로 확정된다(`releaseEndTime = 트리거 시각 + releaseDuration`).
+  - 폴링으로 세 번(오탐 2회 + 이번 회귀) 문제가 났다. **애니메이터 상태를 되묻지 않고 우리가 건 시각을 기준으로 삼는 편이 견고하다.**
+  - 새 필드: `releaseClip`(길이를 읽어 배속 역산), `releaseCrossFadeDuration`(0.10). 제거: `releaseSpeedApplied`/`attackStateObserved`/`hasPlayedAction`/`UpdateReleaseState()`.
+  - `recoveryHoldDuration`은 이제 **"Release로 넘어가기 전 클립 자체의 tail을 얼마나 보여줄지"**를 뜻한다. 트림 끝 즉시 Release를 원하므로 씬 값을 **0**으로 설정.
+
 ---
 
 ## Step 8 실측 결과 (플레이 모드, `Dreamer_Lv2` = 씬의 `debugChart`, 약 14초 구간)

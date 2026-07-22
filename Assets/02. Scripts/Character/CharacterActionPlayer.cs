@@ -12,7 +12,8 @@ using UnityEngine;
 /// - <b>연계 있음(콤보)</b> — 다음 공격이 comboLinkWindow 안에 시작되면 Attack Layer 웨이트를 1로 <b>유지</b>한 채 다음 클립으로 크로스페이드한다.
 ///   레이어를 내렸다 올리지 않으므로 사이에 Run이 비집고 들어오지 않는다. 실측상 이쪽이 주 경로다(채보 연결의 약 95%).
 /// - <b>연계 없음</b> — recoveryHoldDuration 동안 마무리 동작을 노출한 뒤, blendOutDuration 동안 웨이트를 0으로 내려 base Running Layer(Run)와 크로스블렌드한다.
-///   공격 클립에 남은 마무리 구간이 없어 Release 스테이트로 흘러간 경우에는, Release를 releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> Run으로 페이드한다(재생 도중 잘리지 않게).
+///   이때 <b>트림 끝에서 곧바로 Release 스테이트로 CrossFade</b>하고(애니메이터의 ExitTime 전이는 클립 전체가 끝나야 발동해 늦다),
+///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> Run으로 페이드한다.
 /// 두 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
 ///
 /// AnimatorOverrideController로 듀얼 슬롯(Attack_A, Attack_B)을 교대로 교체하며 재생해 모션 끊김(Popping)을 방지한다. 재생할 클립이 없으면 무연출로 넘어간다.
@@ -39,6 +40,8 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private string releaseStateName = "Release";
     [Tooltip("Release 스테이트의 Speed Multiplier 파라미터 이름.")]
     [SerializeField] private string releaseSpeedParam = "ReleaseSpeed";
+    [Tooltip("Release 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
+    [SerializeField] private AnimationClip releaseClip;
 
     [Header("Clips")]
     [Tooltip("패턴 실패 시 재생할 피격 리액션 클립들. 번갈아 재생된다.")]
@@ -55,6 +58,8 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private float blendOutDuration = 0.30f;
     [Tooltip("Release(마무리) 스테이트를 이 시간(초) 안에 완주시킨다. 배속은 클립 길이에서 역산된다(길이 2.33초 / 0.9초 ≈ 2.6배).")]
     [SerializeField] private float releaseDuration = 0.9f;
+    [Tooltip("공격 → Release 크로스페이드 시간(초).")]
+    [SerializeField] private float releaseCrossFadeDuration = 0.10f;
     [Tooltip("액션 시작 시 레이어 웨이트를 현재값에서 1까지 올리는 시간(초). 복귀 도중 인터럽트될 때의 스냅을 막는다.")]
     [SerializeField] private float layerBlendInDuration = 0.08f;
     [Tooltip("자동 배속(입력 구간이 짧을 때)의 상한.")]
@@ -67,9 +72,8 @@ public class CharacterActionPlayer : MonoBehaviour
     private int attackSpeedHash;
     private int releaseStateHash;
     private int releaseSpeedHash;
-    private bool releaseSpeedApplied; // 이번 액션의 Release 진입 시 배속을 걸었는지
-    private bool hasPlayedAction;     // 액션을 한 번이라도 재생했는지(시작 시 기본 스테이트가 Release라 필요)
-    private bool attackStateObserved; // 이번 액션의 공격 스테이트에 실제로 진입한 것을 확인했는지
+    private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
+    private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
     private bool useSlotA = true; // 듀얼 슬롯 전환 플래그
 
@@ -158,11 +162,26 @@ public class CharacterActionPlayer : MonoBehaviour
             speedRestored = true;
         }
 
-        // Release 진입을 매 프레임 확인한다(아래 조건의 단락 평가에 가리지 않도록 먼저 호출).
-        bool releaseHolding = UpdateReleaseState();
+        // 공격(트림) 구간 재생 중.
+        if (Time.time < actionEndTime)
+        {
+            ApplyBlendIn();
+            return;
+        }
 
-        // 웨이트 1을 유지(또는 blend-in)하는 경우: 재생 중 / 연계 있음(콤보) / Release 재생 중 / 마무리 동작 노출 중.
-        if (Time.time < actionEndTime || IsLinkedToNextAction() || releaseHolding || Time.time < recoveryEndTime)
+        if (!releaseTriggered)
+        {
+            // 연계가 있으면 Release로 가지 않는다 — 다음 공격이 이어받는다.
+            if (IsLinkedToNextAction()) { ApplyBlendIn(); return; }
+
+            // 클립 자체의 마무리 동작을 recoveryHoldDuration만큼 노출한 뒤 Release로 넘어간다(0이면 즉시).
+            if (Time.time < recoveryEndTime) { ApplyBlendIn(); return; }
+
+            TriggerRelease();
+        }
+
+        // Release 완주까지 웨이트 유지.
+        if (Time.time < releaseEndTime)
         {
             ApplyBlendIn();
             return;
@@ -172,51 +191,32 @@ public class CharacterActionPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 공격 클립이 끝나 Release(마무리) 스테이트로 흘러갔는지 확인하고, 그렇다면 배속을 걸어 <b>끝까지 재생되게</b> 웨이트를 유지시킨다.
-    /// Release는 2.3초짜리 논루프 클립이라 정상 속도로는 복귀 창 안에 담기지 않아 재생 도중 웨이트가 0으로 잘렸다.
-    /// releaseDuration(목표 재생 시간)에서 배속을 역산해 압축 재생하고, 완주시킨 뒤 Run으로 페이드한다.
+    /// 트림 끝에서 Release(마무리) 스테이트로 직접 넘어간다.
+    ///
+    /// <b>ExitTime 전이에 맡기지 않는 이유</b>: 애니메이터의 Attack→Release 전이는 `ExitTime = 1.0`(클립 전체 끝)이라,
+    /// 트림 끝과 클립 끝이 다른 클립(대부분)에서는 트림된 공격이 끝나고도 1초 이상 지나서야 Release가 시작된다.
+    /// 그 사이 이미 Run으로 블렌드아웃이 끝나 있어서, Release가 뒤늦게 튀어나오는 것처럼 보였다.
+    /// 여기서 직접 CrossFade하면 모든 클립이 트림 끝 기준으로 동일하게 동작한다.
+    ///
+    /// 재생 시간은 releaseDuration으로 고정하고 배속을 역산하므로, 종료 시각을 시간 계산만으로 알 수 있다
+    /// (스테이트 폴링은 전이 중 현재/다음 스테이트가 뒤바뀌어 오탐이 잦아 쓰지 않는다).
     /// </summary>
-    /// <returns>Release 재생이 끝나지 않아 웨이트를 유지해야 하면 true.</returns>
-    private bool UpdateReleaseState()
+    private void TriggerRelease()
     {
-        if (!hasPlayedAction) return false; // 게임 시작 직후의 기본 스테이트(Release)를 액션으로 오인하지 않는다.
+        releaseTriggered = true;
 
-        AnimatorStateInfo cur = animator.GetCurrentAnimatorStateInfo(attackLayerIndex);
-        bool curIsAttack = cur.shortNameHash == attackStateAHash || cur.shortNameHash == attackStateBHash;
-
-        // 이번 액션의 공격 스테이트에 아직 진입하지 않았다면 Release는 '직전 액션의 잔상'이다.
-        // CrossFade를 건 다음 프레임에도 IsInTransition이 아직 false일 수 있어, 전이 방향만으로는 걸러지지 않는다.
-        // 공격 스테이트를 실제로 관측한 뒤부터만 Release를 마무리로 인정한다.
-        if (!attackStateObserved)
+        float length = releaseClip != null ? releaseClip.length : 0f;
+        if (length <= 0f)
         {
-            if (curIsAttack) attackStateObserved = true;
-            return false;
+            // 클립 미배선 — 압축할 대상이 없으므로 곧바로 blend-out으로 넘긴다.
+            releaseEndTime = Time.time;
+            return;
         }
 
-        bool entering = animator.IsInTransition(attackLayerIndex)
-            && animator.GetNextAnimatorStateInfo(attackLayerIndex).shortNameHash == releaseStateHash;
-        bool inRelease = !animator.IsInTransition(attackLayerIndex) && cur.shortNameHash == releaseStateHash;
-
-        if (!entering && !inRelease) return false;
-
-        if (!releaseSpeedApplied)
-        {
-            // 목표 재생 시간에 맞춰 배속을 역산한다. 길이는 스테이트에서 읽으므로 클립을 따로 배선할 필요가 없다.
-            // PlaySlot에서 ReleaseSpeed를 1로 되돌려 두므로 이 시점의 length는 배속이 섞이지 않은 클립 길이다.
-            float length = entering
-                ? animator.GetNextAnimatorStateInfo(attackLayerIndex).length
-                : cur.length;
-
-            float speed = (releaseDuration > 0.01f && length > 0f)
-                ? length / releaseDuration
-                : 1f;
-
-            animator.SetFloat(releaseSpeedHash, Mathf.Max(speed, 0.01f));
-            releaseSpeedApplied = true;
-        }
-
-        // 전이 중(아직 Release 시작 전)이거나, 재생이 끝나지 않았으면 유지한다.
-        return entering || cur.normalizedTime < 1f;
+        float duration = Mathf.Max(releaseDuration, 0.01f);
+        animator.SetFloat(releaseSpeedHash, Mathf.Max(length / duration, 0.01f));
+        releaseEndTime = Time.time + duration;
+        animator.CrossFadeInFixedTime(releaseStateHash, releaseCrossFadeDuration, attackLayerIndex, 0f);
     }
 
     /// <summary>다음 공격이 comboLinkWindow 안에 시작되는가. 예약 정보를 그대로 쓰므로 추가 이벤트 구독이 필요 없다.</summary>
@@ -352,11 +352,8 @@ public class CharacterActionPlayer : MonoBehaviour
         blendInStartTime = Time.time;
         blendInFromWeight = animator.GetLayerWeight(attackLayerIndex);
         blendOutLatched = false;
-        releaseSpeedApplied = false;
-        attackStateObserved = false;
-        hasPlayedAction = true;
-        // 다음 Release 진입 때 배속이 섞이지 않은 클립 길이를 읽을 수 있도록 되돌려 둔다.
-        animator.SetFloat(releaseSpeedHash, 1f);
+        releaseTriggered = false;
+        releaseEndTime = 0f;
 
         // CrossFadeInFixedTime의 fixedTimeOffset은 '클립 초'가 아니라 스테이트 speed가 곱해지는 '스테이트 재생 초'로 해석된다.
         // AttackSpeed를 먼저 걸어둔 상태이므로 startOffset(클립 초)을 speed로 나눠 넘겨야 실제 클립상 startOffset 지점에서 시작한다.
