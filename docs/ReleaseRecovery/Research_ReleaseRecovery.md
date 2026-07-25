@@ -121,3 +121,76 @@
 2. 공격 간 크로스페이드 시간(현재 0.05는 사실상 컷 전환).
 3. blend 커브를 선형으로 둘지 ease(SmoothStep)로 둘지.
 4. 실패(피격) 후에도 동일 복귀를 적용할지(구조상 자연 포함).
+
+---
+
+# 추가 조사 — "Release가 너무 자주 나온다" (개정 2의 근거)
+
+## 증상 (사용자 확인)
+- `comboLinkWindow`를 **10초**로 올려 사실상 모든 연결을 "연계"로 만들었는데도 **Release가 계속 재생된다.**
+- 애니메이터 창 관측: `Attack` 스테이트 뒤에 `Release`가 나오고, **그다음** 레이어 웨이트가 내려간다.
+
+## 7. 근본 원인 — 애니메이터의 `ExitTime` 전이는 코드가 막을 수 없다
+
+`Assets/05. Animations/Animator/PlayerAnimator.controller`:
+
+| 출발 스테이트 | 전이 fileID | 목적지 | 조건 |
+|---|---|---|---|
+| `Attack_A` (:32, :35-36) | `7410374101304509780` (:229-250) | `Release` (`1131339499896222762`) | `m_HasExitTime: 1`, `m_ExitTime: 1`, duration 0.15 |
+| `Attack_B` (:171, :174-175) | `7638834329385509203` (:251-268) | `Release` (동일) | `m_HasExitTime: 1`, `m_ExitTime: 1`, duration 0.15 |
+
+- `comboLinkWindow`는 `CharacterActionPlayer.Update()`의 **`TriggerRelease()` 호출 여부만** 제어한다(`:172-181`). 위 전이는 애니메이터가 클립 끝에서 자체적으로 발동시키므로 **코드 경로와 완전히 무관하다.**
+- 개정 1의 콤보 경로는 트림 끝부터 다음 공격 시작(`pendingScheduleStart`)까지 **웨이트 1을 유지한 채 아무것도 하지 않는다.** 그 사이 공격 클립이 자기 끝(tail 0.9~1.5초)에 도달하면 `ExitTime` 전이가 발동해 **웨이트 1 상태로 Release가 그대로 보인다.**
+- 즉 증상은 튜닝 값 문제가 아니라 **Release 진입 경로가 둘(코드 / 애니메이터)이고, 그중 하나가 통제 밖**이라는 구조 문제다.
+- 개정 1의 Plan도 이 가능성을 리스크로 적어 두었다(Plan :172, :176 — "tail이 짧은 클립에서 ExitTime 전이로 Release까지 흘러가 예상보다 정적으로 보일 수 있다"). 실제로는 tail이 긴 클립에서도 연계 간격이 tail보다 길면 발생한다.
+
+## 8. 웨이트가 내려가는 케이스
+
+`comboLinkWindow = 10`에서도 웨이트가 내려갔다면 `IsLinkedToNextAction()`(`:225`)의 `hasPending`이 false였다는 뜻이다. 성립 조건:
+- 다음 판정 대상이 아직 승계되지 않음(`RaiseJudgeTargetBegan`은 패턴 완료와 같은 프레임 — `PatternHandler.cs:607`),
+- 다음 패턴의 `SuccessAnimationClip`이 비어 있음(`:275-276`에서 `hasPending = false`로 조기 반환),
+- 첫 미스로 예약이 취소됨(`:316`).
+
+개정 2에서는 **연계일 때도 웨이트를 내리므로** 이 분기는 "웨이트를 내리는가"가 아니라 **"Release를 거치는가"**만 결정하게 된다. 위 오판 케이스의 영향 범위가 그만큼 줄어든다.
+
+## 9. 개정 2의 요구사항 (사용자 확정)
+- **연계 있음** — 공격 사이에 Attack Layer 웨이트를 내려 **Run을 노출**하고, 다음 공격에서 다시 올린다. **Release는 재생하지 않는다.**
+- **연계 없음** — Release를 재생한 뒤 웨이트를 내려 Run으로 복귀한다. (개정 1과 동일)
+
+→ 개정 1의 전제("연계 사이에 Run이 비집고 들어오면 안 된다")가 뒤집혔다. Run 노출이 **의도된 연출**이 된다.
+
+## 10. 개정 2가 새로 만드는 문제 — 짧은 간격에서의 웨이트 깜빡임
+
+개정 1 Step 8의 런타임 실측(`Dreamer_Lv2`)에서 관측된 연계 간격:
+
+| 간격(초) | 비고 |
+|---|---|
+| 0.107 / 0.133 / 0.134 | **blendOut(0.30) + blendIn(0.08)보다 짧다** |
+| 0.402 / 0.674 / 0.828 | Run 노출에 충분 |
+
+- 앞 3건은 웨이트를 내리기 시작하자마자 다시 올려야 해서, **Run이 보이지도 않는 채 웨이트만 출렁인다.** 정적 계산(`Dreamer_lv10`)의 최소 간격 0.400과 달리, 배속 상한(씬 값 3.5)에 걸린 케이스에서 실제 간격이 훨씬 짧아진 결과다.
+- → **최소 노출 간격 가드가 필요하다.** 간격이 일정 값 미만이면 웨이트를 내리지 않고 유지한다(개정 1의 콤보 경로와 동일하게 동작).
+
+---
+---
+
+# 추가 조사 — 경로별 Run 클립 분리 (개정 3의 근거)
+
+## 요구사항 (사용자 확정)
+- **경로 ②(연계 O · 간격 여유, Release 생략하고 콤보 사이 잠깐 달리는 구간)** → **`Sprint_HS`** 클립.
+- **경로 ③(연계 X, 곡 공백 → Release 완주 후 복귀)** → **현재 `Run`** 클립 유지.
+- 즉 "빠른 연계가 이어지는 동안엔 Sprint, 곡이 잦아들어 쉬는 구간엔 Run".
+
+## 11. 현재 구조 — 두 경로가 같은 base 스테이트 하나를 드러낸다
+- `CharacterActionPlayer`는 **Attack Layer(index 1) 웨이트만** 0으로 내린다. base `Running Layer`(index 0)는 손대지 않는다.
+- base `Running Layer`에는 `Run` 스테이트 하나뿐이며 default 스테이트다(`m_Motion` = `Run.anim`, guid `dadb429571d0b174faf839367851eb26`).
+- 따라서 경로 ②·③ 모두 blend-out 시 **동일한 `Run`**이 드러난다. 클립을 경로별로 다르게 하려면 base 레이어를 **상황에 맞게 전환**해야 한다(클립 하나 교체로는 불가능).
+
+## 12. 클립 자산
+- `Sprint_HS.anim` — `Assets/05. Animations/Clip/Sprint_HS.anim`, guid `c6ce09bd2c3f38645b61adeccab81781`. 원본 FBX는 `Assets/Samurai_Katana/Animations/Lock-On/Sprint_HS.FBX`.
+- 연속 콤보 구간에서 끊기지 않으려면 **Loop Time**이 켜져 있어야 한다(확인 필요).
+
+## 13. 전환 방식 — 코드 CrossFade (파라미터/전이 배제)
+- 기존 코드는 ExitTime 전이를 의도적으로 제거하고 `CrossFadeInFixedTime`으로 스테이트 진입을 코드가 일원화하는 방향이다(개정 1 Step 11~12). base 레이어 전환도 같은 방식으로 통일한다.
+- base 레이어 CrossFade는 Attack 레이어 웨이트가 아직 남아 있는(=base가 가려진) 동안 일어나므로, 커버 아래에서 Run↔Sprint 포즈 블렌딩이 끝나 전환이 눈에 띄지 않는다.
+- 중복 진입 방지: 목표 스테이트가 현재와 다를 때만 CrossFade하도록 `currentBaseStateHash`를 추적한다(매 프레임 `ApplyBlendOut`에서 호출돼도 1회만 전환).

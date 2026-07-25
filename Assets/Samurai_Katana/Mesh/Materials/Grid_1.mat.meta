@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 974e8f24809f03b4c9133c2ca60d8d54
+timeCreated: 1492744109
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 87700
+  packageName: Samurai Katana AnimSet
+  packageVersion: 1.0
+  assetPath: Assets/Samurai_Katana/Mesh/Materials/Grid_1.mat
+  uploadId: 175582

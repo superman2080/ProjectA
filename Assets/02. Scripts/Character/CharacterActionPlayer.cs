@@ -8,13 +8,17 @@ using UnityEngine;
 /// - 미스(첫 미스 1회): 그 순간 힛(Hit) 클립을 재생하고 예약/진행 중이던 성공 애니를 취소한다 — 재생 중이던 베기는 힛 크로스페이드로 즉시 끊긴다.
 ///
 /// <b>트림 끝(actionEndTime)은 '재생이 끝나는 시각'이 아니다.</b> 클립은 스테이트에 통째로 물려 있어 그 뒤로도 마무리 동작(follow-through)이 계속 재생된다.
-/// actionEndTime은 '임팩트 정렬이 끝나 복귀를 시작해도 되는 시각'일 뿐이며, 이 시점부터 다음 두 경로로 갈린다:
-/// - <b>연계 있음(콤보)</b> — 다음 공격이 comboLinkWindow 안에 시작되면 Attack Layer 웨이트를 1로 <b>유지</b>한 채 다음 클립으로 크로스페이드한다.
-///   레이어를 내렸다 올리지 않으므로 사이에 Run이 비집고 들어오지 않는다. 실측상 이쪽이 주 경로다(채보 연결의 약 95%).
-/// - <b>연계 없음</b> — recoveryHoldDuration 동안 마무리 동작을 노출한 뒤, blendOutDuration 동안 웨이트를 0으로 내려 base Running Layer(Run)와 크로스블렌드한다.
-///   이때 <b>트림 끝에서 곧바로 Release 스테이트로 CrossFade</b>하고(애니메이터의 ExitTime 전이는 클립 전체가 끝나야 발동해 늦다),
-///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> Run으로 페이드한다.
-/// 두 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
+/// actionEndTime은 '임팩트 정렬이 끝나 복귀를 시작해도 되는 시각'일 뿐이다. 이 시점에 recoveryHoldDuration 동안 마무리 동작을 웨이트 1로 노출한 뒤(세 경로 공통), 아래 세 경로로 갈린다:
+/// - <b>연계 O · 간격 부족</b> — 다음 공격이 comboLinkWindow 안이면서 minRunExposure보다 촘촘히 붙는다. 웨이트를 <b>1로 유지</b>한 채 다음 클립으로 크로스페이드한다(Run·Release 모두 생략). 짧은 연계의 웨이트 깜빡임을 막는다.
+/// - <b>연계 O · 간격 여유</b> — comboLinkWindow 안이되 다음 공격까지 minRunExposure 이상 남는다. blendOutDuration 동안 웨이트를 0으로 내려 <b>그 사이 base Sprint(Sprint_HS)를 노출</b>하고, 다음 공격에서 다시 올린다(Release 생략). 실측상 이쪽이 주 경로다(채보 연결의 약 95%).
+/// - <b>연계 X</b> — comboLinkWindow 밖(곡 공백). <b>트림 끝에서 곧바로 Release 스테이트로 CrossFade</b>하고(애니메이터에는 Attack→Release 전이가 없다 — 진입은 코드가 유일하게 통제한다),
+///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> blendOutDuration 동안 base Run으로 페이드한다.
+///
+/// <b>base 로코모션은 경로에 따라 클립이 갈린다.</b> base Running Layer는 평소 Run이 기본이고, 연계 O·간격 여유(콤보 사이)를 탈 때 Sprint로,
+/// 연계 X(곡 공백 복귀)를 탈 때 다시 Run으로 CrossFade한다(SwitchBaseState). 전환은 Attack 웨이트에 가려진 동안 일어나 눈에 띄지 않는다.
+/// 콤보 gap 대부분은 시작 순간 Release가 트리거되므로(hasPending이 뒤늦게 섬), "Release를 냈는가"가 아니라 <b>"Release가 releaseEndTime까지 완주했는가"(releaseCompleted)</b>로
+/// 진짜 곡 공백과 콤보 gap을 가른다. 완주했으면 Run, 인터럽트됐으면 Sprint. releaseCompleted는 다음 PlaySlot에서 리셋된다.
+/// 세 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
 ///
 /// AnimatorOverrideController로 듀얼 슬롯(Attack_A, Attack_B)을 교대로 교체하며 재생해 모션 끊김(Popping)을 방지한다. 재생할 클립이 없으면 무연출로 넘어간다.
 /// </summary>
@@ -43,6 +47,16 @@ public class CharacterActionPlayer : MonoBehaviour
     [Tooltip("Release 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
     [SerializeField] private AnimationClip releaseClip;
 
+    [Header("Base Locomotion")]
+    [Tooltip("base 로코모션 레이어 이름. Attack Layer 웨이트가 0일 때 이 레이어가 드러난다.")]
+    [SerializeField] private string runningLayerName = "Running Layer";
+    [Tooltip("연계 X(공백/Release 복귀) 시 드러낼 base 스테이트 이름.")]
+    [SerializeField] private string runStateName = "Run";
+    [Tooltip("연계 O·간격 여유(콤보 사이 노출) 시 드러낼 base 스테이트 이름.")]
+    [SerializeField] private string sprintStateName = "Sprint";
+    [Tooltip("base 레이어 Run↔Sprint 포즈 블렌딩 시간(초). base가 Attack 웨이트에 가려진 동안 진행된다.")]
+    [SerializeField] private float baseCrossFadeDuration = 0.2f;
+
     [Header("Clips")]
     [Tooltip("패턴 실패 시 재생할 피격 리액션 클립들. 번갈아 재생된다.")]
     [SerializeField] private AnimationClip[] hitClips; // Hit1, Hit2
@@ -50,18 +64,20 @@ public class CharacterActionPlayer : MonoBehaviour
     [Header("Tuning")]
     [Tooltip("공격 간 크로스페이드 시간(초). 연계(콤보)가 주 경로이므로 이 값이 체감 품질을 좌우한다.")]
     [SerializeField] private float attackCrossFadeDuration = 0.15f;
-    [Tooltip("이 시간(초) 안에 다음 공격이 시작되면 연계로 보고 레이어 웨이트를 내리지 않는다.")]
+    [Tooltip("이 시간(초) 안에 다음 공격이 시작되면 연계로 보고 Release(마무리)를 생략한다.")]
     [SerializeField] private float comboLinkWindow = 1.0f;
-    [Tooltip("연계가 없을 때, 트림 끝 이후 마무리 동작을 웨이트 1로 노출하는 시간(초).")]
+    [Tooltip("연계 중, 다음 공격까지 이 시간(초) 이상 남아 있으면 웨이트를 내려 그 사이 Run을 노출한다. 미만이면 웨이트 1을 유지해 바로 다음 공격으로 잇는다.")]
+    [SerializeField] private float minRunExposure = 0.35f;
+    [Tooltip("트림 끝 이후 마무리 동작을 웨이트 1로 노출하는 시간(초). 세 경로 공통.")]
     [SerializeField] private float recoveryHoldDuration = 0.25f;
     [Tooltip("Run으로 녹아드는 시간(초). 레이어 웨이트를 0으로 내리는 구간.")]
-    [SerializeField] private float blendOutDuration = 0.30f;
+    [SerializeField] private float blendOutDuration = 0.15f;
     [Tooltip("Release(마무리) 스테이트를 이 시간(초) 안에 완주시킨다. 배속은 클립 길이에서 역산된다(길이 2.33초 / 0.9초 ≈ 2.6배).")]
     [SerializeField] private float releaseDuration = 0.9f;
     [Tooltip("공격 → Release 크로스페이드 시간(초).")]
     [SerializeField] private float releaseCrossFadeDuration = 0.10f;
     [Tooltip("액션 시작 시 레이어 웨이트를 현재값에서 1까지 올리는 시간(초). 복귀 도중 인터럽트될 때의 스냅을 막는다.")]
-    [SerializeField] private float layerBlendInDuration = 0.08f;
+    [SerializeField] private float layerBlendInDuration = 0.12f;
     [Tooltip("자동 배속(입력 구간이 짧을 때)의 상한.")]
     [SerializeField] private float maxAttackSpeed = 2.5f;
 
@@ -72,7 +88,12 @@ public class CharacterActionPlayer : MonoBehaviour
     private int attackSpeedHash;
     private int releaseStateHash;
     private int releaseSpeedHash;
+    private int runningLayerIndex = -1;
+    private int runStateHash;
+    private int sprintStateHash;
+    private int currentBaseStateHash; // 현재 base 레이어가 향하는 스테이트(중복 CrossFade 방지)
     private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
+    private bool releaseCompleted; // 이번 사이클에 Release가 releaseEndTime까지 완주했는지(= 진짜 곡 공백). base=Run 유지 판별용.
     private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
     private bool useSlotA = true; // 듀얼 슬롯 전환 플래그
@@ -116,6 +137,13 @@ public class CharacterActionPlayer : MonoBehaviour
         attackSpeedHash = Animator.StringToHash(attackSpeedParam);
         releaseStateHash = Animator.StringToHash(releaseStateName);
         releaseSpeedHash = Animator.StringToHash(releaseSpeedParam);
+
+        runningLayerIndex = animator.GetLayerIndex(runningLayerName);
+        if (runningLayerIndex < 0)
+            Debug.LogError($"[CharacterActionPlayer] 레이어 '{runningLayerName}'를 찾을 수 없습니다 — Sprint/Run 전환이 동작하지 않습니다.", this);
+        runStateHash = Animator.StringToHash(runStateName);
+        sprintStateHash = Animator.StringToHash(sprintStateName);
+        currentBaseStateHash = runStateHash; // base 레이어의 default 스테이트는 Run이다.
 
         // 원본 컨트롤러를 감싼 오버라이드 인스턴스를 씌운다. 이후 이 인스턴스의 클립만 런타임에 교체한다.
         overrideController = new AnimatorOverrideController(animator.runtimeAnimatorController);
@@ -169,34 +197,63 @@ public class CharacterActionPlayer : MonoBehaviour
             return;
         }
 
-        if (!releaseTriggered)
+        // 클립 자체의 마무리 동작을 recoveryHoldDuration만큼 노출한다(세 경로 공통, 0이면 즉시).
+        if (Time.time < recoveryEndTime)
         {
-            // 연계가 있으면 Release로 가지 않는다 — 다음 공격이 이어받는다.
-            if (IsLinkedToNextAction()) { ApplyBlendIn(); return; }
-
-            // 클립 자체의 마무리 동작을 recoveryHoldDuration만큼 노출한 뒤 Release로 넘어간다(0이면 즉시).
-            if (Time.time < recoveryEndTime) { ApplyBlendIn(); return; }
-
-            TriggerRelease();
+            ApplyBlendIn();
+            return;
         }
 
-        // Release 완주까지 웨이트 유지.
+        // 연계 O — Release는 생략한다. 다만 다음 공격까지의 간격이 충분할 때만 웨이트를 내려 Run을 노출하고,
+        // 간격이 짧으면(minRunExposure 미만) 웨이트 1을 유지해 곧바로 다음 공격으로 잇는다(깜빡임 방지).
+        if (IsLinkedToNextAction())
+        {
+            if (HasRoomForRunExposure())
+            {
+                // 콤보 사이 잠깐 달리는 구간 — Sprint를 드러낸다.
+                // 단, 이번 사이클에 Release가 '완주'했다면(=진짜 곡 공백을 거쳤다면) Run을 유지한다.
+                // gap 대부분은 시작 순간 Release가 트리거되지만(hasPending이 뒤늦게 섬), 다음 연계에
+                // 인터럽트되면 Release는 완주하지 못한다 → 그 경우는 콤보 gap이므로 Sprint.
+                // Release가 releaseEndTime까지 완주(RELEASE-RUN 도달)한 경우만 진짜 공백 → Run. 스펙: Release 출력 시 Run.
+                SwitchBaseState(releaseCompleted ? runStateHash : sprintStateHash);
+                ApplyBlendOut();
+            }
+            else ApplyBlendIn();
+            return;
+        }
+
+        // 연계 X — Release를 완주시킨 뒤 Run으로 내린다.
+        if (!releaseTriggered) TriggerRelease();
+
         if (Time.time < releaseEndTime)
         {
             ApplyBlendIn();
             return;
         }
 
+        // 곡 공백 복귀 — 평상시 Run으로 되돌린다.
+        releaseCompleted = true; // Release가 완주했다 → 이후 뒤늦게 hasPending이 서도 Run 유지(다음 PlaySlot까지).
+        SwitchBaseState(runStateHash);
         ApplyBlendOut();
     }
 
     /// <summary>
-    /// 트림 끝에서 Release(마무리) 스테이트로 직접 넘어간다.
+    /// base 로코모션 레이어를 지정 스테이트로 CrossFade한다(경로 ②=Sprint / 경로 ③=Run).
+    /// 목표가 현재와 같으면 즉시 반환해 매 프레임 재진입을 막는다. 전환은 Attack 웨이트에 가려진 동안 일어나므로 눈에 띄지 않는다.
+    /// </summary>
+    private void SwitchBaseState(int stateHash)
+    {
+        if (runningLayerIndex < 0 || stateHash == currentBaseStateHash) return;
+        animator.CrossFadeInFixedTime(stateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
+        currentBaseStateHash = stateHash;
+    }
+
+    /// <summary>
+    /// 트림 끝에서 Release(마무리) 스테이트로 직접 넘어간다. <b>Release 진입 경로는 이 호출 하나뿐이다.</b>
     ///
-    /// <b>ExitTime 전이에 맡기지 않는 이유</b>: 애니메이터의 Attack→Release 전이는 `ExitTime = 1.0`(클립 전체 끝)이라,
-    /// 트림 끝과 클립 끝이 다른 클립(대부분)에서는 트림된 공격이 끝나고도 1초 이상 지나서야 Release가 시작된다.
-    /// 그 사이 이미 Run으로 블렌드아웃이 끝나 있어서, Release가 뒤늦게 튀어나오는 것처럼 보였다.
-    /// 여기서 직접 CrossFade하면 모든 클립이 트림 끝 기준으로 동일하게 동작한다.
+    /// 애니메이터의 Attack→Release 전이(과거 `ExitTime = 1.0`)는 제거했다. 그 전이는 클립 전체가 끝나야 발동해,
+    /// 트림 끝과 클립 끝이 다른 클립(대부분)에서 Release가 1초 이상 늦게 튀어나왔고, 연계 경로에서도 코드와 무관하게 Release가 새어 나왔다.
+    /// 진입을 코드로 일원화해 모든 클립이 트림 끝 기준으로 동일하게 동작하고, 연계 시에는 아예 호출되지 않는다.
     ///
     /// 재생 시간은 releaseDuration으로 고정하고 배속을 역산하므로, 종료 시각을 시간 계산만으로 알 수 있다
     /// (스테이트 폴링은 전이 중 현재/다음 스테이트가 뒤바뀌어 오탐이 잦아 쓰지 않는다).
@@ -219,10 +276,18 @@ public class CharacterActionPlayer : MonoBehaviour
         animator.CrossFadeInFixedTime(releaseStateHash, releaseCrossFadeDuration, attackLayerIndex, 0f);
     }
 
-    /// <summary>다음 공격이 comboLinkWindow 안에 시작되는가. 예약 정보를 그대로 쓰므로 추가 이벤트 구독이 필요 없다.</summary>
+    /// <summary>다음 공격이 comboLinkWindow 안에 시작되는가(= Release를 생략할 연계인가). 예약 정보를 그대로 쓰므로 추가 이벤트 구독이 필요 없다.</summary>
     private bool IsLinkedToNextAction()
     {
         return hasPending && (pendingScheduleStart - actionEndTime) <= comboLinkWindow;
+    }
+
+    /// <summary>연계 중, Run 노출 창(recovery 끝 ~ 다음 공격 시작)이 minRunExposure 이상인가.
+    /// <b>고정 간격으로 판정한다</b>(Time.time이 아니라 recoveryEndTime 기준). 매 프레임 줄어드는 잔여시간으로 재면
+    /// 창 도중 문턱을 밑돌아 blend-out↔blend-in이 뒤집히고, 그 순간 stale한 blendInStartTime 탓에 웨이트가 1로 튄다.</summary>
+    private bool HasRoomForRunExposure()
+    {
+        return (pendingScheduleStart - recoveryEndTime) >= minRunExposure;
     }
 
     /// <summary>레이어 웨이트를 액션 시작 시점의 값에서 1까지 올린다. 이미 1이었으면 사실상 즉시 완료된다.</summary>
@@ -353,6 +418,7 @@ public class CharacterActionPlayer : MonoBehaviour
         blendInFromWeight = animator.GetLayerWeight(attackLayerIndex);
         blendOutLatched = false;
         releaseTriggered = false;
+        releaseCompleted = false; // 새 공격이 시작됐다 → 다음 gap은 다시 Sprint 후보.
         releaseEndTime = 0f;
 
         // CrossFadeInFixedTime의 fixedTimeOffset은 '클립 초'가 아니라 스테이트 speed가 곱해지는 '스테이트 재생 초'로 해석된다.

@@ -147,7 +147,7 @@ Assets/
 - `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.SuccessAnimationClip`), 실패면 공용 피격(Hit) 클립**을 번갈아 재생.
 - `AnimatorOverrideController`로 단일 슬롯(`Attack`) 스테이트의 placeholder 클립을 런타임에 덮어쓴 뒤 그 스테이트를 `CrossFadeInFixedTime`으로 재생. Attack Layer는 휴지 시 웨이트 0, 재생 중 1, 종료 후 0으로 페이드.
 - **겹침 방지 배속**: 다음 패턴까지의 여유(`NextLastNodeTime`)보다 클립이 길면 `AttackSpeed`로 압축하되 `maxAttackSpeed`(기본 2.5) 상한. 상한으로도 안 담기면 다음 액션 CrossFade가 현재 액션을 끊는다(의도된 동작). 상세: `docs/CharacterAction/`
-- **공격 종료 후 복귀**: 트림 끝(`actionEndTime`)은 재생 끝이 아니라 **복귀 시작점**이다(클립은 계속 재생되며 마무리 동작이 이어진다). 여기서 `AttackSpeed`를 1로 되돌리고 두 경로로 갈린다 — 다음 공격이 `comboLinkWindow`(1.0초) 안에 시작되면 **Attack Layer 웨이트를 1로 유지**한 채 크로스페이드로 잇고(콤보, 실측상 채보 연결의 약 95%), 아니면 마무리 동작을 노출한 뒤 웨이트를 0으로 내려 Run과 블렌드한다. 상세: `docs/ReleaseRecovery/`
+- **공격 종료 후 복귀**: 트림 끝(`actionEndTime`)은 재생 끝이 아니라 **복귀 시작점**이다(클립은 계속 재생되며 마무리 동작이 이어진다). 여기서 `AttackSpeed`를 1로 되돌리고, `recoveryHoldDuration` 동안 마무리 동작을 노출한 뒤(공통) **세 경로**로 갈린다 — ① 다음 공격이 `comboLinkWindow`(1.0초) 안이면서 `minRunExposure`(0.35초)보다 촘촘히 붙으면 **웨이트 1을 유지**한 채 바로 잇고(Run·Release 생략, 깜빡임 방지), ② `comboLinkWindow` 안이되 간격에 여유가 있으면 웨이트를 0으로 내려 **그 사이 Sprint(`Sprint_HS`)를 노출**한 뒤 다음 공격에서 다시 올리며(Release 생략, 실측상 주 경로 ≈95%), ③ `comboLinkWindow` 밖(곡 공백)이면 **Release를 압축 완주**시킨 뒤 Run으로 페이드한다. **Release 진입은 코드가 유일하게 통제한다** — 애니메이터의 Attack→Release ExitTime 전이는 제거했다(과거 이 전이가 연계 중에도 Release를 새어나오게 한 버그의 원인). **base 로코모션 클립은 경로에 따라 갈린다** — 경로 ②는 Sprint, 경로 ③은 Run으로 코드가 base `Running Layer`를 CrossFade(`SwitchBaseState`). 상세: `docs/ReleaseRecovery/`
 
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**

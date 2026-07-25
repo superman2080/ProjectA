@@ -4455,11 +4455,16 @@ MonoBehaviour:
   releaseStateName: Release
   releaseSpeedParam: ReleaseSpeed
   releaseClip: {fileID: 7400000, guid: f5f067eefaa69b446a380402844ba888, type: 2}
+  runningLayerName: Running Layer
+  runStateName: Run
+  sprintStateName: Sprint
+  baseCrossFadeDuration: 0.2
   hitClips:
   - {fileID: 110800000, guid: 36fe30ba832ef4c42ac1961245b8cfbf, type: 3}
   - {fileID: 110800000, guid: 2cddf4c6d5df01948bf2b017240556a5, type: 3}
   attackCrossFadeDuration: 0.15
-  comboLinkWindow: 3
+  comboLinkWindow: 10
+  minRunExposure: 0.35
   recoveryHoldDuration: 0
   blendOutDuration: 0.3
   releaseDuration: 0.5

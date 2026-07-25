@@ -179,9 +179,211 @@
 
 ---
 
-## 범위 밖(하지 않음)
+## 범위 밖(하지 않음) — 개정 1 기준
 - 애니메이터 컨트롤러/상태/전이 편집 — 대안안(Attack Layer에 `Run` 스테이트 추가)은 본 안 튜닝 실패 시에만 검토.
 - `PatternHandler` 및 이벤트 시그니처 변경, `OnPatternComplete` 구독 추가.
 - Run 다리 위상(footphase) 동기화, 아바타 마스크 도입.
 - 패턴 에셋의 트림 값 재조정.
 - 콤보 전용 클립/콤보 카운터 등 **데이터 측 콤보 시스템** — 여기서 말하는 "콤보"는 기존 연계 베기를 끊김 없이 잇는 **연출 처리**만을 뜻한다.
+
+---
+---
+
+# 개정 2 — 연계 사이에 Run 노출 (재설계)
+
+> 근거: `Research_ReleaseRecovery.md` §7~§10
+> 상태: **검토 중 — 확정 전까지 구현하지 않음.** 피드백은 이 절에 `>>>`로 남겨주세요.
+
+## 무엇이 바뀌나
+
+개정 1은 **연계 유무로 "웨이트를 내릴지"를 갈랐다(2분기).** 개정 2는 이를 **3분기**로 바꾼다. 판정 축은 두 개다 — ① 다음 공격이 연계 창(`comboLinkWindow`) 안에 오는가, ② 그 사이 Run을 보여줄 만큼 간격(`minRunExposure`)이 있는가.
+
+```
+                                  ┌─ 연계 O · 간격 부족 ─ 웨이트 1 유지 → 바로 다음 Attack   (Release 없음, Run 없음)
+ 트림 구간 재생 ─→ actionEndTime ─┼─ 연계 O · 간격 여유 ─ 웨이트 ↓ → Run 노출 → 다음 Attack서 ↑ (Release 없음)
+ 배속 / 웨이트 1    AttackSpeed=1  └─ 연계 X            ─ Release 완주 → 웨이트 ↓ → Run
+```
+
+- **연계 O · 간격 부족** = `IsLinkedToNextAction()` 참 **이면서** `HasRoomForRunExposure()` 거짓. 개정 1의 콤보 경로 그대로 — 웨이트 1을 유지한 채 다음 공격으로 크로스페이드한다. Run도 Release도 나오지 않는다.
+- **연계 O · 간격 여유** = 둘 다 참. 웨이트를 0으로 내려 Run을 노출한 뒤 다음 공격에서 다시 올린다. Release는 생략.
+- **연계 X** = `IsLinkedToNextAction()` 거짓. Release를 완주한 뒤 웨이트를 내려 Run으로 복귀(개정 1과 동일).
+
+아래 것들은 **그대로 유지**된다:
+- 임팩트 정렬(`시작 = 마지막노드 − 재생시간`, 배속 재보정) — 다음 공격의 시작 시각은 건드리지 않는다.
+- `actionEndTime`에서 `AttackSpeed = 1` 복귀.
+- Release 경로의 압축 완주(`releaseDuration`)와 blend-out.
+- blend-out 래치(결정 시점의 현재 웨이트에서 시작), blend-in(현재 웨이트 → 1).
+
+## 반드시 함께 해야 하는 것 — 애니메이터 `ExitTime` 전이 제거
+
+**이것을 빼면 개정 2를 해도 증상이 남는다.** `Attack_A/B → Release`가 `ExitTime = 1.0`으로 걸려 있어(Research §7), 코드가 무엇을 하든 클립 끝에서 Release가 재생된다. 연계 경로에서 웨이트가 0이면 눈에 보이지는 않지만, **Release 진입 경로를 코드 하나로 통일**하지 않으면 같은 종류의 버그가 계속 재발한다. 개정 1에서 폴링을 세 번 갈아엎은 것과 같은 교훈이다(Step 11).
+
+→ 개정 1의 "범위 밖: 애니메이터 무수정" 제약을 **여기서 해제한다.**
+
+## 새 튜너블
+
+| 필드 | 제안 기본값 | 의미 |
+|---|---|---|
+| `minRunExposure` | `0.35` | **"연계 O · 간격 부족"과 "연계 O · 간격 여유"를 가르는 문턱.** 다음 공격까지 이 시간 이상 남아 있으면 웨이트를 내려 Run을 노출하고, 미만이면 웨이트 1을 유지한다(개정 1의 콤보 경로 그대로). 실측 간격 0.107/0.133/0.134초에서의 **웨이트 깜빡임 방지**(Research §10). `>>>` |
+
+기존 값 중 재검토가 필요한 것:
+
+| 필드 | 현재 | 제안 | 이유 |
+|---|---|---|---|
+| `blendOutDuration` | `0.30` | `0.15` `>>>` | 개정 1에서는 곡당 6회뿐인 예외 경로였지만, 이제 **모든 연계마다** 실행된다. 0.30이면 간격 0.40초의 연계에서 내려가는 데만 절반 이상을 쓴다. |
+| `layerBlendInDuration` | `0.08` | `0.12` `>>>` | 마찬가지로 모든 공격 진입이 웨이트 0에서 시작하게 된다. 진입 팝핑이 개정 1보다 훨씬 자주 노출된다. |
+| `recoveryHoldDuration` | 씬 값 `0` | 유지 `>>>` | 이제 **두 경로 공통**으로 "트림 끝 이후 마무리 동작을 웨이트 1로 노출하는 시간"을 뜻한다. 0이면 트림 끝 즉시 내려간다. |
+| `comboLinkWindow` | `1.0` | 유지 `>>>` | 의미가 "웨이트를 유지할 간격"에서 **"Release를 생략할 간격"**으로 바뀐다. 실측 절벽(0.9 ↔ 1.2)은 그대로 유효. |
+
+## `Update()` 최종 형태
+
+```csharp
+if (Time.time < actionEndTime) { ApplyBlendIn(); return; }   // 트림 구간 재생 중
+if (Time.time < recoveryEndTime) { ApplyBlendIn(); return; } // 마무리 동작 노출(공통)
+
+if (IsLinkedToNextAction())
+{
+    // 연계 — Release를 건너뛰고 Run을 드러낸다. 단 간격이 너무 짧으면 유지.
+    if (HasRoomForRunExposure()) ApplyBlendOut();
+    else ApplyBlendIn();
+    return;
+}
+
+if (!releaseTriggered) TriggerRelease();
+if (Time.time < releaseEndTime) { ApplyBlendIn(); return; }  // Release 완주까지 유지
+ApplyBlendOut();
+```
+
+```csharp
+// Run 노출 창(recovery 끝 ~ 다음 공격 시작)이 문턱 이상인가. 고정 간격으로 판정한다.
+private bool HasRoomForRunExposure()
+    => (pendingScheduleStart - recoveryEndTime) >= minRunExposure;
+```
+
+> **구현 중 수정**: 초안은 `pendingScheduleStart - Time.time`이었으나, 이 값은 매 프레임 줄어들어 Run 노출 도중 문턱을 밑돌면 `ApplyBlendOut → ApplyBlendIn`으로 분기가 뒤집힌다. 그 순간 `blendInStartTime`이 과거값이라 보간이 즉시 완료되어 **웨이트가 0→1로 튄다**(Step 11에서 겪은 스냅과 동종). 그래서 **고정 기준(`recoveryEndTime`)** 으로 바꿔 분기가 창 안에서 뒤집히지 않게 했다.
+
+`recoveryHoldDuration`이 연계 판정보다 **앞으로** 이동한 점에 주의한다(개정 1은 연계 판정이 먼저였다). 두 경로가 동일한 마무리 노출을 갖게 하려는 의도다.
+
+## 구현 단계
+
+- [x] **Step 12 — 애니메이터 `ExitTime` 전이 제거**
+  - `Attack_A`의 전이 `7410374101304509780`, `Attack_B`의 전이 `7638834329385509203`을 삭제하고 각 스테이트의 `m_Transitions`를 빈 배열로 만들었다.
+  - `Release` 스테이트와 `ReleaseSpeed` 파라미터는 **그대로 둔다**(코드가 `CrossFadeInFixedTime`으로 직접 진입).
+  - `Release`가 Attack Layer의 `m_DefaultState`인 것도 유지 — 웨이트 0이라 보이지 않는다.
+  - 확인: 삭제 후 Attack 클립은 끝에서 마지막 포즈로 정지한다. 연계 경로에서는 이미 웨이트 0이므로 무영향.
+
+- [x] **Step 13 — `minRunExposure` 추가**
+  - `[SerializeField] private float minRunExposure = 0.35f;` + `[Tooltip]`.
+  - `HasRoomForRunExposure()` 추가(위 코드).
+
+- [x] **Step 14 — `Update()` 분기 재배치**
+  - 위 "최종 형태"대로 교체. `recoveryEndTime` 체크를 연계 판정보다 앞으로 옮겼다.
+  - 연계 경로에서 `TriggerRelease()`가 **절대 호출되지 않도록** 한다(`releaseTriggered`는 `PlaySlot`에서 리셋되므로 추가 처리 불필요).
+  - 새 상태 필드 없음 — 기존 래치/블렌드 로직을 그대로 쓴다.
+
+- [x] **Step 15 — 튜너블 기본값 조정**
+  - `blendOutDuration` 0.30 → 0.15, `layerBlendInDuration` 0.08 → 0.12. (위 표의 결정 반영)
+  - **필드명은 바꾸지 않으므로 씬의 직렬화 값이 그대로 남는다.** 씬 인스펙터에서 직접 갱신해야 한다 — Step 1의 반대 함정이다. (`minRunExposure`는 새 필드라 기본값 0.35로 들어온다.)
+
+- [x] **Step 16 — 주석/문서 갱신**
+  - `CharacterActionPlayer` 클래스 XML 주석을 개정 2(3분기) 기준으로 교체. "웨이트를 1로 유지한 채 크로스페이드로 잇는다"는 서술은 이제 "연계 O · 간격 부족" 경로에만 해당한다. `TriggerRelease` 주석의 ExitTime 근거도 "전이 제거됨" 기준으로 갱신.
+  - `CLAUDE.md` §6의 "공격 종료 후 복귀" 문단을 3분기로 교체.
+
+- [ ] **Step 17 — 실측 검증** (사용자 플레이 확인 필요)
+  - 연계 경로: 트림 끝 이후 웨이트가 0까지 내려갔다가 다음 공격에서 1로 올라오는지, 그 사이 **Release 스테이트에 진입하지 않는지** 로그로 확인.
+  - `minRunExposure` 가드: 간격 0.1~0.15초 구간에서 웨이트가 1을 유지하는지.
+  - 비연계 경로: Release 완주 후 blend-out(개정 1과 동일 동작 유지 = 회귀 없음).
+  - 육안: 짧은 연계에서 Run이 한 프레임 스치듯 지나가 어색하지 않은지 → `minRunExposure` 튜닝.
+  - 임시 로그 제거 + 클린 컴파일 확인.
+
+## 리스크
+
+- **연계마다 전신이 Run으로 갔다가 돌아온다.** Attack Layer는 마스크 없는 전신 Override라, 0.4초 간격의 연계에서도 상체가 Run 포즈를 거친다. 개정 1이 피하려던 바로 그 현상이며, 이번에는 **의도된 연출**이다. 실제로 보고 어색하면 조정 순서는 `minRunExposure` ↑ → `blendOutDuration` ↑ → (그래도 안 되면) 아바타 마스크 검토.
+- **`hasPending` 오판의 영향**(Research §8)이 남는다. 다음 패턴에 `SuccessAnimationClip`이 없거나 첫 미스로 예약이 취소되면 연계 없음으로 판정되어 Release가 나온다. 개정 2에서는 "웨이트가 튀는" 문제는 사라지고 "Release가 한 번 더 나온다" 정도로 완화된다.
+- **`minRunExposure`는 실측 2곡 기준이다.** 배속 상한(씬 값 3.5)에 걸리는 케이스에서 간격이 크게 줄어드는 것이 관측됐으므로, 곡이 추가되면 분포를 다시 본다.
+
+## 범위 밖 (개정 2)
+- 다음 공격 시작 시각 변경 — **임팩트 정렬은 건드리지 않는다.**
+- 아바타 마스크(상체) 도입.
+- `PatternHandler` / 이벤트 시그니처 변경.
+- `Release` 클립 자체의 교체·트리밍.
+
+---
+---
+
+# 개정 3 — 경로별 Run 클립 분리 (경로 ②는 Sprint_HS)
+
+> 근거: `Research_ReleaseRecovery.md` §11~§13
+> 상태: **검토 중 — 확정 전까지 구현하지 않음.** 피드백은 이 절에 `>>>`로 남겨주세요.
+
+## 무엇이 바뀌나
+
+개정 2는 blend-out으로 드러나는 base 클립이 **경로 ②·③ 공통으로 `Run` 하나**였다. 개정 3은 이를 **경로별로 분리**한다.
+
+```
+                                  ┌─ 연계 O · 간격 부족 ─ 웨이트 1 유지 (base 안 보임 — 손대지 않음)
+ 트림 구간 재생 ─→ actionEndTime ─┼─ 연계 O · 간격 여유 ─ 웨이트 ↓ → base = Sprint_HS 노출
+ 배속 / 웨이트 1    AttackSpeed=1  └─ 연계 X            ─ Release 완주 → 웨이트 ↓ → base = Run 복귀
+```
+
+- base `Running Layer`는 평소 `Run`이 기본. **경로 ②를 탈 때 `Sprint`로 CrossFade**, **경로 ③을 탈 때 `Run`으로 CrossFade**해 되돌린다.
+- 경로 ①(간격 부족, 웨이트 유지)은 base가 가려져 안 보이므로 전환하지 않는다.
+
+**변경 범위**: 애니메이터 `Running Layer`(스테이트 1개 추가) + `CharacterActionPlayer.cs`. Attack Layer·`PatternHandler`·이벤트·패턴 에셋은 무수정.
+
+## 새 튜너블
+
+| 필드 | 제안 기본값 | 의미 |
+|---|---|---|
+| `runningLayerName` | `"Running Layer"` | base 레이어 이름. 인덱스/해시 캐시용. `>>>` |
+| `runStateName` | `"Run"` | 경로 ③ 복귀 시 드러낼 base 스테이트. `>>>` |
+| `sprintStateName` | `"Sprint"` | 경로 ② 노출 시 드러낼 base 스테이트. `>>>` |
+| `baseCrossFadeDuration` | `0.2` | base 레이어 Run↔Sprint 포즈 블렌딩 시간(초). base가 가려진 동안 진행. `>>>` |
+
+## 구현 단계
+
+- [x] **Step 18 — 애니메이터 `Sprint` 스테이트 추가**
+  - `Running Layer`에 `Sprint` 스테이트 신규 추가. 모션 = `Sprint_HS.anim`(guid `c6ce09bd2c3f38645b61adeccab81781`, fileID 7400000).
+  - `m_Transitions: []`, `m_WriteDefaultValues: 1`(기존 `Run`과 동일), 스피드 파라미터 없음.
+  - `Run`은 default 스테이트 그대로 유지.
+  - **확인**: `Sprint_HS.anim`의 Loop Time이 켜져 있는지(연속 콤보 대비). 꺼져 있으면 켠다.
+
+- [x] **Step 19 — 코드: base 레이어 캐시 + 전환 프리미티브**
+  - 새 `[SerializeField]` 필드 4개(위 표) + `[Tooltip]`.
+  - `Awake`에서 `runningLayerIndex = GetLayerIndex(runningLayerName)`, `runStateHash`/`sprintStateHash` 캐시. `currentBaseStateHash = runStateHash`로 초기화(default 스테이트).
+  - `SwitchBaseState(int hash)`: `hash == currentBaseStateHash`이면 즉시 반환, 아니면 `CrossFadeInFixedTime(hash, baseCrossFadeDuration, runningLayerIndex, 0f)` 후 `currentBaseStateHash = hash`.
+  - 레이어/해시 조회 실패 시 무연출(기존 방어 패턴과 동일하게 로그 후 스킵).
+
+- [x] **Step 20 — 코드: `Update()` 경로별 호출 배선**
+  - 경로 ②(`IsLinkedToNextAction() && HasRoomForRunExposure()` → `ApplyBlendOut()`) 직전에 `SwitchBaseState(sprintStateHash)`.
+  - 경로 ③(비연계, `Time.time >= releaseEndTime` → `ApplyBlendOut()`) 직전에 `SwitchBaseState(runStateHash)`.
+  - 경로 ①(간격 부족, `ApplyBlendIn()`)은 손대지 않는다.
+  - 매 프레임 호출돼도 `SwitchBaseState`가 중복 진입을 막으므로 별도 래치 불필요.
+
+- [x] **Step 21 — 주석/문서 갱신**
+  - `CharacterActionPlayer` 클래스 XML 주석에 경로 ②=Sprint / 경로 ③=Run 분리를 반영.
+  - `CLAUDE.md` §6의 "공격 종료 후 복귀" 문단에 한 줄 추가.
+
+- [x] **Step 22 — 실측 검증** (플레이 확인 완료)
+  - 경로 ②: 콤보 사이 노출 클립이 `Sprint_HS`인지 육안 확인. base 레이어가 `Sprint`로 CrossFade됐는지 로그.
+  - 경로 ③: 공백 복귀 시 `Run`으로 되돌아오는지.
+  - 전환 팝핑: Run↔Sprint 교체가 base 가림막 아래에서 끝나 튀지 않는지.
+  - 연속 콤보에서 `Sprint_HS`가 루프로 매끄럽게 이어지는지(Loop Time 확인 겸 — 이미 Loop 켜짐, 길이 0.5초).
+  - 임시 로그 제거 + 클린 컴파일.
+
+- [x] **Step 23 — 판별 버그 수정 (실측으로 발견)**
+  - **증상**: Release가 완주한 진짜 공백 이후에도 Sprint가 계속 재생됐다.
+  - **원인**: `[BASE-DBG]` 프레임 로그로 확정. Release 완주(RELEASE-RUN) → base=Run 전환은 정상인데, **50~70ms 뒤 다음 판정 대상이 시작되며 `hasPending`이 true로 뒤집혀** LINKED-SPRINT 분기가 base를 곧바로 Sprint로 덮었다. Run은 스치듯 지나가 체감상 "Sprint가 계속".
+  - **1차 오답**: `releaseTriggered`(Release를 트리거했는가)로 가드 → gap 대부분이 시작 순간 `hasPending=false`라 Release가 트리거되므로 **거의 전부 Run**이 되어 Sprint가 사라짐(과잉 교정, 로그로 확인).
+  - **채택**: `releaseCompleted`(Release가 `releaseEndTime`까지 **완주**해 RELEASE-RUN 분기에 도달했는가)로 판별. 다음 연계에 인터럽트돼 완주 못 한 Release는 콤보 gap → Sprint, 완주한 Release는 진짜 공백 → Run. RELEASE-RUN에서 `true`, `PlaySlot`에서 `false` 리셋.
+  - **메커니즘은 그대로**: bool 파라미터+전이가 아니라 기존 코드 CrossFade(`SwitchBaseState`) 유지 — 버그는 전환 방식이 아니라 판별 로직이었다.
+
+## 리스크
+- **Sprint와 Run의 다리 위상(footphase) 불일치.** 경로 ③에서 Sprint→Run으로 되돌릴 때 발이 어긋날 수 있으나 base 가림막 아래 `baseCrossFadeDuration` 블렌딩으로 대부분 흡수된다. 심하면 `baseCrossFadeDuration`을 늘린다.
+- **`Sprint_HS.anim` Loop 미설정 시** 짧은 노출은 괜찮지만 연속 콤보에서 정지 포즈로 굳는다. Step 18에서 확인.
+- Attack Layer는 전신 Override라 base 클립이 바뀌어도 공격 중에는 가려진다. 문제 없음.
+
+## 범위 밖 (개정 3)
+- Attack Layer / `PatternHandler` / 이벤트 시그니처 변경.
+- Sprint·Run 다리 위상 동기화, 아바타 마스크.
+- 임팩트 정렬·Release 로직 변경(개정 2 그대로).

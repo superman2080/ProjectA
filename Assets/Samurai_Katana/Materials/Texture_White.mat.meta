@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 59c4288f9391bc84bb5be3be6f89d66e
+timeCreated: 1491735427
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 87700
+  packageName: Samurai Katana AnimSet
+  packageVersion: 1.0
+  assetPath: Assets/Samurai_Katana/Materials/Texture_White.mat
+  uploadId: 175582

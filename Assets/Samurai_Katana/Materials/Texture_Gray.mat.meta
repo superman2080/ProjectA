@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 812af11b0f72fb9499bc14ceae765952
+timeCreated: 1491735427
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 87700
+  packageName: Samurai Katana AnimSet
+  packageVersion: 1.0
+  assetPath: Assets/Samurai_Katana/Materials/Texture_Gray.mat
+  uploadId: 175582
