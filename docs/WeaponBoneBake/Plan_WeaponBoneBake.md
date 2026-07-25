@@ -165,3 +165,65 @@ pelvis⁻¹ · add_weapon_l          add_weapon_l = root⁻¹ · pelvis · 오�
 - 리그 계층 재구성(`add_weapon_*`의 부모 변경).
 - 휴머노이드 머슬 커브 수정.
 - `Sprint_Forward`의 검집 커브 누락 처리.
+
+---
+
+# 추가 작업 — 검집 허리 고정 (pelvis follow)
+
+> 2026-07-26 요청. 근거: 아래 문제 분석 + 사용자 확정(허리 본=`pelvis`, 오프셋=바인드 포즈 그대로, UI=3단계 드롭다운).
+
+## 문제
+`검집 굽기` 옵션을 **끄면** `add_weapon_l`에 커브가 하나도 안 써진다. `add_weapon_l`은 `root`의 직계 자식이라, 커브가 없으면 재생 내내 **root 기준 바인드 포즈 한 점에 얼어붙는다**. 몸(pelvis)이 회전·이동해도 검집은 처음 허리춤 위치에 그대로 멈춰 있어 어색하다.
+
+**원하는 동작:** 검집이 지금 보이는 그 허리 위치를 유지하되, `pelvis`에 강체로 붙어 **몸이 돌면 같이 돌고 이동하면 같이 이동**한다.
+
+## 해결 원리
+칼 굽기(`hand_r` 기준 그립)와 동일한 구조를 재사용하되, **기준 본을 `pelvis`로, 오프셋 소스를 참조 클립이 아니라 바인드 포즈로** 바꾼다.
+
+```
+[오프셋 캡처 — 애니메이션 샘플링 전, 신선한 프리팹 인스턴스 = 사용자가 지금 보는 그 위치]
+    offsetPos = pelvis.InverseTransformPoint(add_weapon_l.position)
+    offsetRot = Quaternion.Inverse(pelvis.rotation) * add_weapon_l.rotation
+
+[프레임 t — 대상 클립을 t로 샘플링한 뒤]
+    world  = pelvis(t) 로 offset 을 복원 (TransformPoint + rotation 합성)
+    local  = root⁻¹ · world      → add_weapon_l 의 root 기준 로컬 TRS
+    → m_PositionCurves + m_RotationCurves 로 기입 (칼과 동일한 형태)
+```
+
+- 지금 보이는 **허리춤 위치·방향이 정확히 보존**된다(바인드 포즈에서 캡처 = 커브 없을 때 얼어붙던 바로 그 자세).
+- 이후 pelvis의 회전/이동을 **강체로 따라간다**(회전 오프셋 포함).
+- **참조 클립이 필요 없다**(바인드 포즈 캡처이므로). 칼과 달리 정상 클립 역산 불필요.
+- 기존 실측(Step 1)에서 정상 클립의 검집은 `hand_l`에 쥐어져 있어 `pelvis` 기준 편차가 122도였다 → 그래서 **정상 클립이 아니라 바인드 포즈**를 오프셋 소스로 쓴다.
+
+## 툴 변경 (에디터 전용, 런타임 무변경)
+
+### `WeaponBoneBaker.cs`
+- `Bones`에 `Pelvis` 추가, `ResolveBones`에 `case "pelvis"` 추가.
+- `public enum SheathMode { None, Waist, Hand }` 신설.
+- 바인드 오프셋 캡처 메서드 신설: 샘플링하지 않은 신선 인스턴스에서 `pelvis→add_weapon_l` 오프셋(위치+회전)을 1회 캡처해 `Grip`으로 반환. (편차는 상수라 0; 리포트엔 "바인드 포즈 상수" 표기.)
+- `Bake`/`Inspect`의 `bool sheath` 인자를 `SheathMode`로 교체.
+  - `Waist`: 기준 본 = `pelvis`, 그립 = 바인드 캡처. 프레임별 `ComposeLocal(root, pelvis, grip)`.
+  - `Hand`: 기존 로직 유지(참조 클립에서 `hand_l` 그립 역산).
+  - `None`: 스킵.
+- `ComposeLocal`은 기준 본 인자만 바꿔 그대로 재사용(hand↔pelvis 무관하게 동작).
+
+### `WeaponBoneBakeWindow.cs`
+- `[SerializeField] bool bakeSheath` → `[SerializeField] SheathMode sheathMode` 로 교체.
+- 검집 체크박스 → **EnumPopup 드롭다운**: `안 함 / 허리 고정 / 손 그립`.
+- 버튼 활성 조건 조정: 검집=`허리 고정`이고 칼 굽기가 꺼져 있으면 **참조 클립 없이도** 실행 가능. (칼 굽기 ON이거나 검집=`손 그립`이면 참조 클립 필수 — 기존과 동일.)
+
+## 구현 단계
+
+- [x] **S1 — `SheathMode` enum + `pelvis` 본 해석 추가** (`WeaponBoneBaker.cs`)
+- [x] **S2 — 바인드 오프셋 캡처 메서드 구현** (샘플링 전 신선 인스턴스에서 `pelvis→add_weapon_l` 1회 캡처 — `CaptureBindOffset`)
+- [x] **S3 — `Bake`/`Inspect` 시그니처를 `SheathMode`로 교체, `Waist`/`Hand`/`None` 분기**
+- [x] **S4 — 윈도우 UI를 드롭다운으로 교체 + 버튼 활성 조건(참조 클립 선택 요건) 조정**
+- [x] **S5 — 컴파일 무에러 확인 후 `Flurry_Slashes`에 `허리 고정`으로 굽기 완료.** 검집 오프셋 pelvis 기준 `(0.0061, 0.1710, 0.5305)`(회전편차 0.00도) — Z 0.53m는 기존 실측 "허리에서 52cm 옆"과 일치. `add_weapon_r` 커브 7개 보존 + `add_weapon_l` 커브 7개(pos3+rot4) 신규 기입 확인. 백업은 기존 `_Backup/Flurry_Slashes_backup.anim` 재사용.
+- [~] **S6 — 데이터 검증 통과.** `add_weapon_l.x`가 프레임별로 변함(t0=-0.151 / t2=0.033 / t4=-0.376) = 굽기 전 root 고정이던 것이 이제 pelvis를 따라 움직임을 확인. **육안 검증(재생 중 몸 회전 시 검집이 허리를 따라 도는지)과 나머지 두 클립(`Cross_Slash`/`Down_Up_Slash`) 처리 여부는 사용자 확인 대기.**
+
+## 리스크 / 주의
+- **오프셋은 반드시 샘플링 전 신선 인스턴스에서 캡처**한다. `AnimationMode.SampleAnimationClip` 호출 뒤엔 트랜스폼이 클립 값으로 덮여 바인드 포즈가 사라진다.
+- `pelvis`가 없거나 이름이 다르면 본 해석 실패 → 기존 `BoneError` 경로로 안내. (Research 계층상 `pelvis` 존재는 확인됨.)
+- `Waist`로 다시 구우면 기존 `add_weapon_l` 커브를 덮어쓴다. 이미 `손 그립`으로 구운 클립을 `허리 고정`으로 바꾸려면 한 번 더 실행하면 된다(백업 토글은 기존대로 동작).
+- 이 작업은 **툴 기능 추가**까지가 범위다. 세 결함 클립에 실제 굽기 적용/육안 검증(S5~S6)은 툴 완성 뒤 이어서 진행한다.

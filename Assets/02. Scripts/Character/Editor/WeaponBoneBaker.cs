@@ -23,6 +23,14 @@ public static class WeaponBoneBaker
     private static readonly string[] PosProps = { "m_LocalPosition.x", "m_LocalPosition.y", "m_LocalPosition.z" };
     private static readonly string[] RotProps = { "m_LocalRotation.x", "m_LocalRotation.y", "m_LocalRotation.z", "m_LocalRotation.w" };
 
+    /// <summary>검집(add_weapon_l) 굽기 방식. 순서(0/1/2)가 윈도우 드롭다운 인덱스와 일치해야 한다.</summary>
+    public enum SheathMode
+    {
+        None = 0,  // 굽지 않음(커브 없음 → 바인드 포즈에 얼어붙음)
+        Waist = 1, // pelvis 기준 바인드 오프셋으로 허리에 강체 고정 → 몸을 따라 회전/이동
+        Hand = 2,  // hand_l 기준 참조 클립 그립(정상 클립의 발도 자세)
+    }
+
     /// <summary>손 기준 무기 오프셋. 회전이 상수라는 것이 이 접근의 전제이므로 편차도 함께 들고 다닌다.</summary>
     public struct Grip
     {
@@ -34,8 +42,8 @@ public static class WeaponBoneBaker
 
     // ─────────────────────────── 공개 API ───────────────────────────
 
-    /// <summary>굽지 않고 그립 오프셋만 역산해 보고한다(전제 검증용).</summary>
-    public static string Inspect(GameObject prefab, AnimationClip reference, bool katana, bool sheath, int fps)
+    /// <summary>굽지 않고 그립/허리 오프셋만 역산해 보고한다(전제 검증용).</summary>
+    public static string Inspect(GameObject prefab, AnimationClip reference, bool katana, SheathMode sheath, int fps)
     {
         GameObject instance = null;
         try
@@ -44,14 +52,32 @@ public static class WeaponBoneBaker
             Bones bones = ResolveBones(instance);
             if (bones == null) return BoneError;
 
+            // 허리 오프셋은 반드시 샘플링 전(바인드 포즈)에서 캡처한다.
+            Grip waist = default(Grip);
+            if (sheath == SheathMode.Waist) waist = CaptureBindOffset(bones.Pelvis, bones.WeaponL);
+
             AnimationMode.StartAnimationMode();
 
             var sb = new StringBuilder();
-            sb.AppendLine("참조 클립: " + reference.name + " (" + fps + "fps, 길이 " + reference.length.ToString("F3") + "초)");
-            if (katana) sb.AppendLine(Describe("칼  hand_r ", ExtractGrip(instance, bones.HandR, bones.WeaponR, reference, fps)));
-            if (sheath) sb.AppendLine(Describe("검집 hand_l", ExtractGrip(instance, bones.HandL, bones.WeaponL, reference, fps)));
+            if (reference != null)
+                sb.AppendLine("참조 클립: " + reference.name + " (" + fps + "fps, 길이 " + reference.length.ToString("F3") + "초)");
+
+            if (katana)
+            {
+                if (reference == null) sb.AppendLine("[칼] 참조 클립이 필요합니다.");
+                else sb.AppendLine(Describe("칼  hand_r ", ExtractGrip(instance, bones.HandR, bones.WeaponR, reference, fps)));
+            }
+
+            if (sheath == SheathMode.Waist)
+                sb.AppendLine(Describe("검집 pelvis", waist) + "  ← 바인드 포즈 상수(참조 클립 불필요)");
+            else if (sheath == SheathMode.Hand)
+            {
+                if (reference == null) sb.AppendLine("[검집·손] 참조 클립이 필요합니다.");
+                else sb.AppendLine(Describe("검집 hand_l", ExtractGrip(instance, bones.HandL, bones.WeaponL, reference, fps)));
+            }
+
             sb.AppendLine();
-            sb.AppendLine("회전편차가 0에 가까우면 강체 그립 — 상수 오프셋으로 구워도 안전합니다.");
+            sb.AppendLine("회전편차가 0에 가까우면 강체 — 상수 오프셋으로 구워도 안전합니다.");
             return sb.ToString();
         }
         finally
@@ -60,11 +86,14 @@ public static class WeaponBoneBaker
         }
     }
 
-    /// <summary>참조 클립의 그립을 대상 클립에 적용해 무기 본 커브를 생성한다.</summary>
+    /// <summary>참조 클립의 그립(칼·검집 손) 또는 바인드 오프셋(검집 허리)을 대상 클립에 적용해 무기 본 커브를 생성한다.</summary>
     public static string Bake(GameObject prefab, AnimationClip reference, AnimationClip target,
-        bool katana, bool sheath, int fps, bool backup)
+        bool katana, SheathMode sheath, int fps, bool backup)
     {
-        if (!katana && !sheath) return "굽기 대상이 없습니다.";
+        bool doSheath = sheath != SheathMode.None;
+        if (!katana && !doSheath) return "굽기 대상이 없습니다.";
+        if ((katana || sheath == SheathMode.Hand) && reference == null)
+            return "참조 클립이 필요합니다(칼 또는 검집=손 그립).";
 
         GameObject instance = null;
         try
@@ -73,11 +102,18 @@ public static class WeaponBoneBaker
             Bones bones = ResolveBones(instance);
             if (bones == null) return BoneError;
 
+            // 허리 오프셋은 반드시 샘플링 전(바인드 포즈)에서 캡처한다.
+            Grip gripL = default(Grip);
+            if (sheath == SheathMode.Waist) gripL = CaptureBindOffset(bones.Pelvis, bones.WeaponL);
+
             AnimationMode.StartAnimationMode();
 
-            Grip gripR = default(Grip), gripL = default(Grip);
+            Grip gripR = default(Grip);
             if (katana) gripR = ExtractGrip(instance, bones.HandR, bones.WeaponR, reference, fps);
-            if (sheath) gripL = ExtractGrip(instance, bones.HandL, bones.WeaponL, reference, fps);
+            if (sheath == SheathMode.Hand) gripL = ExtractGrip(instance, bones.HandL, bones.WeaponL, reference, fps);
+
+            // 검집이 따라갈 기준 본: 허리=pelvis, 손=hand_l.
+            Transform sheathBone = sheath == SheathMode.Waist ? bones.Pelvis : bones.HandL;
 
             int frames = Mathf.Max(2, Mathf.RoundToInt(target.length * fps));
             var times = new float[frames + 1];
@@ -90,14 +126,14 @@ public static class WeaponBoneBaker
                 times[i] = t;
                 SampleAt(instance, target, t);
                 if (katana) ComposeLocal(bones.Root, bones.HandR, gripR, out posR[i], out rotR[i]);
-                if (sheath) ComposeLocal(bones.Root, bones.HandL, gripL, out posL[i], out rotL[i]);
+                if (doSheath) ComposeLocal(bones.Root, sheathBone, gripL, out posL[i], out rotL[i]);
             }
 
             AnimationMode.StopAnimationMode();
 
             string backupNote = backup ? Backup(target) : "백업 생략";
             if (katana) WriteCurves(target, PathWeaponR, times, posR, rotR);
-            if (sheath) WriteCurves(target, PathWeaponL, times, posL, rotL);
+            if (doSheath) WriteCurves(target, PathWeaponL, times, posL, rotL);
 
             EditorUtility.SetDirty(target);
             AssetDatabase.SaveAssets();
@@ -106,7 +142,8 @@ public static class WeaponBoneBaker
             sb.AppendLine("굽기 완료: " + target.name);
             sb.AppendLine("  " + (frames + 1) + "프레임 / " + fps + "fps / 길이 " + target.length.ToString("F3") + "초");
             if (katana) sb.AppendLine("  " + Describe("칼  ", gripR));
-            if (sheath) sb.AppendLine("  " + Describe("검집", gripL));
+            if (sheath == SheathMode.Waist) sb.AppendLine("  " + Describe("검집(허리)", gripL));
+            else if (sheath == SheathMode.Hand) sb.AppendLine("  " + Describe("검집(손)  ", gripL));
             sb.AppendLine("  " + backupNote);
             return sb.ToString();
         }
@@ -134,7 +171,7 @@ public static class WeaponBoneBaker
 
     // ─────────────────────────── 내부 ───────────────────────────
 
-    private const string BoneError = "본 탐색 실패 — root/hand_r/hand_l/add_weapon_r/add_weapon_l 중 없는 것이 있습니다.";
+    private const string BoneError = "본 탐색 실패 — root/pelvis/hand_r/hand_l/add_weapon_r/add_weapon_l 중 없는 것이 있습니다.";
 
     private static string Describe(string label, Grip g)
     {
@@ -167,7 +204,19 @@ public static class WeaponBoneBaker
         return new Grip { Position = mean, Rotation = rotations[0], MaxPosDev = maxPos, MaxRotDev = maxRot };
     }
 
-    /// <summary>손의 현재 자세에 그립 오프셋을 곱해 무기의 root 기준 로컬 TRS를 만든다.</summary>
+    /// <summary>샘플링 전(바인드 포즈)의 기준 본↔무기 상대 자세를 1회 캡처한다. 상수라 편차는 0.</summary>
+    private static Grip CaptureBindOffset(Transform reference, Transform weapon)
+    {
+        return new Grip
+        {
+            Position = reference.InverseTransformPoint(weapon.position),
+            Rotation = Quaternion.Inverse(reference.rotation) * weapon.rotation,
+            MaxPosDev = 0f,
+            MaxRotDev = 0f,
+        };
+    }
+
+    /// <summary>기준 본(손/허리)의 현재 자세에 오프셋을 곱해 무기의 root 기준 로컬 TRS를 만든다.</summary>
     private static void ComposeLocal(Transform root, Transform hand, Grip grip, out Vector3 localPos, out Quaternion localRot)
     {
         Vector3 worldPos = hand.TransformPoint(grip.Position);
@@ -238,7 +287,7 @@ public static class WeaponBoneBaker
 
     private class Bones
     {
-        public Transform Root, HandR, HandL, WeaponR, WeaponL;
+        public Transform Root, Pelvis, HandR, HandL, WeaponR, WeaponL;
     }
 
     private static Bones ResolveBones(GameObject instance)
@@ -250,13 +299,14 @@ public static class WeaponBoneBaker
             switch (all[i].name)
             {
                 case "root": b.Root = all[i]; break;
+                case "pelvis": b.Pelvis = all[i]; break;
                 case "hand_r": b.HandR = all[i]; break;
                 case "hand_l": b.HandL = all[i]; break;
                 case "add_weapon_r": b.WeaponR = all[i]; break;
                 case "add_weapon_l": b.WeaponL = all[i]; break;
             }
         }
-        bool ok = b.Root != null && b.HandR != null && b.HandL != null && b.WeaponR != null && b.WeaponL != null;
+        bool ok = b.Root != null && b.Pelvis != null && b.HandR != null && b.HandL != null && b.WeaponR != null && b.WeaponL != null;
         return ok ? b : null;
     }
 }

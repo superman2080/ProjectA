@@ -3284,7 +3284,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8452091367517958602, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8452091367583348194, guid: c822ccc94298e6044a6191815437b7c4, type: 3}
       propertyPath: m_IsActive
@@ -3902,7 +3902,7 @@ MonoBehaviour:
   audioSource: {fileID: 854156977}
   patternHandler: {fileID: 1565592730}
   countdownDuration: 3
-  playOnStart: 1
+  playOnStart: 0
 --- !u!82 &854156977
 AudioSource:
   m_ObjectHideFlags: 0
@@ -5013,13 +5013,15 @@ MonoBehaviour:
   - {r: 0.95, g: 0.8, b: 0.25, a: 1}
   - {r: 0.75, g: 0.45, b: 0.95, a: 1}
   - {r: 0.95, g: 0.55, b: 0.2, a: 1}
-  debugTestPattern: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+  debugTestPattern: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
   debugInputTimes:
   - 1
   - 1.4
   - 1.8
   - 2.2
+  - 2.6
   debugExposureDurations:
+  - 0.5
   - 0.5
   - 0.5
   - 0.5

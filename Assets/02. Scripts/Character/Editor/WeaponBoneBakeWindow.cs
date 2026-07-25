@@ -16,9 +16,12 @@ public class WeaponBoneBakeWindow : EditorWindow
     [SerializeField] private AnimationClip referenceClip;  // 그립 오프셋을 역산할 정상 클립
     [SerializeField] private AnimationClip targetClip;     // 커브를 구워 넣을 결함 클립
     [SerializeField] private bool bakeKatana = true;       // add_weapon_r ← hand_r
-    [SerializeField] private bool bakeSheath = true;       // add_weapon_l ← hand_l
+    [SerializeField] private WeaponBoneBaker.SheathMode sheathMode = WeaponBoneBaker.SheathMode.Waist; // add_weapon_l
     [SerializeField] private int sampleFps = 30;
     [SerializeField] private bool backupBeforeBake = true;
+
+    // 드롭다운 라벨. 인덱스가 SheathMode(None=0/Waist=1/Hand=2)와 일치해야 한다.
+    private static readonly string[] SheathModeLabels = { "안 함", "허리 고정 (pelvis)", "손 그립 (hand_l)" };
 
     private Vector2 scroll;
     private string report = "";
@@ -33,8 +36,8 @@ public class WeaponBoneBakeWindow : EditorWindow
     {
         EditorGUILayout.LabelField("무기 본 커브 굽기", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "정상 클립에서 손↔무기 상대 자세(그립 오프셋)를 역산해, 대상 클립의 손을 따라 무기 본 커브를 생성합니다.\n" +
-            "칼: add_weapon_r ← hand_r / 검집: add_weapon_l ← hand_l", MessageType.Info);
+            "칼: 정상 클립에서 손↔칼 그립을 역산해 hand_r을 따라 굽습니다(add_weapon_r).\n" +
+            "검집(add_weapon_l): 안 함=커브 없음 / 허리 고정=바인드 위치를 유지한 채 pelvis를 따라 회전·이동 / 손 그립=참조 클립의 hand_l 자세.", MessageType.Info);
 
         characterPrefab = (GameObject)EditorGUILayout.ObjectField("캐릭터 프리팹", characterPrefab, typeof(GameObject), false);
         referenceClip = (AnimationClip)EditorGUILayout.ObjectField("참조 클립(정상)", referenceClip, typeof(AnimationClip), false);
@@ -42,17 +45,21 @@ public class WeaponBoneBakeWindow : EditorWindow
 
         EditorGUILayout.Space();
         bakeKatana = EditorGUILayout.Toggle("칼 굽기 (add_weapon_r)", bakeKatana);
-        bakeSheath = EditorGUILayout.Toggle("검집 굽기 (add_weapon_l)", bakeSheath);
+        sheathMode = (WeaponBoneBaker.SheathMode)EditorGUILayout.Popup("검집 (add_weapon_l)", (int)sheathMode, SheathModeLabels);
         sampleFps = Mathf.Clamp(EditorGUILayout.IntField("샘플링 fps", sampleFps), 5, 120);
         backupBeforeBake = EditorGUILayout.Toggle("굽기 전 백업", backupBeforeBake);
 
+        // 참조 클립은 칼 또는 검집=손 그립일 때만 필요. 검집=허리 고정은 바인드 포즈만 쓴다.
+        bool needReference = bakeKatana || sheathMode == WeaponBoneBaker.SheathMode.Hand;
+        bool canRun = characterPrefab != null && targetClip != null && (!needReference || referenceClip != null);
+
         EditorGUILayout.Space();
-        using (new EditorGUI.DisabledScope(characterPrefab == null || referenceClip == null || targetClip == null))
+        using (new EditorGUI.DisabledScope(!canRun))
         {
             if (GUILayout.Button("오프셋 검사만 (굽지 않음)"))
-                report = WeaponBoneBaker.Inspect(characterPrefab, referenceClip, bakeKatana, bakeSheath, sampleFps);
+                report = WeaponBoneBaker.Inspect(characterPrefab, referenceClip, bakeKatana, sheathMode, sampleFps);
             if (GUILayout.Button("굽기 실행"))
-                report = WeaponBoneBaker.Bake(characterPrefab, referenceClip, targetClip, bakeKatana, bakeSheath, sampleFps, backupBeforeBake);
+                report = WeaponBoneBaker.Bake(characterPrefab, referenceClip, targetClip, bakeKatana, sheathMode, sampleFps, backupBeforeBake);
         }
         using (new EditorGUI.DisabledScope(targetClip == null))
         {
