@@ -46,6 +46,14 @@ Assets/
 │   │   └── Tests/                   # 코어 유닛테스트(asmdef)
 │   ├── Character/
 │   │   └── CharacterActionPlayer.cs # 패턴 완료 시 베기/피격 애니메이션 재생
+│   ├── Slice/                       # 베이는 표적(연출 전용)
+│   │   ├── SliceSet.cs              # ScriptableObject - 굽기 산출물(원본+조각 프리팹 N개+절단 평면)
+│   │   ├── SliceTargetDirector.cs   # 표적 유일 관리 지점(예약·확정·풀링)
+│   │   ├── SliceTargetView.cs       # 표적 하나의 −Z 이동 / 절단 / 소멸
+│   │   ├── SlicePiece.cs            # 조각 하나의 운동(물리 없이 닫힌 식)
+│   │   ├── Core/                    # MeshSliceBaker 등 순수 기하 로직(asmdef)
+│   │   ├── Editor/                  # MeshSliceBakerWindow(획 긋기 굽기 툴)
+│   │   └── Tests/                   # 절단 코어 유닛테스트(asmdef)
 │   ├── Effect/                      # Canvas 이펙트 시스템
 │   │   ├── EffectManager.cs         # 이펙트 유일 관리 지점(PatternHandler 이벤트 구독)
 │   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
@@ -169,17 +177,29 @@ Assets/
 - **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
 - **`StateMachine<T>`**(범용 FSM/HFSM): Enum 키/인스턴스로 전환, 조건 기반 자동 전환(`RegisterCondition`), AnyState 전환, HFSM용 `CompositeStateBase`. *현재 게임플레이 루프에 직접 배선돼 있진 않은 범용 유틸.*
 
+### 11. 베이는 표적 (Slice)
+- 패턴 성공 시 표적이 **미리 구운 조각으로 갈라지고**, 실패하면 충돌·소멸하는 **연출 전용** 시스템. 판정/점수에 개입하지 않는다.
+- **`MeshSliceBaker`**(`Slice/Core`, asmdef): 메쉬를 평면 여러 장으로 절단하는 순수 기하 로직. 다중 평면 교차는 "이미 잘린 조각을 다시 자른다"는 **순차 적용**만으로 성립한다(가로+세로 = `┼` → 4조각). 앞 평면이 만든 **캡도 일반 지오메트리로 취급**해 다음 평면이 자르고(안 그러면 교차부가 뚫림), 캡은 몇 번을 잘라도 **서브메쉬 하나(인덱스 M)에 병합**한다(머티리얼 슬롯 `M+1` 규칙). 결과는 **연결 요소별로 분해**되므로 조각 수는 2개가 아니라 N개다.
+- **`MeshSliceBakerWindow`**(`Tools/Mesh Slice Baker`): 씬 뷰에서 **직선 획을 그어** 평면을 만든다(획 길이는 무시 — 무한 평면). 재굽기는 에셋을 **제자리 수정해 GUID를 유지**한다. 카탈로그가 없어 이것이 배선을 지키는 유일한 장치다.
+- **`SliceSet`**(SO): 굽기 산출물(원본·조각 프리팹 N개·오프셋·흩뿌림 방향·`bakedPlanes`·풀 크기). **`Pattern.sliceTarget`이 이 에셋을 직접 참조한다** — enum 키 카탈로그를 두지 않는다(`SuccessAnimationClip`과 같은 성격). **표적은 패턴당 하나**이며, 배치는 같은 패턴의 `sliceTargetOffset`(임팩트 기준 XY, 스폰·임팩트 양쪽에 동일 적용)·`sliceTargetImpactOffset`(Deadline 대비 ±초)이 정한다.
+- **`SliceTargetDirector`**: 표적의 유일한 관리 지점. **임팩트 시각 = `Deadline`**(판정 종료 시점)이라 표적이 닿는 순간 성패가 이미 확정돼 있다(`LastNodeTime`에 맞추면 정상적인 늦은 Good이 실패로 연출됨). 접근시간은 `min(approachDuration, impactTime − StartTime)`으로 **클램프**된다 — 표적은 첫 노드보다 먼저 나타날 수 없기 때문. **등장 위치를 authoring하고 속도는 파생시킨다** — 도착 시각이 Deadline으로 고정이라 '거리 = 속도 × 시간'에서 하나만 정할 수 있고, `spawnAnchor`(씬 Transform, 비면 임팩트에서 +Z로 `fallbackSpawnDistance`)로 거리를 잡아 화면 구도를 일정하게 유지한다. 그 결과 **패턴이 짧을수록 표적이 빨리 날아온다**(의도된 결과). 씬 뷰 기즈모(`drawGizmos`)가 스폰·임팩트 지점과 파생 속도를 표시하고, 플레이 중에는 활성 표적의 실제 경로와 성패 확정 상태(노랑/초록/빨강)까지 그린다.
+- **물리를 쓰지 않는다.** 조각은 콜라이더·Rigidbody 없이 `SlicePiece`가 경과 시간 t로 위치·회전을 **닫힌 식**으로 계산한다. 조각이 표적의 자식이라 −Z 진행 속도는 구조적으로 승계된다.
+- 가이드: `docs/!Guides/Guide_MeshSliceBaker.md` / 상세: `docs/SliceTarget/`
+
 ---
 
 ## 이벤트 확장 포인트 (`PatternHandler`)
 새 연출/시스템은 아래 이벤트만 구독해 붙인다(PatternHandler 본체 수정 없이 확장).
 - `OnJudged(JudgementResult, int index)` — 판정 발생.
 - `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (CharacterActionPlayer, EffectManager가 구독)
+- `OnPatternQueued(PatternQueuedInfo)` — 패턴이 **큐에 투입되는 순간**(판정 대상이 되기 훨씬 전). 등장에 시간이 걸리는 연출이 구독한다. `StartTime`(첫 노드 낙하 시작)과 `Deadline`(판정 종료)을 함께 준다. (SliceTargetDirector가 구독)
+- `OnAllPatternsCleared` — `ClearAllPatterns()`로 전부 정리된 순간(곡 중단 등). 외부 연출의 잔존물 회수용.
 - `OnNodeConnected(int index, Vector3 world)` — 노드가 라인에 연결.
 - `OnFallingNodeSpawned / OnFallingNodeResolved / OnFallingNodeMissedArrival` — 낙하 노드의 스폰/판정/미입력 도착.
 
 ## 네임스페이스
-- `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`
+- `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`, `PatternQueuedInfo`
+- `SliceSpace`: `SliceSet`, `SlicePlane`, `SliceShape`, `MeshSliceBaker`, `SliceTargetDirector`, `SliceTargetView`, `SlicePiece`
 - `ChartGen`: `SongChart`, `SongChartEntry`, `ChartPlayer`, 분석 코어/에디터
 - 그 외(`PatternHandler`, `EffectManager`, `CharacterActionPlayer`, `GameSession`, `Singleton`, `Pool` 등)는 전역 네임스페이스
 

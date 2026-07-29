@@ -41,7 +41,25 @@ namespace PatternSpace
         [Tooltip("이 패턴 베기의 기본 배속(하한). 패턴 입력 구간이 짧으면 자동으로 더 배속된다.")]
         [SerializeField] private float animationSpeed = 1f;
 
+        [Tooltip("이 패턴에서 등장할 베이는 표적. 비우면 표적 없음.")]
+        [SerializeField] private SliceSpace.SliceSet sliceTarget;
+
+        [Tooltip("임팩트 지점 기준 XY 배치. 칼 궤적 밖으로 벌리지 않는다.")]
+        [SerializeField] private Vector2 sliceTargetOffset;
+
+        [Tooltip("판정 종료 시각(Deadline) 대비 ±초. 표적이 닿는 순간을 앞뒤로 민다.")]
+        [SerializeField] private float sliceTargetImpactOffset;
+
         public IReadOnlyList<PatternData> AllData => patternDatas;
+
+        /// <summary>이 패턴이 띄울 표적. <see cref="SuccessAnimationClip"/>과 같은 '모양에 종속된 정적 데이터'다.</summary>
+        public SliceSpace.SliceSet SliceTarget => sliceTarget;
+
+        /// <summary>표적의 임팩트 지점 기준 XY 배치. 스폰·임팩트 양쪽에 똑같이 실린다.</summary>
+        public Vector2 SliceTargetOffset => sliceTargetOffset;
+
+        /// <summary>표적 도착 시각을 Deadline 기준으로 미는 값(초).</summary>
+        public float SliceTargetImpactOffset => sliceTargetImpactOffset;
 
         public AnimationClip SuccessAnimationClip => successAnimationClip;
 

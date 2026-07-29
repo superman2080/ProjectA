@@ -141,6 +141,11 @@ public class PatternHandler : MonoBehaviour
     public event Action<JudgementResult, int> OnJudged;
     public event Action<PatternCompletionInfo> OnPatternComplete; // 패턴 완료(완주/만료) 순간의 페이로드. 성공/실패·타이밍·다음 패턴 정보를 담는다.
 
+    /// <summary>확장 포인트: 패턴이 <b>큐에 투입되는 순간</b>(판정 대상이 되기 훨씬 전). 등장에 시간이 걸리는 연출(베이는 표적)이 구독한다.</summary>
+    public event Action<PatternQueuedInfo> OnPatternQueued;
+    /// <summary>확장 포인트: <see cref="ClearAllPatterns"/>로 전부 정리된 순간(곡 중단 등). 외부 연출이 잔존물을 회수하는 데 쓴다.</summary>
+    public event Action OnAllPatternsCleared;
+
     /// <summary>판정 대상이 선두가 되는 순간(최초 투입/승계). 캐릭터 액션이 성공 애니 조기 시작을 예약하는 데 쓴다.</summary>
     public event Action<JudgeTargetInfo> OnJudgeTargetBegan;
     /// <summary>판정 대상의 AllCorrect가 처음 깨지는 순간(오답/타이밍Miss 공통, 패턴당 1회). 힛 애니 재생·성공 애니 취소에 쓴다.</summary>
@@ -290,6 +295,10 @@ public class PatternHandler : MonoBehaviour
         bool becomesJudgeTarget = activePatterns.Count == 0;
         activePatterns.Add(active);
 
+        // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
+        OnPatternQueued?.Invoke(new PatternQueuedInfo(
+            active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline));
+
         if (becomesJudgeTarget)
         {
             RefreshJudgeTargetVisuals();
@@ -317,6 +326,8 @@ public class PatternHandler : MonoBehaviour
         ResetPointColors();
         TriggerLineFadeOut();
         RefreshJudgeTargetVisuals();
+
+        OnAllPatternsCleared?.Invoke();
     }
 
     /// <summary>루트 Canvas의 실제 화면 상단 경계를 fallingNodeParent 로컬 좌표로 변환한다 (Canvas는 Screen Space Overlay라 이 경계 밖은 Mask 없이도 실제로 렌더링되지 않는다).</summary>

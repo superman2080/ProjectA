@@ -1,0 +1,501 @@
+using System.Collections.Generic;
+using PatternSpace;
+using UnityEngine;
+
+namespace SliceSpace
+{
+    /// <summary>
+    /// 베이는 표적의 <b>유일한 관리 지점</b>. <see cref="PatternHandler"/>의 이벤트만 구독해
+    /// 표적을 예약·스폰·확정·회수한다. 판정 파이프라인에는 일절 개입하지 않는다(연출 전용).
+    ///
+    /// <para><b>임팩트 시각은 Deadline이다.</b> 마지막 노드를 goodWindow 안에 늦게 눌러도 Good 성공이므로,
+    /// LastNodeTime에 도착시키면 정상적인 늦은 입력이 실패로 연출된다. 도착을 Deadline에 맞추면
+    /// 표적이 다가오는 내내가 판정 구간이 되고, 닿는 순간 성패는 이미 확정되어 있다.</para>
+    ///
+    /// <para><b>접근시간은 클램프된다.</b> 표적은 패턴이 큐에 들어와야 존재를 알 수 있어 첫 노드보다 먼저 나타날 수 없다.
+    /// 따라서 상한은 StartTime~impactTime 구간이며, 그보다 긴 approachDuration은 이 구간으로 잘린다.</para>
+    ///
+    /// <para><b>등장 위치를 authoring하고 속도는 파생시킨다.</b> 도착 시각이 Deadline으로 고정이므로
+    /// '거리 = 속도 × 시간'에서 둘 중 하나만 정할 수 있다. 여기서는 <see cref="spawnAnchor"/>로 거리를 잡아
+    /// 표적이 언제나 같은 자리에서 등장하게 하고(화면 구도 일정), 속도는 거리÷접근시간으로 따라오게 둔다.
+    /// 그래서 <b>패턴이 짧을수록 표적이 빨리 날아온다</b> — 의도된 결과다.</para>
+    /// </summary>
+    public class SliceTargetDirector : MonoBehaviour
+    {
+        [Header("References")]
+        [SerializeField] private PatternHandler handler;
+
+        [Tooltip("칼이 지나가는 월드 지점. 표적은 여기로 다가와 갈라진다.")]
+        [SerializeField] private Transform impactAnchor;
+
+        [Tooltip("표적이 등장하는 월드 지점. 비우면 임팩트 지점에서 +Z로 fallbackSpawnDistance만큼 떨어진 곳을 쓴다.")]
+        [SerializeField] private Transform spawnAnchor;
+
+        [Header("Approach")]
+        [Tooltip("표적이 판정 지점까지 오는 데 쓰는 희망 시간(초). 패턴이 짧으면 그 구간 전체로 클램프된다.")]
+        [SerializeField] private float approachDuration = 1.5f;
+
+        [Tooltip("spawnAnchor가 비었을 때만 쓰는 기본 등장 거리(+Z 방향, 월드 단위).")]
+        [SerializeField] private float fallbackSpawnDistance = 18f;
+
+        [Header("Scatter")]
+        [SerializeField] private float scatterSpeed = 3f;
+        [SerializeField] private float scatterJitter = 0.8f;
+        [Tooltip("조각 회전 속도의 범위(도/초).")]
+        [SerializeField] private float scatterSpin = 180f;
+        [Tooltip("조각에 걸리는 가속도. 0이면 직선으로 흩어지고, 아래로 주면 처지며 날아간다.")]
+        [SerializeField] private Vector3 scatterGravity = Vector3.zero;
+
+        [Header("Cleanup")]
+        [Tooltip("절단/소멸 후 조각을 회수하기까지의 시간(초).")]
+        [SerializeField] private float debrisLifetime = 2f;
+
+        [Tooltip("동시 활성 조각 상한. 넘으면 가장 오래된 표적부터 회수한다.")]
+        [SerializeField] private int maxActivePieces = 64;
+
+        [Header("Pooling")]
+        [Tooltip("씬 시작 시 미리 채워 둘 세트. 첫 히치를 줄이는 최적화일 뿐이라 비워도 동작한다.")]
+        [SerializeField] private SliceSet[] prewarmSets;
+
+        [Header("Effects (optional)")]
+        [Tooltip("절단 성공 시 임팩트 지점에 재생할 이펙트. 비우면 무연출.")]
+        [SerializeField] private GameObject sliceEffectPrefab;
+
+        [Tooltip("실패(충돌) 시 재생할 이펙트. 비우면 무연출.")]
+        [SerializeField] private GameObject crushEffectPrefab;
+
+        [Header("Gizmos")]
+        [Tooltip("씬 뷰에 스폰 지점·임팩트 지점·접근 경로를 그린다. 에디터 전용이라 빌드에는 영향이 없다.")]
+        [SerializeField] private bool drawGizmos = true;
+
+        [SerializeField] private Color gizmoSpawnColor = new Color(0.3f, 0.8f, 1f);
+        [SerializeField] private Color gizmoImpactColor = new Color(1f, 0.35f, 0.2f);
+        [SerializeField] private float gizmoRadius = 0.25f;
+
+        /// <summary>성패 확정 상태. Deadline 도착 시점엔 Pending이 아니어야 정상이다.</summary>
+        private enum Outcome { Pending, Success, Failure }
+
+        private sealed class Reservation
+        {
+            public int token;          // 패턴 인스턴스 단위 토큰(같은 템플릿이 겹쳐도 구분된다)
+            public SliceSet set;
+            public Vector3 spawnPos;
+            public Vector3 impactPos;
+            public float spawnTime;
+            public float impactTime;
+            public Outcome outcome;
+            public SliceTargetView view;   // 스폰 전에는 null
+        }
+
+        private readonly List<Reservation> reservations = new List<Reservation>();
+        private readonly List<Reservation> active = new List<Reservation>();
+
+        // 패턴 인스턴스 토큰 — OnPatternQueued에서 발급하고 완료 이벤트와 FIFO로 매칭한다.
+        private readonly Queue<int> pendingTokens = new Queue<int>();
+        private int nextToken;
+
+        // 프리팹별 자체 큐(EffectManager 선례). Pool(PoolKey 단일 매핑)은 표적 프리팹 수 증가에 맞지 않는다.
+        private readonly Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
+        private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
+
+        private Transform poolRoot;
+
+        void Awake()
+        {
+            var rootGo = new GameObject("[SliceTargetPool]");
+            rootGo.transform.SetParent(transform, false);
+            rootGo.SetActive(false);
+            poolRoot = rootGo.transform;
+        }
+
+        void Start()
+        {
+            Prewarm();
+        }
+
+        void OnEnable()
+        {
+            if (handler == null) return;
+            handler.OnPatternQueued += HandlePatternQueued;
+            handler.OnPatternComplete += HandlePatternComplete;
+            handler.OnJudgeTargetFirstMiss += HandleFirstMiss;
+            handler.OnAllPatternsCleared += HandleAllCleared;
+        }
+
+        void OnDisable()
+        {
+            if (handler == null) return;
+            handler.OnPatternQueued -= HandlePatternQueued;
+            handler.OnPatternComplete -= HandlePatternComplete;
+            handler.OnJudgeTargetFirstMiss -= HandleFirstMiss;
+            handler.OnAllPatternsCleared -= HandleAllCleared;
+        }
+
+        // ── 이벤트 처리 ──────────────────────────────────────────────────────────
+
+        private void HandlePatternQueued(PatternQueuedInfo info)
+        {
+            int token = nextToken++;
+            pendingTokens.Enqueue(token);
+
+            var template = info.Template;
+            var set = template != null ? template.SliceTarget : null;
+            if (set == null) return; // 무연출
+
+            if (!set.IsUsable)
+            {
+                Debug.LogWarning($"[SliceTargetDirector] '{set.name}'이 사용 가능한 상태가 아닙니다(원본/조각 배열 확인). 건너뜁니다.", set);
+                return;
+            }
+
+            // 판정이 끝나는 순간에 도착시킨다 — 그래야 닿을 때 성패가 이미 확정되어 있다.
+            float impactTime = info.Deadline + template.SliceTargetImpactOffset;
+
+            // 표적은 첫 노드보다 먼저 나타날 수 없으므로, 접근시간의 상한은 패턴이 살아 있는 구간 전체다.
+            float approach = Mathf.Min(approachDuration, impactTime - info.StartTime);
+            approach = Mathf.Max(approach, 0.01f);
+
+            // 배치 오프셋은 스폰·임팩트 양쪽에 똑같이 실린다 — 경로가 기울지 않고 나란히 평행이동하도록.
+            Vector3 anchor = impactAnchor != null ? impactAnchor.position : transform.position;
+            var offset = new Vector3(template.SliceTargetOffset.x, template.SliceTargetOffset.y, 0f);
+
+            reservations.Add(new Reservation
+            {
+                token = token,
+                set = set,
+                spawnPos = SpawnBase(anchor) + offset,
+                impactPos = anchor + offset,
+                spawnTime = impactTime - approach,
+                impactTime = impactTime,
+                outcome = Outcome.Pending
+            });
+        }
+
+        /// <summary>표적이 등장하는 기준 지점. 앵커가 없으면 임팩트 지점에서 +Z로 물러난 곳을 쓴다.</summary>
+        private Vector3 SpawnBase(Vector3 anchor)
+        {
+            return spawnAnchor != null
+                ? spawnAnchor.position
+                : anchor + Vector3.forward * fallbackSpawnDistance;
+        }
+
+        private void HandlePatternComplete(PatternCompletionInfo info)
+        {
+            // PatternCompletionInfo는 Template만 주므로 매칭은 큐 순서(FIFO)로 한다 —
+            // 판정 대상은 언제나 선두 하나이고 완료도 선두부터 순서대로 일어나므로 안전하다.
+            if (pendingTokens.Count == 0) return;
+            int token = pendingTokens.Dequeue();
+
+            SetOutcome(token, info.AllCorrect ? Outcome.Success : Outcome.Failure);
+        }
+
+        private void HandleFirstMiss()
+        {
+            // 현재 판정 대상 = 아직 확정되지 않은 가장 오래된 토큰.
+            if (pendingTokens.Count == 0) return;
+            SetOutcome(pendingTokens.Peek(), Outcome.Failure);
+        }
+
+        private void HandleAllCleared()
+        {
+            for (int i = active.Count - 1; i >= 0; i--) Recycle(active[i]);
+            active.Clear();
+            reservations.Clear();
+            pendingTokens.Clear();
+        }
+
+        private void SetOutcome(int token, Outcome outcome)
+        {
+            foreach (var r in reservations)
+                if (r.token == token && r.outcome == Outcome.Pending) r.outcome = outcome;
+
+            foreach (var r in active)
+                if (r.token == token && r.outcome == Outcome.Pending) r.outcome = outcome;
+        }
+
+        // ── 루프 ────────────────────────────────────────────────────────────────
+
+        void Update()
+        {
+            float now = Time.time;
+
+            // 1) 예약 스폰
+            for (int i = reservations.Count - 1; i >= 0; i--)
+            {
+                var r = reservations[i];
+                if (now < r.spawnTime) continue;
+
+                reservations.RemoveAt(i);
+                Spawn(r);
+                active.Add(r);
+            }
+
+            // 2) 임팩트 처리
+            for (int i = active.Count - 1; i >= 0; i--)
+            {
+                var r = active[i];
+                if (r.view == null || r.view.Resolved) continue;
+                if (now < r.impactTime) continue;
+
+                // Deadline 프레임에 Director가 PatternHandler보다 먼저 돌면 확정이 아직 없을 수 있다.
+                // 실패로 넘기지 말고 도착 상태로 한 프레임 기다린다(이미 도착해 있어 눈에 띄지 않는다).
+                if (r.outcome == Outcome.Pending) continue;
+
+                if (r.outcome == Outcome.Success) SliceTarget(r);
+                else CrushTarget(r);
+            }
+
+            // 3) 수명 만료 회수
+            for (int i = active.Count - 1; i >= 0; i--)
+            {
+                var r = active[i];
+                if (r.view == null) { active.RemoveAt(i); continue; }
+                if (!r.view.Resolved || r.view.TimeSinceResolved < debrisLifetime) continue;
+
+                Recycle(r);
+                active.RemoveAt(i);
+            }
+
+            EnforcePieceBudget();
+        }
+
+        /// <summary>동시 활성 조각이 상한을 넘으면 가장 오래된 것부터 회수한다.</summary>
+        private void EnforcePieceBudget()
+        {
+            int total = 0;
+            foreach (var r in active)
+                if (r.view != null && r.view.Resolved) total += r.view.Pieces.Count;
+
+            if (total <= maxActivePieces) return;
+
+            for (int i = 0; i < active.Count && total > maxActivePieces; i++)
+            {
+                var r = active[i];
+                if (r.view == null || !r.view.Resolved) continue;
+
+                total -= r.view.Pieces.Count;
+                Recycle(r);
+                active.RemoveAt(i);
+                i--;
+            }
+        }
+
+        // ── 스폰 / 확정 / 회수 ───────────────────────────────────────────────────
+
+        private void Spawn(Reservation r)
+        {
+            var viewGo = new GameObject($"SliceTarget_{r.set.name}");
+            viewGo.transform.SetParent(transform, false);
+
+            var view = viewGo.AddComponent<SliceTargetView>();
+            var original = Rent(r.set.OriginalPrefab, r.set.MaxPoolSize);
+
+            view.Setup(r.set, original, r.spawnPos, r.impactPos, r.spawnTime, r.impactTime);
+            r.view = view;
+        }
+
+        private void SliceTarget(Reservation r)
+        {
+            var set = r.set;
+            var spawned = new List<SlicePiece>(set.PieceCount);
+
+            for (int i = 0; i < set.PieceCount; i++)
+            {
+                var go = Rent(set.PiecePrefabs[i], set.MaxPoolSize);
+                if (go == null) continue;
+
+                var piece = go.GetComponent<SlicePiece>();
+                if (piece == null) piece = go.AddComponent<SlicePiece>();
+                spawned.Add(piece);
+            }
+
+            r.view.Slice(spawned, scatterSpeed, scatterJitter, scatterSpin, scatterGravity, r.token);
+            PlayEffect(sliceEffectPrefab, r.impactPos);
+        }
+
+        private void CrushTarget(Reservation r)
+        {
+            r.view.Crush();
+            PlayEffect(crushEffectPrefab, r.impactPos);
+        }
+
+        private void PlayEffect(GameObject prefab, Vector3 position)
+        {
+            if (prefab == null) return; // 비우면 무연출
+            Instantiate(prefab, position, Quaternion.identity);
+        }
+
+        private void Recycle(Reservation r)
+        {
+            if (r.view == null) return;
+
+            foreach (var piece in r.view.Pieces)
+            {
+                if (piece == null) continue;
+                piece.ResetState();
+                Release(piece.gameObject);
+            }
+
+            var original = r.view.DetachOriginal();
+            if (original != null) Release(original);
+
+            Destroy(r.view.gameObject);
+            r.view = null;
+        }
+
+        // ── 프리팹별 풀 ──────────────────────────────────────────────────────────
+
+        private void Prewarm()
+        {
+            if (prewarmSets == null) return;
+
+            foreach (var set in prewarmSets)
+            {
+                if (set == null || !set.IsUsable) continue;
+
+                int count = set.InitialPoolSize;
+                for (int i = 0; i < count; i++)
+                {
+                    Release(CreateInstance(set.OriginalPrefab));
+                    foreach (var prefab in set.PiecePrefabs)
+                        Release(CreateInstance(prefab));
+                }
+
+                maxSizes[set.OriginalPrefab] = set.MaxPoolSize;
+                foreach (var prefab in set.PiecePrefabs)
+                    maxSizes[prefab] = set.MaxPoolSize;
+            }
+        }
+
+        private GameObject CreateInstance(GameObject prefab)
+        {
+            if (prefab == null) return null;
+            var go = Instantiate(prefab, poolRoot);
+            go.name = prefab.name;
+            var link = go.GetComponent<SlicePooledInstance>();
+            if (link == null) link = go.AddComponent<SlicePooledInstance>();
+            link.SourcePrefab = prefab;
+            return go;
+        }
+
+        private GameObject Rent(GameObject prefab, int maxSize)
+        {
+            if (prefab == null) return null;
+
+            maxSizes[prefab] = maxSize;
+
+            if (pools.TryGetValue(prefab, out var queue) && queue.Count > 0)
+            {
+                var pooled = queue.Dequeue();
+                pooled.SetActive(true);
+                return pooled;
+            }
+
+            var created = CreateInstance(prefab);
+            if (created != null) created.SetActive(true);
+            return created;
+        }
+
+        private void Release(GameObject instance)
+        {
+            if (instance == null) return;
+
+            var link = instance.GetComponent<SlicePooledInstance>();
+            if (link == null || link.SourcePrefab == null)
+            {
+                Destroy(instance);
+                return;
+            }
+
+            var prefab = link.SourcePrefab;
+            if (!pools.TryGetValue(prefab, out var queue))
+                pools[prefab] = queue = new Queue<GameObject>();
+
+            int cap = maxSizes.TryGetValue(prefab, out int m) ? m : int.MaxValue;
+            if (queue.Count >= cap)
+            {
+                Destroy(instance);
+                return;
+            }
+
+            instance.SetActive(false);
+            instance.transform.SetParent(poolRoot, false);
+            queue.Enqueue(instance);
+        }
+
+        // ── 기즈모 (에디터 전용) ─────────────────────────────────────────────────
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// 편집 중에는 <b>기준 경로</b>(스폰 지점 → 임팩트 지점)를 그린다.
+        /// 실제 표적은 패턴의 sliceTargetOffset/sliceTargetImpactOffset만큼 이 선에서 나란히 어긋나고,
+        /// 접근시간이 패턴 길이에 따라 클램프되면 <b>속도만</b> 빨라진다(경로 자체는 이 선 그대로다).
+        /// </summary>
+        void OnDrawGizmos()
+        {
+            if (!drawGizmos) return;
+
+            Vector3 anchor = impactAnchor != null ? impactAnchor.position : transform.position;
+            Vector3 spawn = SpawnBase(anchor);
+            float distance = Vector3.Distance(spawn, anchor);
+
+            DrawApproach(spawn, anchor);
+
+            UnityEditor.Handles.color = gizmoImpactColor;
+            UnityEditor.Handles.Label(anchor + Vector3.up * (gizmoRadius * 1.5f),
+                $"impact ({anchor.x:0.00}, {anchor.y:0.00}, {anchor.z:0.00})");
+            UnityEditor.Handles.color = gizmoSpawnColor;
+            UnityEditor.Handles.Label(spawn + Vector3.up * (gizmoRadius * 1.5f),
+                $"spawn  {distance:0.0}u  →  {distance / Mathf.Max(approachDuration, 0.01f):0.0}u/s @ {approachDuration:0.00}s"
+                + (spawnAnchor == null ? "  (fallback)" : ""));
+
+            if (!Application.isPlaying) return;
+
+            // 런타임 — 스폰을 기다리는 예약과 살아 있는 표적의 '실제' 경로.
+            foreach (var r in reservations) DrawApproach(r.spawnPos, r.impactPos);
+
+            foreach (var r in active)
+            {
+                if (r.view == null) continue;
+
+                DrawApproach(r.spawnPos, r.impactPos);
+
+                // 표적의 현재 위치와 성패 확정 상태(노랑=미확정 / 초록=성공 / 빨강=실패).
+                Gizmos.color = OutcomeColor(r.outcome);
+                Gizmos.DrawWireCube(r.view.transform.position, Vector3.one * (gizmoRadius * 2f));
+            }
+        }
+
+        private void DrawApproach(Vector3 spawn, Vector3 impact)
+        {
+            Gizmos.color = gizmoSpawnColor;
+            Gizmos.DrawWireSphere(spawn, gizmoRadius);
+            Gizmos.DrawLine(spawn, impact);
+
+            Gizmos.color = gizmoImpactColor;
+            Gizmos.DrawWireSphere(impact, gizmoRadius);
+
+            // 임팩트 지점의 XY 십자 — 칼 궤적의 높이·좌우를 맞추는 기준선.
+            float arm = gizmoRadius * 3f;
+            Gizmos.DrawLine(impact + Vector3.left * arm, impact + Vector3.right * arm);
+            Gizmos.DrawLine(impact + Vector3.down * arm, impact + Vector3.up * arm);
+        }
+
+        private Color OutcomeColor(Outcome outcome)
+        {
+            switch (outcome)
+            {
+                case Outcome.Success: return Color.green;
+                case Outcome.Failure: return Color.red;
+                default: return Color.yellow;
+            }
+        }
+#endif
+    }
+
+    /// <summary>풀 반납 시 어느 프리팹에서 나왔는지 되짚기 위한 표식.</summary>
+    public class SlicePooledInstance : MonoBehaviour
+    {
+        public GameObject SourcePrefab;
+    }
+}
