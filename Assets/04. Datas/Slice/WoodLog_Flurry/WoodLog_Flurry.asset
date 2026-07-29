@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: WoodLog_Flurry
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 1067067477924061449, guid: 83fd8f54f429a8b499c70dc6be351a61, type: 3}
+  piecePrefabs:
+  - {fileID: 6989435894996707452, guid: 2fd6f723032110345b9dd7f19124c0f6, type: 3}
+  - {fileID: 8895591911666470812, guid: 70a87ec6321fcae4cac7f7daa4089f3d, type: 3}
+  - {fileID: 4746291445533330263, guid: 88ff656e0147610468c759eaed82d09f, type: 3}
+  - {fileID: 8669331548788311912, guid: 04e8abdd1e8ba5d498b55372d0f68c30, type: 3}
+  - {fileID: 670129151591257078, guid: 9ac223f2e0e088244b853b765e882af3, type: 3}
+  - {fileID: 1746339913244611162, guid: 7cab1a13e41fc0a4bb499995d93edc16, type: 3}
+  pieceLocalOffsets:
+  - {x: 0.0027447839, y: 0.043010324, z: 0.0000000010964867}
+  - {x: 0.14317828, y: 0.028056588, z: 0.0000000027921516}
+  - {x: 0.14245021, y: -0.031916443, z: -0.0000000014944528}
+  - {x: -0.14045724, y: 0.028101541, z: -6.606425e-10}
+  - {x: -0.13972493, y: -0.031953227, z: -0.0000000036714345}
+  - {x: 0.002744779, y: -0.045171134, z: 2.9761307e-10}
+  pieceScatterDirs:
+  - {x: 0.0027447839, y: 0.043010324, z: 0.0000000010964867}
+  - {x: 0.14317828, y: 0.028056588, z: 0.0000000027921516}
+  - {x: 0.14245021, y: -0.031916443, z: -0.0000000014944528}
+  - {x: -0.14045724, y: 0.028101541, z: -6.606425e-10}
+  - {x: -0.13972493, y: -0.031953227, z: -0.0000000036714345}
+  - {x: 0.002744779, y: -0.045171134, z: 2.9761307e-10}
+  bakedPlanes:
+  - normal: {x: 0.70710677, y: 0.70710677, z: 0}
+    distance: -0
+  - normal: {x: -0.70710677, y: 0.7071068, z: 0}
+    distance: 0.0038817048
+  - normal: {x: 0, y: 1, z: 0}
+    distance: 0.003136937
+  shape: 5
+  initialPoolSize: 2
+  maxPoolSize: 8

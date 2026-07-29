@@ -18,5 +18,9 @@ MonoBehaviour:
   - index: 5
   successAnimationClip: {fileID: 7400000, guid: 0e2fcbecedc05a742bfb97b18957bb73, type: 2}
   animationStartOffset: 0
-  animationDuration: 0.4
+  animationDuration: 0.2765859
+  animationImpactTime: 0.19158016
   animationSpeed: 1
+  sliceTarget: {fileID: 11400000, guid: 79a99c860323b144d9854c9df56070ce, type: 2}
+  sliceTargetOffset: {x: 0, y: 0}
+  sliceTargetImpactOffset: 0

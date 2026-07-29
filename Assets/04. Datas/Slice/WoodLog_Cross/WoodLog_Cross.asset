@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: WoodLog_Cross
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 1067067477924061449, guid: 83fd8f54f429a8b499c70dc6be351a61, type: 3}
+  piecePrefabs:
+  - {fileID: 7838682158389323566, guid: c683785f6bd54da478f10a0755150bc2, type: 3}
+  - {fileID: 213369621504738344, guid: c6400b8dd5c408f479e33f0a43f1929a, type: 3}
+  - {fileID: 3853348002302202063, guid: 3e08192e39b5ba04ab5ac82a0813ed31, type: 3}
+  - {fileID: 6763689683140690049, guid: 2b842126e7c535d4088a0533fa0d23ea, type: 3}
+  pieceLocalOffsets:
+  - {x: 0.12651166, y: 0.03176127, z: 8.960255e-10}
+  - {x: 0.1265117, y: -0.031761266, z: 0.0000000021868936}
+  - {x: -0.1265117, y: 0.031761266, z: -0.0000000053886433}
+  - {x: -0.12651168, y: -0.031761266, z: -0.0000000011882508}
+  pieceScatterDirs:
+  - {x: 0.12651166, y: 0.03176127, z: 8.960255e-10}
+  - {x: 0.1265117, y: -0.031761266, z: 0.0000000021868936}
+  - {x: -0.1265117, y: 0.031761266, z: -0.0000000053886433}
+  - {x: -0.12651168, y: -0.031761266, z: -0.0000000011882508}
+  bakedPlanes:
+  - normal: {x: 1, y: 0, z: 0}
+    distance: -0
+  - normal: {x: 0, y: 1, z: 0}
+    distance: -0
+  shape: 3
+  initialPoolSize: 2
+  maxPoolSize: 8

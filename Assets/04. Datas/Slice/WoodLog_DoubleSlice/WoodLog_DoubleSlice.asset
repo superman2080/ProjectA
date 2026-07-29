@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: WoodLog_DoubleSlice
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 1067067477924061449, guid: 83fd8f54f429a8b499c70dc6be351a61, type: 3}
+  piecePrefabs:
+  - {fileID: 3078712135297352436, guid: a4a41394410fe924080c20e75ec67f22, type: 3}
+  - {fileID: 5241563024291881050, guid: e6f5a26a1af588a4093d3427479a1fb7, type: 3}
+  - {fileID: 9182154682232993011, guid: dfec1d59c30ba9e4ebac99833e8fd799, type: 3}
+  pieceLocalOffsets:
+  - {x: 0.000000019446365, y: -0.05410313, z: -0.0000000016086147}
+  - {x: 0.0000000025664721, y: 0.0000000013784762, z: 2.1554356e-10}
+  - {x: -0.0000000022878073, y: 0.05410313, z: 9.472951e-10}
+  pieceScatterDirs:
+  - {x: 0.000000019446365, y: -0.05410313, z: -0.0000000016086147}
+  - {x: 0.0000000025664721, y: 0.0000000013784762, z: 2.1554356e-10}
+  - {x: -0.0000000022878073, y: 0.05410313, z: 9.472951e-10}
+  bakedPlanes:
+  - normal: {x: 0, y: -1, z: 0}
+    distance: -0.04
+  - normal: {x: 0, y: -1, z: 0}
+    distance: 0.04
+  shape: 5
+  initialPoolSize: 2
+  maxPoolSize: 8

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: WoodLog_Vertical
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 1067067477924061449, guid: 83fd8f54f429a8b499c70dc6be351a61, type: 3}
+  piecePrefabs:
+  - {fileID: 6666965226765742239, guid: 2ff819c1859a1ec45b0dcd0b43623050, type: 3}
+  - {fileID: 719278289297357474, guid: 960131882e3358b4b9689c70e772899e, type: 3}
+  pieceLocalOffsets:
+  - {x: 0.1265117, y: 0.0000000012588586, z: 0.0000000016956054}
+  - {x: -0.1265117, y: 0.0000000017983695, z: -0.0000000025177171}
+  pieceScatterDirs:
+  - {x: 0.1265117, y: 0.0000000012588586, z: 0.0000000016956054}
+  - {x: -0.1265117, y: 0.0000000017983695, z: -0.0000000025177171}
+  bakedPlanes:
+  - normal: {x: 1, y: 0, z: 0}
+    distance: -0
+  shape: 1
+  initialPoolSize: 2
+  maxPoolSize: 8

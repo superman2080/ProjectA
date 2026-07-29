@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: Prop_Pouffes_06_Diagonal
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 68193211944529805, guid: 4e4ea366fc86420458c29220f6761751, type: 3}
+  piecePrefabs:
+  - {fileID: 985791200110247190, guid: 58f2ab4a1f0d04f45b9503791de2d0e0, type: 3}
+  - {fileID: 8544933931044695453, guid: f412f98c6fd63384487d1ce751180fc9, type: 3}
+  - {fileID: 1493114489069346558, guid: 434b3366799827941805379e5eb7c3f6, type: 3}
+  pieceLocalOffsets:
+  - {x: 5.427707e-10, y: 0.28120545, z: 4.6523208e-10}
+  - {x: -0.000000052915368, y: -0.008769678, z: -0.000000054810055}
+  - {x: 0.00000000762223, y: 0.09583838, z: 8.661625e-10}
+  pieceScatterDirs:
+  - {x: 5.427707e-10, y: 0.0971103, z: 4.6523208e-10}
+  - {x: -0.000000052915368, y: -0.19286482, z: -0.000000054810055}
+  - {x: 0.00000000762223, y: -0.08825676, z: 8.661625e-10}
+  bakedPlanes:
+  - normal: {x: 0, y: 1, z: 0}
+    distance: -0.18409514
+  shape: 0
+  initialPoolSize: 2
+  maxPoolSize: 8
