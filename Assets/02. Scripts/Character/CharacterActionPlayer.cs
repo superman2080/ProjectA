@@ -1,3 +1,4 @@
+using System;
 using PatternSpace;
 using UnityEngine;
 
@@ -29,6 +30,9 @@ using UnityEngine;
 /// 세 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
 ///
 /// AnimatorOverrideController로 듀얼 슬롯(Attack_A, Attack_B)을 교대로 교체하며 재생해 모션 끊김(Popping)을 방지한다. 재생할 클립이 없으면 무연출로 넘어간다.
+///
+/// <b>확장 포인트</b>: <see cref="OnSwingBegan"/> / <see cref="OnSwingEnded"/>가 스윙(베기) 트림 구간의 시작·끝을 알린다.
+/// '칼을 휘두르는 동안'에만 붙는 연출(무기 트레일 등)은 이 이벤트만 구독해 붙인다 — 본체를 고치지 않는다.
 /// </summary>
 public class CharacterActionPlayer : MonoBehaviour
 {
@@ -88,6 +92,21 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private float layerBlendInDuration = 0.12f;
     [Tooltip("자동 배속(입력 구간이 짧을 때)의 상한.")]
     [SerializeField] private float maxAttackSpeed = 2.5f;
+
+    /// <summary>
+    /// 확장 포인트: <b>스윙(베기) 트림 구간의 시작</b>. 무기 트레일처럼 '칼을 휘두르는 동안'에만 붙는 연출이 구독한다.
+    /// 피격(Hit) 클립에서는 발행되지 않는다 — 휘두르는 동작이 아니기 때문이다.
+    /// </summary>
+    public event Action OnSwingBegan;
+
+    /// <summary>
+    /// 확장 포인트: <b>스윙 트림 구간의 끝</b>. 트림 끝에 정상 종료될 때뿐 아니라
+    /// 다음 액션/피격에 인터럽트될 때도 발행되므로, 구독자는 켜진 채 남지 않는다.
+    /// </summary>
+    public event Action OnSwingEnded;
+
+    /// <summary>스윙 구간 안인지. 종료 신호가 두 경로(트림 끝 / 인터럽트)로 들어와 중복 발행되지 않게 한다.</summary>
+    private bool swingActive;
 
     private AnimatorOverrideController overrideController;
     private int attackLayerIndex = -1;
@@ -184,6 +203,24 @@ public class CharacterActionPlayer : MonoBehaviour
             handler.OnJudgeTargetBegan -= HandleJudgeTargetBegan;
             handler.OnJudgeTargetFirstMiss -= HandleJudgeTargetFirstMiss;
         }
+
+        RaiseSwingEnded(); // 재생기가 꺼지는데 트레일만 켜진 채 남지 않도록.
+    }
+
+    /// <summary>스윙 시작을 1회만 발행한다. 이미 진행 중이면 먼저 끝낸 뒤 새로 시작한다.</summary>
+    private void RaiseSwingBegan()
+    {
+        RaiseSwingEnded();
+        swingActive = true;
+        OnSwingBegan?.Invoke();
+    }
+
+    /// <summary>스윙 종료를 1회만 발행한다. 트림 끝과 인터럽트 양쪽에서 호출되므로 멱등이어야 한다.</summary>
+    private void RaiseSwingEnded()
+    {
+        if (!swingActive) return;
+        swingActive = false;
+        OnSwingEnded?.Invoke();
     }
 
     void Update()
@@ -193,10 +230,12 @@ public class CharacterActionPlayer : MonoBehaviour
         TryStartPendingSuccess();
 
         // 트림 구간이 끝나면 배속을 해제해 마무리 동작이 정상 속도로 재생되게 한다.
+        // 이 래치는 트림 끝을 정확히 1회만 통과하므로 스윙 종료 발행 지점으로 그대로 재사용한다.
         if (!speedRestored && Time.time >= actionEndTime)
         {
             animator.SetFloat(attackSpeedHash, 1f);
             speedRestored = true;
+            RaiseSwingEnded();
         }
 
         // 공격(트림) 구간 재생 중.
@@ -400,7 +439,7 @@ public class CharacterActionPlayer : MonoBehaviour
         float cap = Mathf.Max(maxAttackSpeed, pendingBaseSpeed);
         float speed = Mathf.Clamp(needed, pendingBaseSpeed, cap);
 
-        PlaySlot(pendingClip, pendingStartOffset, pendingDur, speed);
+        PlaySlot(pendingClip, pendingStartOffset, pendingDur, speed, isSwing: true);
         hasPending = false;
     }
 
@@ -415,7 +454,9 @@ public class CharacterActionPlayer : MonoBehaviour
 
         AnimationClip hit = NextHitClip();
         if (hit != null)
-            PlaySlot(hit, 0f, hit.length, 1f);
+            PlaySlot(hit, 0f, hit.length, 1f, isSwing: false);
+        else
+            RaiseSwingEnded(); // 힛 클립이 없어도 진행 중이던 베기는 취소됐다.
     }
 
     /// <summary>피격 리액션 클립을 번갈아 반환한다. 배선이 없으면 null. (랜덤을 원하면 이 인덱스 선택만 교체.)</summary>
@@ -430,10 +471,19 @@ public class CharacterActionPlayer : MonoBehaviour
 
     // ─────────────────────────── 재생 프리미티브 ───────────────────────────
 
-    /// <summary>주어진 클립의 [startOffset, startOffset+dur] 구간을 speed 배속으로 재생한다(듀얼 슬롯 교대 + 크로스페이드).</summary>
-    private void PlaySlot(AnimationClip clip, float startOffset, float dur, float speed)
+    /// <summary>
+    /// 주어진 클립의 [startOffset, startOffset+dur] 구간을 speed 배속으로 재생한다(듀얼 슬롯 교대 + 크로스페이드).
+    ///
+    /// <paramref name="isSwing"/>은 이 클립이 <b>칼을 휘두르는 동작인지</b>다(성공 베기 = true, 피격 = false).
+    /// 진입 시 <b>무조건</b> 이전 스윙을 끝내는데, 이 클립이 이전 액션을 트림 끝 전에 인터럽트했을 수 있기 때문이다
+    /// (베기 도중 미스 → 피격으로 끊김). 그러지 않으면 트레일이 켜진 채 남는다.
+    /// </summary>
+    private void PlaySlot(AnimationClip clip, float startOffset, float dur, float speed, bool isSwing)
     {
         if (overrideController == null || placeholderA == null || placeholderB == null || attackLayerIndex < 0) return;
+
+        if (isSwing) RaiseSwingBegan();
+        else RaiseSwingEnded();
 
         int targetStateHash = useSlotA ? attackStateAHash : attackStateBHash;
         AnimationClip targetPlaceholder = useSlotA ? placeholderA : placeholderB;

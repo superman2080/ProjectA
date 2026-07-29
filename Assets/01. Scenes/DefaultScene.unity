@@ -119,6 +119,31 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &48155556 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 443475880987934545, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+  m_PrefabInstance: {fileID: 6328205791487977057}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &48155560
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 48155556}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bff4f5a8991d7fa47baed5c5ff25979f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Tiny.Trail
+  material: {fileID: 2100000, guid: 44c0a98045e51e54db998366c5208a35, type: 2}
+  duration: 0.1
+  corner: 1
+  loop: 0
+  points:
+  - {x: 0.02, y: 0.92, z: 0}
+  - {x: 0, y: 0.61, z: 0}
+  - {x: 0, y: 0.1, z: 0}
 --- !u!1 &94638267
 GameObject:
   m_ObjectHideFlags: 0
@@ -1794,7 +1819,7 @@ MonoBehaviour:
   audioSource: {fileID: 854156977}
   patternHandler: {fileID: 1565592730}
   countdownDuration: 3
-  playOnStart: 0
+  playOnStart: 1
 --- !u!82 &854156977
 AudioSource:
   m_ObjectHideFlags: 0
@@ -2766,6 +2791,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1515332012}
   m_CullTransparentMesh: 1
+--- !u!1 &1517302338 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5179727832080608963, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+  m_PrefabInstance: {fileID: 6328205791487977057}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1517302339 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+  m_PrefabInstance: {fileID: 6328205791487977057}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517302338}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f5cf48e5abf45e4d92a9a52a3dea7d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterActionPlayer
+--- !u!114 &1517302342
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1517302338}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d92ab2f6d76d8e14c936670a556ae2ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponTrailController
+  actionPlayer: {fileID: 1517302339}
+  bladeTrails:
+  - {fileID: 48155560}
 --- !u!1 &1565592728
 GameObject:
   m_ObjectHideFlags: 0
@@ -3603,10 +3659,26 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1752704868211385467, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2472397707386567612, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2757495796228020633, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: handler
       value: 
       objectReference: {fileID: 1565592730}
+    - target: {fileID: 4676898125207862372, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5179727832080608963, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: m_Name
       value: Char_School_Katana_FullBody-Magica cloth2
@@ -3651,10 +3723,33 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7324424215299818205, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 2472397707386567612, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5179727832080608963, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1517302342}
+    - targetCorrespondingSourceObject: {fileID: 443475880987934545, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 48155560}
   m_SourcePrefab: {fileID: 100100000, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
