@@ -44,7 +44,25 @@
       "Bash(git commit *)",
       "mcp__UnityMCP__manage_packages",
       "mcp__UnityMCP__execute_menu_item",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git show *)",
+      "Bash(find C:/Unity/KatanaRush_BeatOverdrive/Library/PackageCache/com.unity.ext.nunit@d8c07649098d -name *.dll)",
+      "Bash(tasklist)",
+      "Bash(awk '{print $6, $7}')",
+      "Bash(awk '{print $6,$7}')",
+      "Bash(mkdir -p C:/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/a5405674-f786-4bbd-8944-e2fa0f5dc789/scratchpad/probe)",
+      "Bash(cat)",
+      "Bash(sed -i 's|SLICE|C:/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/a5405674-f786-4bbd-8944-e2fa0f5dc789/scratchpad/Slice.Core.dll|; s|CORE|__TRACKED_VAR__/Managed/UnityEngine/UnityEngine.CoreModule.dll|' probe.csproj)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Bash(dotnet 'C:/Program Files/Unity/Hub/Editor/6000.3.11f1/Editor/Data/DotNetSdkRoslyn/csc.dll' @C:/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/a5405674-f786-4bbd-8944-e2fa0f5dc789/scratchpad/c3.rsp)",
+      "Bash(grep -rA1 \"sliceTargets:\" \"Assets/04. Datas/Patterns/Templates/\")",
+      "mcp__UnityMCP__batch_execute",
+      "Bash(git diff *)",
+      "Bash(git status *)",
+      "Bash(cp __TRACKED_VAR__/Pattern.cs 'Assets/02. Scripts/Pattern/Pattern.cs')",
+      "Bash(cp __TRACKED_VAR__/PatternHandler.cs 'Assets/02. Scripts/UI/PatternHandler.cs')",
+      "Bash(cp __TRACKED_VAR__/CLAUDE.md CLAUDE.md)"
     ]
   }
 }
