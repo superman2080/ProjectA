@@ -3,9 +3,17 @@ using UnityEngine;
 
 /// <summary>
 /// 캐릭터 액션을 <b>패턴 입력 도중</b> 재생한다.
-/// - 성공(베기): 판정 대상이 시작되면, 마지막 노드 판정 시각에 끝나도록 `시작 = max(마지막노드 − 재생시간, 첫노드)` 지점에 예약해 조기 재생한다.
-///   재생시간은 트림(AnimationStartOffset/Duration)과 패턴 배속(AnimationSpeed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
+/// - 성공(베기): 판정 대상이 시작되면, <b>클립의 임팩트 프레임(칼날이 표적을 지나가는 프레임)이 표적 절단 시각에 오도록</b>
+///   `시작 = max(임팩트정렬시각 − 임팩트까지의 재생시간, 첫노드)` 지점에 예약해 조기 재생한다.
+///   임팩트 프레임 이후의 잔여 구간은 <b>같은 배속으로 그대로 이어 재생</b>되어 마무리 동작이 뒤에 남는다.
+///   재생시간은 트림(AnimationStartOffset/Duration/ImpactTime)과 패턴 배속(AnimationSpeed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
 /// - 미스(첫 미스 1회): 그 순간 힛(Hit) 클립을 재생하고 예약/진행 중이던 성공 애니를 취소한다 — 재생 중이던 베기는 힛 크로스페이드로 즉시 끊긴다.
+///
+/// <b>정렬 앵커는 표적 절단 시각이다.</b> `임팩트정렬시각 = Deadline + Pattern.SliceTargetImpactOffset`으로,
+/// <see cref="SliceSpace.SliceTargetDirector"/>가 표적 도착에 쓰는 식과 <b>동일하다</b>. 그래서 칼날이 지나가는 순간과
+/// 표적이 갈라지는 순간이 구조적으로 일치한다. LastNodeTime이 아니라 Deadline인 이유는 표적 쪽과 같다 —
+/// 마지막 노드를 goodWindow 안에 늦게 눌러도 Good 성공이므로, 성패는 Deadline에서야 확정된다.
+/// 임팩트 프레임이 오서링되지 않은(0 이하이거나 트림 범위 밖) 패턴은 <b>트림 끝</b>을 임팩트로 간주한다.
 ///
 /// <b>트림 끝(actionEndTime)은 '재생이 끝나는 시각'이 아니다.</b> 클립은 스테이트에 통째로 물려 있어 그 뒤로도 마무리 동작(follow-through)이 계속 재생된다.
 /// actionEndTime은 '임팩트 정렬이 끝나 복귀를 시작해도 되는 시각'일 뿐이다. 이 시점에 recoveryHoldDuration 동안 마무리 동작을 웨이트 1로 노출한 뒤(세 경로 공통), 아래 세 경로로 갈린다:
@@ -114,10 +122,11 @@ public class CharacterActionPlayer : MonoBehaviour
     private bool hasPending;
     private AnimationClip pendingClip;
     private float pendingStartOffset;
-    private float pendingDur;
+    private float pendingDur;        // 트림 전체 길이(클립 초) — 임팩트 이후 잔여 구간까지 포함한다.
+    private float pendingImpactSpan; // 트림 시작 → 임팩트 프레임까지의 길이(클립 초). 배속 역산의 기준.
     private float pendingBaseSpeed;
     private float pendingScheduleStart;
-    private float pendingLastNodeTime;
+    private float pendingImpactAlignTime; // 임팩트 프레임이 도달해야 할 절대시각(= 표적 절단 시각).
     private bool missedThisTarget; // 이번 판정 대상에서 이미 첫 미스 처리를 했는지
 
     void Awake()
@@ -331,7 +340,7 @@ public class CharacterActionPlayer : MonoBehaviour
 
     // ─────────────────────────── 성공 애니 예약/시작 ───────────────────────────
 
-    /// <summary>판정 대상이 선두가 되면 성공 애니 시작을 예약한다(마지막 노드에 끝을 맞추는 조기 시작).</summary>
+    /// <summary>판정 대상이 선두가 되면 성공 애니 시작을 예약한다(임팩트 프레임을 표적 절단 시각에 맞추는 조기 시작).</summary>
     private void HandleJudgeTargetBegan(JudgeTargetInfo info)
     {
         missedThisTarget = false;
@@ -344,26 +353,50 @@ public class CharacterActionPlayer : MonoBehaviour
         float dur = info.Template.AnimationDuration > 0f ? info.Template.AnimationDuration : clip.length - startOffset;
         if (dur <= 0f) return;
 
-        float baseSpeed = info.Template.AnimationSpeed;        // 배속 하한
-        float playTime = dur / baseSpeed;                     // 지정 배속으로 재생 시 소요 시간
-        float scheduleStart = Mathf.Max(info.LastNodeTime - playTime, info.FirstNodeTime);
+        float impactSpan = ResolveImpactSpan(info.Template, startOffset, dur);
+
+        // 표적이 갈라지는 시각과 같은 식 — SliceTargetDirector.HandlePatternQueued와 반드시 일치해야 한다.
+        float impactAlignTime = info.Deadline + info.Template.SliceTargetImpactOffset;
+
+        float baseSpeed = info.Template.AnimationSpeed;   // 배속 하한
+        float playTime = impactSpan / baseSpeed;          // 지정 배속으로 임팩트까지 가는 데 걸리는 시간
+        float scheduleStart = Mathf.Max(impactAlignTime - playTime, info.FirstNodeTime);
 
         pendingClip = clip;
         pendingStartOffset = startOffset;
         pendingDur = dur;
+        pendingImpactSpan = impactSpan;
         pendingBaseSpeed = baseSpeed;
         pendingScheduleStart = scheduleStart;
-        pendingLastNodeTime = info.LastNodeTime;
+        pendingImpactAlignTime = impactAlignTime;
         hasPending = true;
     }
 
-    /// <summary>예약된 성공 애니의 시작 시각에 도달하면 재생한다. 남은 시간 기준으로 배속을 재계산해 마지막 노드에 정렬한다.</summary>
+    /// <summary>
+    /// 트림 시작부터 임팩트 프레임까지의 길이(클립 초). 임팩트가 오서링되지 않았거나 트림 범위 밖이면
+    /// <b>트림 끝</b>으로 폴백한다 — 그래야 값이 없는 기존 패턴도 그대로 동작한다.
+    /// </summary>
+    private static float ResolveImpactSpan(Pattern template, float startOffset, float dur)
+    {
+        float impactTime = template.AnimationImpactTime;
+        if (impactTime <= 0f) return dur;
+
+        float span = impactTime - startOffset;
+        if (span <= 0f || span > dur) return dur;
+
+        return span;
+    }
+
+    /// <summary>
+    /// 예약된 성공 애니의 시작 시각에 도달하면 재생한다. 남은 시간 기준으로 배속을 재계산해 <b>임팩트 프레임</b>을 정렬한다.
+    /// 배속은 트림 전체에 걸리므로 임팩트 이후 잔여 구간도 같은 배속으로 이어 재생된다.
+    /// </summary>
     private void TryStartPendingSuccess()
     {
         if (!hasPending || missedThisTarget || Time.time < pendingScheduleStart) return;
 
-        float remaining = Mathf.Max(pendingLastNodeTime - Time.time, 0.0001f);
-        float needed = pendingDur / remaining;
+        float remaining = Mathf.Max(pendingImpactAlignTime - Time.time, 0.0001f);
+        float needed = pendingImpactSpan / remaining;
         float cap = Mathf.Max(maxAttackSpeed, pendingBaseSpeed);
         float speed = Mathf.Clamp(needed, pendingBaseSpeed, cap);
 

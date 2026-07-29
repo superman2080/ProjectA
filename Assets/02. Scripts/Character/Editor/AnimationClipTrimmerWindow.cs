@@ -5,6 +5,10 @@ using UnityEngine;
 /// <summary>
 /// 애니메이션 클립의 실제 휘두르는 구간을 창 안에서 프레임 단위로 보며 찾고,
 /// 그 start/duration(초)을 Pattern 에셋의 AnimationStartOffset/AnimationDuration에 바로 저장하는 에디터 툴.
+///
+/// <para>마크는 <b>세 개</b>다 — Start(트림 시작) / <b>Impact(칼날이 표적을 지나가는 프레임)</b> / End(트림 끝).
+/// Impact는 런타임에서 표적이 갈라지는 시각에 정렬되는 기준점이라, 프리뷰를 프레임 단위로 이송하며
+/// 칼날이 표적을 통과하는 바로 그 프레임에 찍어야 한다. 찍지 않으면(0) 런타임이 트림 끝으로 폴백한다.</para>
 /// </summary>
 public class AnimationClipTrimmerWindow : EditorWindow
 {
@@ -26,6 +30,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
     // 마킹
     private float startTime;
     private float endTime;
+    private float impactTime;
 
     // 프리뷰
     private PreviewRenderUtility previewUtil;
@@ -107,6 +112,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
         var clipProp = so.FindProperty("successAnimationClip");
         var offProp = so.FindProperty("animationStartOffset");
         var durProp = so.FindProperty("animationDuration");
+        var impactProp = so.FindProperty("animationImpactTime");
 
         if (clipProp != null && clipProp.objectReferenceValue is AnimationClip c)
             clip = c;
@@ -114,6 +120,10 @@ public class AnimationClipTrimmerWindow : EditorWindow
             startTime = offProp.floatValue;
         if (durProp != null)
             endTime = startTime + Mathf.Max(durProp.floatValue, 0f);
+
+        // 미오서링(0 이하)이면 런타임 폴백과 같게 트림 끝에 세워 둔다 — 그래야 저장 시 의도치 않은 값이 들어가지 않는다.
+        float loadedImpact = impactProp?.floatValue ?? 0f;
+        impactTime = loadedImpact > 0f ? loadedImpact : endTime;
 
         currentTime = startTime;
     }
@@ -282,8 +292,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         if (clip.length <= 0f) return;
 
-        DrawMarkerLine(sliderRect, startTime / clip.length, new Color(0.3f, 0.85f, 0.4f)); // start=초록
-        DrawMarkerLine(sliderRect, endTime / clip.length, new Color(0.95f, 0.4f, 0.4f));   // end=빨강
+        DrawMarkerLine(sliderRect, startTime / clip.length, new Color(0.3f, 0.85f, 0.4f));   // start=초록
+        DrawMarkerLine(sliderRect, impactTime / clip.length, new Color(0.3f, 0.85f, 0.95f)); // impact=시안
+        DrawMarkerLine(sliderRect, endTime / clip.length, new Color(0.95f, 0.4f, 0.4f));     // end=빨강
     }
 
     private void DrawMarkerLine(Rect sliderRect, float t01, Color color)
@@ -304,12 +315,15 @@ public class AnimationClipTrimmerWindow : EditorWindow
         {
             if (GUILayout.Button("Mark Start = 현재"))
                 startTime = currentTime;
+            if (GUILayout.Button("Mark Impact = 현재"))
+                impactTime = currentTime;
             if (GUILayout.Button("Mark End = 현재"))
                 endTime = currentTime;
         }
 
         // 직접 편집도 허용
         startTime = Mathf.Max(EditorGUILayout.FloatField("Start Offset (s)", startTime), 0f);
+        impactTime = Mathf.Max(EditorGUILayout.FloatField("Impact (s)", impactTime), 0f);
         endTime = EditorGUILayout.FloatField("End (s)", endTime);
 
         float duration = endTime - startTime;
@@ -318,12 +332,46 @@ public class AnimationClipTrimmerWindow : EditorWindow
         if (duration <= 0f)
             EditorGUILayout.HelpBox("End가 Start보다 뒤여야 합니다 (Duration > 0).", MessageType.Warning);
 
-        // 현재 시각이 휘두름 구간 안인지
+        if (impactTime < startTime || impactTime > endTime)
+        {
+            EditorGUILayout.HelpBox(
+                "Impact가 Start~End 구간 밖입니다. 칼날이 표적을 지나가는 프레임에 찍어야 합니다. " +
+                "저장 시 구간 안으로 클램프됩니다.", MessageType.Warning);
+        }
+
+        DrawStatusBox(duration);
+    }
+
+    /// <summary>현재 스크럽 위치가 임팩트 프레임인지 / 휘두름 구간 안인지 한눈에 보여준다.</summary>
+    private void DrawStatusBox(float duration)
+    {
+        float frameRate = clip.frameRate > 0f ? clip.frameRate : 30f;
         bool inSwing = duration > 0f && currentTime >= startTime && currentTime <= endTime;
+        // 마크가 아직 잡히지 않은 상태(전부 0)에서 프레임 0을 IMPACT로 오인하지 않도록 구간 안에서만 판단한다.
+        bool atImpact = inSwing && Mathf.RoundToInt(currentTime * frameRate) == Mathf.RoundToInt(impactTime * frameRate);
+
+        string label;
+        Color background;
+        if (atImpact)
+        {
+            label = "✦ IMPACT (베는 프레임)";
+            background = new Color(0.3f, 0.85f, 0.95f);
+        }
+        else if (inSwing)
+        {
+            label = "▶ IN SWING (휘두름 구간)";
+            background = new Color(0.3f, 0.85f, 0.4f);
+        }
+        else
+        {
+            label = "— (구간 밖)";
+            background = new Color(0.5f, 0.5f, 0.5f);
+        }
+
         var style = new GUIStyle(EditorStyles.helpBox) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
         Color prev = GUI.backgroundColor;
-        GUI.backgroundColor = inSwing ? new Color(0.3f, 0.85f, 0.4f) : new Color(0.5f, 0.5f, 0.5f);
-        GUILayout.Box(inSwing ? "▶ IN SWING (휘두름 구간)" : "— (구간 밖)", style, GUILayout.Height(22f));
+        GUI.backgroundColor = background;
+        GUILayout.Box(label, style, GUILayout.Height(22f));
         GUI.backgroundColor = prev;
     }
 
@@ -346,7 +394,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
             var so = new SerializedObject(targetPattern);
             float off = so.FindProperty("animationStartOffset")?.floatValue ?? 0f;
             float dur = so.FindProperty("animationDuration")?.floatValue ?? 0f;
-            EditorGUILayout.LabelField("Pattern 현재값", $"offset {off:0.000}s / duration {dur:0.000}s");
+            float imp = so.FindProperty("animationImpactTime")?.floatValue ?? 0f;
+            EditorGUILayout.LabelField("Pattern 현재값",
+                $"offset {off:0.000}s / impact {imp:0.000}s / duration {dur:0.000}s");
         }
         else
         {
@@ -358,10 +408,16 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         Undo.RecordObject(targetPattern, "Apply Clip Trim");
 
+        // 임팩트는 반드시 트림 안에 있어야 한다 — 밖이면 런타임이 트림 끝으로 폴백해 오서링이 조용히 무시된다.
+        float clampedImpact = Mathf.Clamp(impactTime, startTime, endTime);
+
         var so = new SerializedObject(targetPattern);
         so.FindProperty("animationStartOffset").floatValue = startTime;
         so.FindProperty("animationDuration").floatValue = duration;
+        so.FindProperty("animationImpactTime").floatValue = clampedImpact;
         so.ApplyModifiedProperties();
+
+        impactTime = clampedImpact; // 클램프 결과를 창에도 반영해 저장값과 표시가 어긋나지 않게 한다.
 
         EditorUtility.SetDirty(targetPattern);
         AssetDatabase.SaveAssetIfDirty(targetPattern);

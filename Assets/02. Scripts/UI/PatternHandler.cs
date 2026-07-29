@@ -311,7 +311,7 @@ public class PatternHandler : MonoBehaviour
     {
         var target = JudgeTarget;
         if (target != null)
-            OnJudgeTargetBegan?.Invoke(new JudgeTargetInfo(target.Template, target.FirstNodeTime, target.LastNodeTime));
+            OnJudgeTargetBegan?.Invoke(new JudgeTargetInfo(target.Template, target.FirstNodeTime, target.LastNodeTime, target.Deadline));
     }
 
     /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 낙하 노드를 정리한다.</summary>

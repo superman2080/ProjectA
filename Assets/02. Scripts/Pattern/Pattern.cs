@@ -38,6 +38,10 @@ namespace PatternSpace
         [Tooltip("성공 애니메이션의 재생 지속 시간(초). 후딜레이 제거용. 0 이하면 클립 끝까지 재생.")]
         [SerializeField] private float animationDuration = 0f;
 
+        [Tooltip("칼날이 표적을 지나가는 프레임의 클립 절대 시각(초). 이 프레임이 표적 절단 시각에 오도록 정렬된다. " +
+                 "0 이하거나 트림 범위 밖이면 트림 끝으로 간주한다. Tools/Animation Clip Trimmer로 찍는다.")]
+        [SerializeField] private float animationImpactTime = 0f;
+
         [Tooltip("이 패턴 베기의 기본 배속(하한). 패턴 입력 구간이 짧으면 자동으로 더 배속된다.")]
         [SerializeField] private float animationSpeed = 1f;
 
@@ -67,7 +71,24 @@ namespace PatternSpace
 
         public float AnimationDuration => animationDuration;
 
+        /// <summary>
+        /// 칼날이 표적을 지나가는 프레임의 클립 절대 시각(초). 0 이하 또는 트림 범위 밖이면 소비자가 트림 끝으로 폴백한다
+        /// (<see cref="CharacterActionPlayer"/>). 폴백은 오서링되지 않은 기존 패턴을 위한 것이다.
+        /// </summary>
+        public float AnimationImpactTime => animationImpactTime;
+
         public float AnimationSpeed => Mathf.Max(animationSpeed, 0.01f);
+
+        /// <summary>트림 길이(초). <see cref="animationDuration"/>이 0 이하면 클립 끝까지로 본다. 클립이 없으면 0.</summary>
+        public float ResolvedAnimationDuration
+        {
+            get
+            {
+                if (animationDuration > 0f) return animationDuration;
+                if (successAnimationClip == null) return 0f;
+                return Mathf.Max(successAnimationClip.length - animationStartOffset, 0f);
+            }
+        }
 
         public NodeType GetNodeType(int position)
         {
@@ -78,6 +99,8 @@ namespace PatternSpace
 
         private void OnValidate()
         {
+            ValidateImpactTime();
+
             if (patternDatas == null) return;
 
             var seen = new HashSet<int>();
@@ -87,6 +110,26 @@ namespace PatternSpace
                 {
                     Debug.LogError($"[Pattern] '{name}'에 중복된 인덱스 {data.index}가 있습니다.", this);
                 }
+            }
+        }
+
+        /// <summary>
+        /// 임팩트 프레임이 트림 구간 안에 있는지 확인한다. 미지정(0 이하)은 정상 — 트림 끝으로 폴백하기 때문에
+        /// 오서링되지 않은 기존 패턴이 경고를 뿜지 않는다.
+        /// </summary>
+        private void ValidateImpactTime()
+        {
+            if (animationImpactTime <= 0f) return;
+
+            float duration = ResolvedAnimationDuration;
+            if (duration <= 0f) return; // 클립 미지정 — 검증할 구간 자체가 없다.
+
+            float trimEnd = animationStartOffset + duration;
+            if (animationImpactTime < animationStartOffset || animationImpactTime > trimEnd)
+            {
+                Debug.LogWarning(
+                    $"[Pattern] '{name}'의 AnimationImpactTime({animationImpactTime:0.000}s)이 " +
+                    $"트림 구간 [{animationStartOffset:0.000}s, {trimEnd:0.000}s] 밖입니다. 트림 끝으로 폴백합니다.", this);
             }
         }
     }
