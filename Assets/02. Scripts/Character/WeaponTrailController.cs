@@ -1,3 +1,4 @@
+using Hovl;
 using UnityEngine;
 
 /// <summary>
@@ -23,15 +24,12 @@ public class WeaponTrailController : MonoBehaviour
     [SerializeField] private CharacterActionPlayer actionPlayer;
 
     [Tooltip("칼날의 Trail 컴포넌트들. 칼날 변형이 여럿이라 배열이다(비활성 변형은 자동으로 건너뛴다).")]
-    [SerializeField] private Tiny.Trail[] bladeTrails;
+    [SerializeField] private HS_SwordMeshTrail bladeTrail;
 
     void Awake()
     {
         if (actionPlayer == null)
             Debug.LogError("[WeaponTrailController] actionPlayer가 배선되지 않았습니다 — 트레일이 동작하지 않습니다.", this);
-
-        if (bladeTrails == null || bladeTrails.Length == 0)
-            Debug.LogError("[WeaponTrailController] bladeTrails가 비어 있습니다 — 칼날 안쪽 노드의 Trail을 넣으세요.", this);
 
         // 씬에 켜진 채 저장돼 있어도 휴지 상태를 보장한다.
         SetTrailsEnabled(false);
@@ -59,17 +57,8 @@ public class WeaponTrailController : MonoBehaviour
 
     private void SetTrailsEnabled(bool value)
     {
-        if (bladeTrails == null) return;
+        if (bladeTrail == null) return;
 
-        foreach (var trail in bladeTrails)
-        {
-            if (trail == null) continue;
-
-            // 비활성 칼날 변형은 건드리지 않는다 — 켜도 그려지지 않고, 나중에 그 변형이 활성화될 때
-            // 엉뚱한 시점의 상태를 물려받는다.
-            if (!trail.gameObject.activeInHierarchy) continue;
-
-            trail.enabled = value;
-        }
+        bladeTrail.enabled = value;
     }
 }

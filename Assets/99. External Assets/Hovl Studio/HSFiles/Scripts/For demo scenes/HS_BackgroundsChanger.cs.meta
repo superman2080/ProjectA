@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: e2489e0edd2fd0b40a3aea17a18cf115
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 390582
+  packageName: Epic Sword Slash Effects System
+  packageVersion: 1.0.0
+  assetPath: Assets/Hovl Studio/HSFiles/Scripts/For demo scenes/HS_BackgroundsChanger.cs
+  uploadId: 957708

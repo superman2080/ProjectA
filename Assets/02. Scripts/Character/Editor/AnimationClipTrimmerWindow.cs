@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PatternSpace;
 using UnityEditor;
 using UnityEngine;
@@ -84,6 +85,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
         DrawPreview();
         DrawTimeline();
         DrawMarking();
+        DrawSwordTrailEvents();
         DrawApply();
     }
 
@@ -373,6 +375,39 @@ public class AnimationClipTrimmerWindow : EditorWindow
         GUI.backgroundColor = background;
         GUILayout.Box(label, style, GUILayout.Height(22f));
         GUI.backgroundColor = prev;
+    }
+
+    // ─────────────────────────── 칼날 트레일 이벤트 ───────────────────────────
+
+    /// <summary>
+    /// Start/End 마크 시각에 Hovl HS_SwordTrailAnimationEvents가 받는
+    /// StartSwordTrail/StopSwordTrail AnimationEvent를 클립에 직접 기록한다.
+    /// 기존에 찍힌 같은 이름의 이벤트는 지우고 새 마크 위치로 다시 찍는다(중복 방지).
+    /// </summary>
+    private void DrawSwordTrailEvents()
+    {
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Sword Trail Events", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("Write StartSwordTrail(Start) / StopSwordTrail(End) to Clip"))
+            ApplySwordTrailEvents();
+    }
+
+    private void ApplySwordTrailEvents()
+    {
+        Undo.RecordObject(clip, "Apply Sword Trail Events");
+
+        var events = new List<AnimationEvent>(AnimationUtility.GetAnimationEvents(clip));
+        events.RemoveAll(e => e.functionName == "StartSwordTrail" || e.functionName == "StopSwordTrail");
+
+        events.Add(new AnimationEvent { time = startTime, functionName = "StartSwordTrail" });
+        events.Add(new AnimationEvent { time = endTime, functionName = "StopSwordTrail" });
+        events.Sort((a, b) => a.time.CompareTo(b.time));
+
+        AnimationUtility.SetAnimationEvents(clip, events.ToArray());
+
+        EditorUtility.SetDirty(clip);
+        AssetDatabase.SaveAssets();
     }
 
     // ─────────────────────────── 저장 ───────────────────────────

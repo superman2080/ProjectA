@@ -1,0 +1,23 @@
+fileFormatVersion: 2
+guid: 62cbe53ec0e8b004ab83d7b663b93274
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - preset: {fileID: 11400000, guid: a19acfae2304f2f4080be51f40cf96f5, type: 2}
+  - trailMaterial: {instanceID: 0}
+  - pointA: {instanceID: 0}
+  - pointB: {instanceID: 0}
+  - appliedEffectPreset: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 390582
+  packageName: Epic Sword Slash Effects System
+  packageVersion: 1.0.0
+  assetPath: Assets/Hovl Studio/HSFiles/Scripts/HS_SwordMeshTrail.cs
+  uploadId: 957708
