@@ -152,9 +152,9 @@ MonoBehaviour:
   - channel: 0
     volume: 1
   - channel: 1
-    volume: 1
+    volume: 0.3
   - channel: 2
-    volume: 1
+    volume: 0.1
 --- !u!4 &424918437
 Transform:
   m_ObjectHideFlags: 0
@@ -744,15 +744,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SfxManager
   catalog:
   - trigger: 0
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: dbc9eb1651dac2c47966e21698ba7e84, type: 3}
     volume: 1
     pitch: 1
   - trigger: 1
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: dbc9eb1651dac2c47966e21698ba7e84, type: 3}
     volume: 1
     pitch: 1
   - trigger: 2
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: a366bb01bf060b04d964cf22af10cee2, type: 3}
     volume: 1
     pitch: 1
   voiceCount: 8

@@ -1,0 +1,15 @@
+{
+    "asset": "23c7ba8f1c38f884d8d213a2befe027d",
+    "fileName": "019fb45b-a20d-7b8f-bb02-7d53351182d3.wav",
+    "prompt": "A low-pitched, deep, punchy, and heavy bass impact hit sound effect. Satisfying, thick, mechanical bass drop hit for a rhythm game note success. Strong transient, instant impact, no silence at start.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

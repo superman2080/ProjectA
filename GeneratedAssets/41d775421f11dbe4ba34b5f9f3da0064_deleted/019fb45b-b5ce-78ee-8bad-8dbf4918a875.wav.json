@@ -1,0 +1,15 @@
+{
+    "asset": "41d775421f11dbe4ba34b5f9f3da0064",
+    "fileName": "019fb45b-b5ce-78ee-8bad-8dbf4918a875.wav",
+    "prompt": "A high-pitched, extremely crisp, and sharp electronic beep hit sound effect. Bright, punchy, and fast, perfect for a high-accuracy perfect note hit in an arcade rhythm game. Clean transient, instant impact, no silence at start.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

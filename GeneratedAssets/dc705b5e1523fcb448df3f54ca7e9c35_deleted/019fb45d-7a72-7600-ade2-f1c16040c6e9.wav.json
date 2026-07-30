@@ -1,0 +1,15 @@
+{
+  "asset": "dc705b5e1523fcb448df3f54ca7e9c35",
+  "fileName": "019fb45d-7a72-7600-ade2-f1c16040c6e9.wav",
+  "prompt": "A loud and crisp wooden drumstick rimshot, tight acoustic stick click strike. Clear high-impact drumstick clack, perfect for a drumstick hit. Immediate transient, zero silence at the start.",
+  "negativePrompt": "",
+  "model": "elevenlabs-sound-effects-v2",
+  "modelName": "ElevenLabs Sound Effects V2",
+  "customSeed": -1,
+  "w3CTraceId": "",
+  "feedback": -1,
+  "duration": 1.0,
+  "autoTrim": false,
+  "hasReference": false,
+  "voice": ""
+}

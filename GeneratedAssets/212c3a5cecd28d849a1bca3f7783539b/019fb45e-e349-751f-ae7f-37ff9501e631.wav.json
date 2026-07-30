@@ -1,0 +1,15 @@
+{
+    "asset": "212c3a5cecd28d849a1bca3f7783539b",
+    "fileName": "019fb45e-e349-751f-ae7f-37ff9501e631.wav",
+    "prompt": "A high-pitched acoustic snare drum hit, bright and punchy drum snap, tight thud.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

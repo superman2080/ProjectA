@@ -1,0 +1,15 @@
+{
+  "asset": "60037c48fc83fa24fab172afab5b853e",
+  "fileName": "019fb45d-7b1d-72af-a3ad-b42ac63e4340.wav",
+  "prompt": "A thuddy and satisfying acoustic snare drum hit with a bright snap. Crisp drum thud, instant high-volume acoustic wooden drum strike, perfect for a rhythm game note hit. Immediate transient, zero silence at the start.",
+  "negativePrompt": "",
+  "model": "elevenlabs-sound-effects-v2",
+  "modelName": "ElevenLabs Sound Effects V2",
+  "customSeed": -1,
+  "w3CTraceId": "",
+  "feedback": -1,
+  "duration": 1.0,
+  "autoTrim": false,
+  "hasReference": false,
+  "voice": ""
+}

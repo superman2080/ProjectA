@@ -1,0 +1,15 @@
+{
+    "asset": "b88f8ae39e39cc547ab486d9cdbd52fb",
+    "fileName": "019fb45b-8e8a-7748-b94e-f22108e42818.wav",
+    "prompt": "A sharp, organic wooden stick snap or wood block hit sound effect. Clean wood block slap, crisp high-impact clack, perfect for a drumstick rimshot or wooden percussion hit in a rhythm game. Immediate punch, no silence at start.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

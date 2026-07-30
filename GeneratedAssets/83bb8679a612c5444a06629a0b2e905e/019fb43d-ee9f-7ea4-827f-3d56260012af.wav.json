@@ -1,0 +1,15 @@
+{
+    "asset": "83bb8679a612c5444a06629a0b2e905e",
+    "fileName": "019fb43d-ee9f-7ea4-827f-3d56260012af.wav",
+    "prompt": "A satisfying slashing sound when hitting notes in a rhythm game",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 0.5,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

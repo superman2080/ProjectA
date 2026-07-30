@@ -1,0 +1,15 @@
+{
+    "asset": "934e2897f7bf13342a55d24844ee7b3a",
+    "fileName": "019fb45e-e3f0-70af-a3f9-ae6d588b9b65.wav",
+    "prompt": "A loud, sharp wood block click, dry drumstick rimshot, organic wood clack hit.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}
