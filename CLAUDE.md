@@ -55,6 +55,9 @@ Assets/
 │   │   ├── Core/                    # MeshSliceBaker 등 순수 기하 로직(asmdef)
 │   │   ├── Editor/                  # MeshSliceBakerWindow(획 긋기 굽기 툴)
 │   │   └── Tests/                   # 절단 코어 유닛테스트(asmdef)
+│   ├── Camera/                      # 카메라 연출
+│   │   ├── CameraDirector.cs        # 카메라 연출 유일 관리 지점(쉐이크 예약·재생)
+│   │   └── CameraCueCatalog.cs      # CameraTrigger enum + CameraCueEntry(트리거→쉐이크 설정)
 │   ├── Effect/                      # Canvas 이펙트 시스템
 │   │   ├── EffectManager.cs         # 이펙트 유일 관리 지점(PatternHandler 이벤트 구독)
 │   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
@@ -161,6 +164,14 @@ Assets/
 - **확장 포인트**: `OnSwingBegan` / `OnSwingEnded` — 스윙(베기) 트림 구간의 시작·끝. **성공 베기에서만** 발행되고(피격 클립은 제외), 트림 끝뿐 아니라 **인터럽트(연계·미스)에서도 종료가 나온다**. '칼을 휘두르는 동안'에만 붙는 연출은 이 이벤트만 구독한다.
 - **`WeaponTrailController`**: 칼날 트레일(`Tiny.Trail`, 외부 에셋 — 수정하지 않는다)의 유일한 관리 지점. 위 두 이벤트만 구독해 스윙 구간에만 트레일을 enable한다. **배선 주의** — 칼날은 같은 이름 노드가 2단이고 `Trail`은 **안쪽(메쉬) 노드**에 있다(`root/add_weapon_r/Weapon_Katana_01_Blade/Weapon_Katana_01_Blade`). 켤 때는 `Tiny.Trail`이 정점을 현재 위치로 접어 넣어 잔상이 없지만, **끌 때는 페이드 없이 즉시 사라진다**(그 API가 없다). 상세: `docs/WeaponTrail/`
 
+### 7-1. 카메라 연출 (Camera)
+- **`CameraDirector`**: 카메라 연출의 유일 관리 지점. `PatternHandler`의 기존 이벤트만 구독하는 **순수 연출**(판정에 개입하지 않음). `EffectManager`와 같은 위치·같은 카탈로그 관례 — **연출 추가 = 카탈로그에 한 줄**.
+- **`CameraCueCatalog`**: `CameraTrigger` enum(PatternSuccess/PatternMiss/PatternFailure) + `CameraCueEntry`(진폭·지속). 감쇠 곡선은 공식 `(1-t)²`, 주파수는 director 공용 값 하나 — 큐마다 나눌 만한 차이가 안 난다.
+- **큐 시각은 화면에서 사건이 일어나는 순간에 맞춘다**: 성공/실패(표적 파괴)는 **`Deadline`**(= `LastNodeTime + PatternHandler.GoodWindow` + `Pattern.SliceTargetImpactOffset`, §6·§11과 동일한 식), 피격은 `OnJudgeTargetFirstMiss` 순간 **즉시**(Hit 클립이 그때 재생되므로). **실패는 사건이 둘이라 큐도 둘이다.**
+- **예약은 최대 하나**다 — 패턴 완료가 순차적이고 A의 Deadline(A 마지막노드 +0.1초)보다 B의 완료가 최소 0.4초 뒤라, 리스트가 필요 없다.
+- **Perlin은 채널이 하나라 겹침이 합성되지 않는다.** 마지막 노드 미스면 두 큐가 0.1초 간격으로 확실히 붙으므로, 새 쉐이크는 타이머를 재시작하되 **진폭은 큰 쪽을 취한다**(덮어쓰면 세기가 뚝 떨어짐). **휴지값은 0이 아니라 씬의 현재 값**(`AmplitudeGain` 0.1)이라 `Awake`에서 캐시해 그리로 복귀한다.
+- Cinemachine 타입은 `ApplyShake` 하나에만 등장한다 — 나중에 Impulse로 갈아끼울 때 위층 불변. 상세: `docs/CameraDirection/`
+
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**
 - **`EffectCatalog`**: `EffectTrigger` enum(Perfect/Good/Miss/PatternCompleteFull/PatternComplete/NodeConnected) + `EffectEntry`(트리거→프리팹+풀 크기). **이펙트 추가 = 카탈로그에 한 줄 추가**(코드 수정 없음). 프리팹 비면 무연출.
@@ -195,7 +206,7 @@ Assets/
 ## 이벤트 확장 포인트 (`PatternHandler`)
 새 연출/시스템은 아래 이벤트만 구독해 붙인다(PatternHandler 본체 수정 없이 확장).
 - `OnJudged(JudgementResult, int index)` — 판정 발생.
-- `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (CharacterActionPlayer, EffectManager가 구독)
+- `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (EffectManager, CameraDirector가 구독) **`Deadline`은 페이로드에 없다** — `LastNodeTime + PatternHandler.GoodWindow`로 만든다.
 - `OnPatternQueued(PatternQueuedInfo)` — 패턴이 **큐에 투입되는 순간**(판정 대상이 되기 훨씬 전). 등장에 시간이 걸리는 연출이 구독한다. `StartTime`(첫 노드 낙하 시작)과 `Deadline`(판정 종료)을 함께 준다. (SliceTargetDirector가 구독)
 - `OnAllPatternsCleared` — `ClearAllPatterns()`로 전부 정리된 순간(곡 중단 등). 외부 연출의 잔존물 회수용.
 - `OnNodeConnected(int index, Vector3 world)` — 노드가 라인에 연결.

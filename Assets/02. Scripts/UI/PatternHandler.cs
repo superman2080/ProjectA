@@ -96,6 +96,12 @@ public class PatternHandler : MonoBehaviour
     }
 #endif
 
+    /// <summary>
+    /// Good 판정 윈도우(초). 외부 연출이 <c>Deadline = LastNodeTime + GoodWindow</c>로
+    /// 성패 확정 시각을 만드는 데 쓴다 — 표적 절단·칼날 임팩트가 맞춰지는 그 시각이다.
+    /// </summary>
+    public float GoodWindow => goodWindow;
+
     /// <summary>스트로크(마우스 드래그 또는 키보드 연속 입력) 진행 중 여부.</summary>
     public bool IsDragging { get; private set; }
 
