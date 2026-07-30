@@ -151,6 +151,17 @@ public class EffectManager : MonoBehaviour
             _ => EffectTrigger.Miss
         };
         Play(trigger, worldPosition);
+        SfxManager.Instance.Play(MapToSfxTrigger(result));
+    }
+
+    private static SfxTrigger MapToSfxTrigger(JudgementResult result)
+    {
+        return result switch
+        {
+            JudgementResult.Perfect => SfxTrigger.Perfect,
+            JudgementResult.Good => SfxTrigger.Good,
+            _ => SfxTrigger.Miss
+        };
     }
 
     private void HandleNodeConnected(int index, Vector3 worldPosition)

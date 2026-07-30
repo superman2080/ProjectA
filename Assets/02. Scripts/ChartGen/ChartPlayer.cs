@@ -30,6 +30,29 @@ namespace ChartGen
                 Play();
         }
 
+        private void OnEnable()
+        {
+            SoundManager.Instance.OnVolumeChanged += HandleVolumeChanged;
+            ApplyMusicVolume();
+        }
+
+        private void OnDisable()
+        {
+            SoundManager.Instance.OnVolumeChanged -= HandleVolumeChanged;
+        }
+
+        private void HandleVolumeChanged(VolumeChannel channel)
+        {
+            if (channel == VolumeChannel.Music || channel == VolumeChannel.Master)
+                ApplyMusicVolume();
+        }
+
+        private void ApplyMusicVolume()
+        {
+            if (audioSource != null)
+                audioSource.volume = SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Music);
+        }
+
         [ContextMenu("Play")]
         public void Play()
         {
@@ -82,6 +105,7 @@ namespace ChartGen
                 yield return new WaitForSeconds(countdownDuration);
 
             audioSource.clip = ActiveChart.song;
+            ApplyMusicVolume();
             audioSource.Play();
 
             playCoroutine = null;
