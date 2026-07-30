@@ -1,0 +1,15 @@
+{
+    "asset": "938159a916d208745b2122671e5aa3a3",
+    "fileName": "019fb249-0790-7a81-8122-c069407d0d00.wav",
+    "prompt": "A short, sharp, and impactful arcade game hit sound effect, perfect for a rhythm game note hit. High satisfaction, clean punchy impact.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.5,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

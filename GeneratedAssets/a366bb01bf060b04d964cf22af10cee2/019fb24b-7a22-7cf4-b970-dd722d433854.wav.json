@@ -1,0 +1,15 @@
+{
+    "asset": "a366bb01bf060b04d964cf22af10cee2",
+    "fileName": "019fb24b-7a22-7cf4-b970-dd722d433854.wav",
+    "prompt": "A loud, heavy, and satisfying mechanical drum hit combined with a crisp synth laser zap. Extremely punchy, sharp transient, high volume, instant impact sound effect for a rhythm game note success. No silence at the beginning.",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.0,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}
