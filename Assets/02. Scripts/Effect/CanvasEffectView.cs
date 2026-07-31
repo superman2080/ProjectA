@@ -6,7 +6,7 @@ using UnityEngine;
 /// <summary>
 /// Canvas 위 one-shot 파티클 이펙트 하나. 루트에 <see cref="UIParticle"/> + 하위 <see cref="ParticleSystem"/>(들)을 가진
 /// 프리팹에 붙는다. 대여 → 위치 지정 → <see cref="OnSpawn"/>으로 재생, 파티클이 모두 소멸하면 스스로 <see cref="OnFinished"/>를
-/// 발행해 매니저에 반환을 요청한다(<see cref="FallingNodeView"/>의 OnArrived와 같은 패턴).
+/// 발행해 매니저에 반환을 요청한다(<see cref="FocusRingView"/>의 OnArrived와 같은 패턴).
 /// </summary>
 [RequireComponent(typeof(RectTransform))]
 public class CanvasEffectView : MonoBehaviour, IPoolable

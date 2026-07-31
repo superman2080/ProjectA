@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -19,12 +20,21 @@ namespace PatternSpace
         /// <summary>레이캐스트(판정)를 받는 본체 Image. <see cref="image"/>는 색상 표시용 자식 Visual이라 서로 다른 대상이다.</summary>
         [SerializeField] private Image hitGraphic;
 
+        /// <summary>
+        /// 노브(Visual)의 표시/숨김 전용 CanvasGroup. <see cref="image"/>의 알파를 쓰지 않는 이유는
+        /// <see cref="SetJudgementColor"/>·<see cref="ResetColor"/>가 알파를 포함한 색을 통째로 대입하기 때문 —
+        /// 알파로 페이드하면 판정 색 대입이 페이드를 덮어쓴다. 이 CanvasGroup은 Visual 서브트리에만 걸리므로
+        /// 부모 본체의 레이캐스트(<see cref="hitGraphic"/>)에는 영향이 없다 — 노브를 감춰도 판정 영역은 살아 있다.
+        /// </summary>
+        [SerializeField] private CanvasGroup visualGroup;
+
         [Header("Judgement Colors")]
         [SerializeField] private Color perfectColor = Color.blue;
         [SerializeField] private Color goodColor = Color.green;
         [SerializeField] private Color missColor = Color.red;
 
         private Color defaultColor;
+        private Coroutine knobFadeRoutine;
 
         public event Action<int> OnPointDown;
         public event Action<int> OnPointUp;
@@ -40,6 +50,7 @@ namespace PatternSpace
 
             image ??= GetComponent<Image>();
             hitGraphic ??= GetComponent<Image>();
+            visualGroup ??= image != null ? image.GetComponent<CanvasGroup>() : null;
             defaultColor = image != null ? image.color : Color.white;
         }
 
@@ -47,6 +58,7 @@ namespace PatternSpace
         {
             image ??= GetComponent<Image>();
             hitGraphic ??= GetComponent<Image>();
+            visualGroup ??= image != null ? image.GetComponent<CanvasGroup>() : null;
         }
 
         public void OnPointerDown(PointerEventData eventData) => Down();
@@ -98,5 +110,47 @@ namespace PatternSpace
         }
 
         public void ResetHitArea() => SetHitAreaRatio(1f);
+
+        /// <summary>
+        /// 노브(Visual)를 페이드로 표시/숨김한다. 판정 색과는 독립이다(<see cref="visualGroup"/> 참고).
+        /// <paramref name="duration"/>이 0 이하면 즉시 반영한다.
+        /// </summary>
+        public void SetKnobVisible(bool visible, float duration)
+        {
+            if (visualGroup == null) return; // 연출이라 배선이 없어도 게임이 멈추면 안 된다
+
+            if (knobFadeRoutine != null)
+            {
+                StopCoroutine(knobFadeRoutine);
+                knobFadeRoutine = null;
+            }
+
+            float target = visible ? 1f : 0f;
+
+            if (duration <= 0f)
+            {
+                visualGroup.alpha = target;
+                return;
+            }
+
+            knobFadeRoutine = StartCoroutine(FadeKnobRoutine(target, duration));
+        }
+
+        /// <summary>현재 알파에서 이어서 보간한다 — 페이드 도중 반대로 뒤집혀도 값이 튀지 않는다.</summary>
+        private IEnumerator FadeKnobRoutine(float target, float duration)
+        {
+            float start = visualGroup.alpha;
+            float t = 0f;
+
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                visualGroup.alpha = Mathf.Lerp(start, target, t / duration);
+                yield return null;
+            }
+
+            visualGroup.alpha = target;
+            knobFadeRoutine = null;
+        }
     }
 }

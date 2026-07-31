@@ -51,7 +51,7 @@ public class EffectManager : MonoBehaviour
     {
         if (handler != null)
         {
-            handler.OnFallingNodeResolved += HandleFallingNodeResolved;
+            handler.OnFocusRingResolved += HandleFocusRingResolved;
             handler.OnNodeConnected += HandleNodeConnected;
             handler.OnPatternComplete += HandlePatternComplete;
         }
@@ -61,7 +61,7 @@ public class EffectManager : MonoBehaviour
     {
         if (handler != null)
         {
-            handler.OnFallingNodeResolved -= HandleFallingNodeResolved;
+            handler.OnFocusRingResolved -= HandleFocusRingResolved;
             handler.OnNodeConnected -= HandleNodeConnected;
             handler.OnPatternComplete -= HandlePatternComplete;
         }
@@ -142,7 +142,7 @@ public class EffectManager : MonoBehaviour
         view.OnSpawn();
     }
 
-    private void HandleFallingNodeResolved(int index, NodeType nodeType, Vector3 worldPosition, JudgementResult result)
+    private void HandleFocusRingResolved(int index, NodeType nodeType, Vector3 worldPosition, JudgementResult result)
     {
         EffectTrigger trigger = result switch
         {

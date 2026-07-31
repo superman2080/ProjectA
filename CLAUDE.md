@@ -11,7 +11,7 @@ SongSelectManager ─(GameSession.SelectedChart)→ ChartPlayer ─(SetPattern)�
                                                                               │
                           ┌───────────────────────────────────────────────────┤ (이벤트 발행)
                           ▼                       ▼                            ▼
-                   EffectManager          CharacterActionPlayer          FallingNodeView(낙하)
+                   EffectManager          CharacterActionPlayer          FocusRingView(수축)
                    (판정/완성 이펙트)        (베기/피격 애니메이션)         (Pool로 재사용)
 ```
 
@@ -35,7 +35,7 @@ Assets/
 │   ├── UI/
 │   │   ├── PatternHandler.cs        # 패턴인풋 전체 관리(판정·큐·노드 스폰의 중심 허브)
 │   │   ├── PatternLineRenderer.cs   # 입력 라인 / 가이드 캡슐 렌더러
-│   │   ├── FallingNodeView.cs       # 낙하 노드 뷰(IPoolable)
+│   │   ├── FocusRingView.cs         # 포커스 링 뷰 — Point 자리에서 줄어든다(IPoolable)
 │   │   └── Editor/
 │   │       └── PatternHandlerEditor.cs # 디버그 입력 커스텀 인스펙터(에디터 전용)
 │   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
@@ -83,16 +83,18 @@ Assets/
 
 ### 1. 패턴인풋
 - 3x3 격자로 배치된 9개의 Point (Point_1 ~ Point_9)
-- 포인트 간 중심 간격: **150px**
+- 포인트 간 중심 간격: **700px**
 - 배치 좌표 (AnchoredPosition, 중심 기준):
-  - Point_1: (-150, -150) / Point_2: (0, -150) / Point_3: (150, -150)
-  - Point_4: (-150, 0)    / Point_5: (0, 0)     / Point_6: (150, 0)
-  - Point_7: (-150, 150)  / Point_8: (0, 150)   / Point_9: (150, 150)
+  - Point_1: (-700, -700) / Point_2: (0, -700) / Point_3: (700, -700)
+  - Point_4: (-700, 0)    / Point_5: (0, 0)     / Point_6: (700, 0)
+  - Point_7: (-700, 700)  / Point_8: (0, 700)   / Point_9: (700, 700)
+- **입력 영역과 플레이어 시점을 분리하지 않는다(몰입감).** 예전에는 `Canvas/TileArea`(우측 1280px 반투명 검정 스트립)가 입력 영역을 화면 오른쪽에 따로 떼어 놓았지만, 이 컨테이너와 `Boarder`는 제거됐다. 지금은 `PointBackground`가 **Canvas 직속**(형제 인덱스 1 — `AmbientEffectLayer` 위, `EffectOverlayLayer` 아래)이며 앵커·anchoredPosition 모두 화면 중앙(0.5, 0.5)/(0,0)이라 **Point_5가 화면 정중앙**에 온다(Canvas 3840x2160 기준 world (1920,1080)).
+- `PointBackground`는 좌표계 기준점 + `PatternHandler`/`InputHandler`의 부착 지점일 뿐 **더 이상 배경 판이 아니다**(`Image`/`CanvasRenderer` 제거). 캐릭터 위에 반투명 판이 덮이지 않는다.
 - 인덱스는 0~8 (Point_1 = index 0). 인덱스는 `PatternHandler.Initialize(i, this)`로 `patternPoints` **배열 순서에서 주입**된다(게임오브젝트 이름을 파싱하지 않는다).
 
 #### 판정 영역과 시각 표현의 분리
-- **Point 본체**(100x100): Image가 투명(알파 0) + `raycastTarget = true` → **판정(레이캐스트) 영역 전용**
-- **자식 `Visual`**(60x60): Knob 스프라이트, `raycastTarget = false` → **시각 표현 전용**. `Point.image` 필드가 이것을 가리키며 판정 색상(Perfect/Good/Miss)이 여기에 표시된다.
+- **Point 본체**(150x150): Image가 투명(알파 0) + `raycastTarget = true` → **판정(레이캐스트) 영역 전용**
+- **자식 `Visual`**(90x90): Knob 스프라이트, `raycastTarget = false` → **시각 표현 전용**. `Point.image` 필드가 이것을 가리키며 판정 색상(Perfect/Good/Miss)이 여기에 표시된다.
 - 판정 영역용 본체 Image는 `Point.hitGraphic` 필드가 따로 참조한다. **`image`와 `hitGraphic`은 서로 다른 Image이므로 혼동하지 말 것.**
 
 #### 패턴 가이드라인
@@ -104,11 +106,19 @@ Assets/
 - 상세: `docs/PatternGuideLine/`
 
 #### 동적 판정 영역 축소 (조작감)
-- 진행 중인 패턴에 **포함되지 않은** Point는 판정 영역이 축소된다 (`PatternHandler.inactiveHitAreaRatio`, 기본 0.5 → 100x100이 실질 50x50).
+- 진행 중인 패턴에 **포함되지 않은** Point는 판정 영역이 축소된다 (`PatternHandler.inactiveHitAreaRatio`, 기본 0.5 → 150x150이 실질 75x75). 비율 기반이라 Point 크기를 바꿔도 따라온다(`SetHitAreaRatio`가 RectTransform의 현재 rect에서 패딩을 계산).
 - 구현: `Point.SetHitAreaRatio(ratio)`가 `hitGraphic.raycastPadding`을 조정 (RectTransform과 자식 Visual은 불변).
 - 적용/복구 시점: `SetPattern()`에서 축소, 패턴 종료 및 패턴 없는 대기 구간에서 9개 모두 복구.
 - `raycastPadding`은 마우스/터치 경로에만 영향을 준다. 키보드 입력(`ForceDown`)과 통과 노드 자동 인식은 레이캐스트를 거치지 않아 영향받지 않는다.
 - 상세: `docs/PointHitArea/`
+
+#### 노브 표시/숨김 (⚠ 판정 영역 축소와 기준이 다르다)
+- 지금 쓰이는 Point의 **노브(자식 `Visual`)만 보이고 나머지는 감춰진다**. `PatternHandler.knobFadeDuration`(기본 0.12초)로 빠르게 페이드.
+- **표시 기준은 살아 있는 모든 패턴(`activePatterns`)이 쓰는 Point의 합집합**이다(`ApplyKnobVisibility`). 판정 대상 하나만 보면 안 된다 — 링은 **큐에 얹히기만 한 패턴에도 스폰**되므로, 그렇게 하면 아직 감춰진 노브 위에서 다음 패턴의 링이 약 0.2초간 수축해 타이밍 단서가 깨진다. 합집합이라 "이전 패턴의 마지막 노드 = 다음 패턴의 첫 노드"인 인수인계 구간에서도 깜빡임이 없다.
+- 반면 **판정 영역 축소(`ApplyHitAreas`)는 `JudgeTarget` 기준을 유지한다.** 목적이 다르다 — 축소는 입력 오인 방지, 노브 표시는 시선 유도.
+- 페이드는 `Visual`의 **`CanvasGroup`** 알파로 한다. `Point.image`의 알파를 쓰면 안 된다 — `SetJudgementColor`/`ResetColor`가 알파 포함 색을 통째로 대입해 페이드를 덮어쓴다.
+- `CanvasGroup`은 `Visual` 서브트리에만 걸리므로 **부모 본체의 레이캐스트(`hitGraphic`)에는 영향이 없다. 노브를 감춰도 판정 영역은 살아 있다**(영역 제어는 위의 `inactiveHitAreaRatio`가 담당).
+- 상세: `docs/FocusRing/`
 
 #### 통과 노드 자동 인식
 - 3x3 격자에서 a→b로 직선을 그을 때 정확히 가운데를 지나는 노드가 있으면(예: 1→3은 2를 통과) 자동으로 입력 처리한다.
@@ -132,10 +142,10 @@ Assets/
 - `Deadline` = 마지막 입력 시각 + `goodWindow`. 넘기면 만료 처리(미완료면 `AllCorrect=false`).
 
 #### 패턴 겹침 규칙 (중요)
-- 채보는 **다음 패턴의 노드를 이전 패턴이 끝나기 전에 스폰**해야 한다 (스폰 리드타임 ≈1.0초 > 엔트리 간 입력 간격 최소 0.4초). 실제 채보의 95%가 겹친다.
+- 채보는 **다음 패턴의 노드를 이전 패턴이 끝나기 전에 스폰**해야 한다 (스폰 리드타임 = `exposureDuration`, 기본 0.5초 > 엔트리 간 입력 간격 최소 0.4초). 0.5 > 0.4 이므로 겹침은 계속 발생한다. (포커스 링 전환 전에는 리드타임이 ≈1.0초여서 겹침이 훨씬 잦았다 — 줄었을 뿐 없어지지 않았으므로 아래 큐 구조는 그대로 필요하다.)
 - 반면 **입력(판정) 시각은 겹치지 않는다.** 따라서 `PatternHandler`는 여러 패턴을 **큐(`activePatterns`)**로 들고 있되(연출/스폰 대상), **판정 대상(`JudgeTarget`)은 언제나 선두 하나**다.
 - `SetPattern()`은 진행 중인 패턴을 **파기하지 않고 큐에 추가**만 한다. 판정 대상은 선두 패턴이 **완료/만료될 때 같은 프레임에 즉시 승계**된다.
-- 낙하 노드는 패턴별 소유자(`owner`)를 추적하며, 패턴이 완료/만료되면 그 패턴의 노드만 즉시 회수한다.
+- 포커스 링은 패턴별 소유자(`owner`)를 추적하며, 패턴이 완료/만료되면 그 패턴의 링만 즉시 회수한다.
 - 상세: `docs/PatternOverlap/`
 
 #### 입력 계층 규칙 (중요)
@@ -144,11 +154,15 @@ Assets/
 - 키보드 스트로크는 패턴 완료/만료 시 종료된다. **마우스 드래그는 패턴 경계에서 끊지 않는다**(다음 패턴으로 이어 그을 수 있어야 함).
 - 상세: `docs/KeyboardInputStuck/`
 
-### 4. 낙하 노드 시스템
-- `FallingNodeView`(IPoolable): `Pool`(PoolKey.FallingNode)로 재사용. 스폰 시각에 나타나 목표 Point로 낙하, 도착 시 `OnArrived` 발행.
-- `PatternHandler`가 스폰을 스케줄링(`scheduledSpawns`)하고 활성 노드(`activeFallingNodes`)를 소유자별로 추적한다.
-- **낙하 속도(행별 상이)**: 생성 Y(`fallSpawnPositionY`)는 모든 행 공통이지만, 화면 경계 밖에서 시작하는 상단 행은 노출시간이 짧아지므로 **화면 안쪽 구간만 `exposureDuration` 동안** 이동하도록 전체 낙하시간을 역산(`ComputeFallDuration`).
-- 판정된 노드는 즉시 회수, 미입력으로 자연 도착한 노드는 `OnFallingNodeMissedArrival` 발행 후 회수. 상세: `docs/FallingNode/`
+### 4. 포커스 링 시스템
+- `FocusRingView`(IPoolable): `Pool`(PoolKey.FocusRing)로 재사용. **입력해야 할 Point 자리에 고정된 채 크기만 줄어든다** — 링이 노브와 정확히 같은 크기가 되는 순간이 입력 타이밍이고, 그때 `OnArrived`를 발행한다.
+- 크기: `focusRingStartScale`배에서 시작해 `endSize`(90x90, **노브 `Visual`과 같은 값이어야 한다** — 이게 어긋나면 "딱 맞았다"는 단서 자체가 거짓이 된다)로 수축. **보간은 선형이다** — 등속이어야 남은 시간이 크기로 정직하게 읽힌다. 이징을 넣으면 타이밍 판단이 왜곡된다.
+- `PatternHandler`가 스폰을 스케줄링(`scheduledSpawns`)하고 활성 링(`activeFocusRings`)을 소유자별로 추적한다.
+- **링은 이동하지 않으므로 화면 기하가 개입하지 않는다.** `ComputeFallDuration`은 `exposureDuration`을 그대로 돌려주며, 행마다 속도가 갈리지 않는다. (예전 낙하 노드는 생성 Y·화면 경계로 행별 낙하시간을 역산했고, 포인트 간격을 700으로 넓히자 행 간 배수가 2.39~7.53으로 벌어져 깨졌다. 이 메서드는 굽기 툴 `PatternChartWindow`가 호출하므로 **시그니처만 유지**한 채 본문을 비웠다.)
+- 그 결과 `exposureDuration`이 **정확히 링이 보이는 시간**이 되고, 스폰 리드타임도 정확히 그 값이다.
+- 판정된 링은 즉시 회수, 미입력으로 수축을 끝낸 링은 `OnFocusRingMissedArrival` 발행 후 회수.
+- **같은 Point에 링이 둘 겹칠 수 있다(정상).** 한 패턴 안에서는 불가능하지만(`Pattern.OnValidate`가 중복 인덱스를 막는다), **이전 패턴의 마지막 노드와 다음 패턴의 첫 노드가 같은 Point**면 겹친다. 겹침 길이는 `exposureDuration`(0.5) − 엔트리 간 최소 입력 간격(0.4) = **최대 0.1초**이며, 실측상 채보당 7~28쌍. 크기(72 vs 120)와 색이 달라 구분되지만 **인덱스 숫자는 완전히 겹쳐 두꺼워 보이므로 `IndexLabel`은 비활성**이다.
+- 상세: `docs/FocusRing/` (구 낙하 노드 설계: `docs/FallingNode/`)
 
 ### 5. 채보 시스템 (ChartGen)
 - **`SongChart`**(ScriptableObject): `song`(AudioClip), `level`, `bpm`, `beatOffset`, `entries[]`. 각 `SongChartEntry`는 `template`(Pattern), `onsetTimes`(판정 절대시각), `exposureDurations`(노출시간), `spawnTimes`(스폰 절대시각 스냅샷).
@@ -210,7 +224,7 @@ Assets/
 - `OnPatternQueued(PatternQueuedInfo)` — 패턴이 **큐에 투입되는 순간**(판정 대상이 되기 훨씬 전). 등장에 시간이 걸리는 연출이 구독한다. `StartTime`(첫 노드 낙하 시작)과 `Deadline`(판정 종료)을 함께 준다. (SliceTargetDirector가 구독)
 - `OnAllPatternsCleared` — `ClearAllPatterns()`로 전부 정리된 순간(곡 중단 등). 외부 연출의 잔존물 회수용.
 - `OnNodeConnected(int index, Vector3 world)` — 노드가 라인에 연결.
-- `OnFallingNodeSpawned / OnFallingNodeResolved / OnFallingNodeMissedArrival` — 낙하 노드의 스폰/판정/미입력 도착.
+- `OnFocusRingSpawned / OnFocusRingResolved / OnFocusRingMissedArrival` — 포커스 링의 스폰/판정/미입력 수축완료.
 
 ## 네임스페이스
 - `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`, `PatternQueuedInfo`
