@@ -24,10 +24,15 @@ public class PatternHandler : MonoBehaviour
     [SerializeField] private PatternLineRenderer guideLineRenderer;
     [SerializeField] private float guideFadeDuration = 0.2f;
 
-    [Header("Falling Node")]
-    [SerializeField] private RectTransform fallingNodeParent;
-    [SerializeField] private float fallSpawnPositionY = 500f;
-    [SerializeField] private Color[] fallingNodeColorPalette;
+    [Header("Focus Ring")]
+    [SerializeField] private RectTransform focusRingParent;
+    [SerializeField] private Color[] focusRingColorPalette;
+    [Tooltip("링의 시작 크기 배율. 노브 크기의 몇 배에서 줄어들기 시작할지.")]
+    [SerializeField] private float focusRingStartScale = 2f;
+
+    [Header("Knob")]
+    [Tooltip("노브(Point/Visual) 표시·숨김 페이드 시간(초).")]
+    [SerializeField] private float knobFadeDuration = 0.12f;
 
 #if UNITY_EDITOR
     [Header("Debug (Editor Only)")]
@@ -120,6 +125,7 @@ public class PatternHandler : MonoBehaviour
 
     private readonly List<int> connectedIndices = new List<int>();
     private readonly bool[] hitAreaUsage = new bool[9];
+    private readonly bool[] knobUsage = new bool[9];
     private Canvas canvas;
     private Camera canvasCamera;
     private bool isKeyboardStroke;
@@ -129,20 +135,19 @@ public class PatternHandler : MonoBehaviour
         public ActivePattern owner;
         public int position;
         public float spawnTime;
-        public float fallDuration; // 이 노드가 실제로 낙하하는 데 걸리는 시간(행마다 노출 시간을 맞추기 위해 개별 계산됨)
+        public float shrinkDuration; // 링이 줄어드는 데 걸리는 시간(= 노출 시간)
     }
 
     private struct ActiveNode
     {
         public ActivePattern owner;
         public int position;
-        public FallingNodeView view;
+        public FocusRingView view;
     }
 
     private readonly List<ScheduledSpawn> scheduledSpawns = new List<ScheduledSpawn>();
-    private readonly List<ActiveNode> activeFallingNodes = new List<ActiveNode>();
+    private readonly List<ActiveNode> activeFocusRings = new List<ActiveNode>();
     private int spawnCounter;
-    private float screenTopY;
 
     public event Action<JudgementResult, int> OnJudged;
     public event Action<PatternCompletionInfo> OnPatternComplete; // 패턴 완료(완주/만료) 순간의 페이로드. 성공/실패·타이밍·다음 패턴 정보를 담는다.
@@ -159,12 +164,12 @@ public class PatternHandler : MonoBehaviour
     /// <summary>확장 포인트: 새 노드가 라인에 연결될 때마다 (index, 월드 좌표) 전달.</summary>
     public event Action<int, Vector3> OnNodeConnected;
 
-    /// <summary>확장 포인트(캐릭터 액션): 낙하 노드가 스폰될 때 (Point 인덱스, 노드 타입, 월드 좌표) 전달.</summary>
-    public event Action<int, NodeType, Vector3> OnFallingNodeSpawned;
-    /// <summary>확장 포인트(캐릭터 액션): 플레이어가 낙하 노드를 실제로 맞췄을 때 (Point 인덱스, 노드 타입, 월드 좌표, 판정 결과) 전달.</summary>
-    public event Action<int, NodeType, Vector3, JudgementResult> OnFallingNodeResolved;
-    /// <summary>확장 포인트(캐릭터 액션): 낙하 노드가 맞지 않은 채 자연 도착했을 때 (Point 인덱스, 노드 타입, 월드 좌표) 전달.</summary>
-    public event Action<int, NodeType, Vector3> OnFallingNodeMissedArrival;
+    /// <summary>확장 포인트(캐릭터 액션): 포커스 링이 스폰될 때 (Point 인덱스, 노드 타입, 월드 좌표) 전달.</summary>
+    public event Action<int, NodeType, Vector3> OnFocusRingSpawned;
+    /// <summary>확장 포인트(캐릭터 액션): 플레이어가 포커스 링을 실제로 맞췄을 때 (Point 인덱스, 노드 타입, 월드 좌표, 판정 결과) 전달.</summary>
+    public event Action<int, NodeType, Vector3, JudgementResult> OnFocusRingResolved;
+    /// <summary>확장 포인트(캐릭터 액션): 포커스 링이 맞지 않은 채 수축을 끝냈을 때 (Point 인덱스, 노드 타입, 월드 좌표) 전달.</summary>
+    public event Action<int, NodeType, Vector3> OnFocusRingMissedArrival;
 
     void Start()
     {
@@ -182,6 +187,7 @@ public class PatternHandler : MonoBehaviour
             inputHandler.OnKeyPressed += OnKeyboardInput;
 
         RefreshJudgeTargetVisuals();
+        ApplyKnobVisibility(0f); // 패턴 없는 초기 상태 → 9개 전부 숨김. 첫 프레임 깜빡임을 막으려 즉시 적용한다.
 
         DebugSetTestPattern();
     }
@@ -210,7 +216,7 @@ public class PatternHandler : MonoBehaviour
 #endif
 
         ExpireOverduePatterns();
-        ProcessFallingNodeSpawns();
+        ProcessFocusRingSpawns();
 
         if (!IsDragging) return;
 
@@ -257,7 +263,7 @@ public class PatternHandler : MonoBehaviour
     /// 판정 대상은 선두 패턴이 완료/만료될 때 승계된다.
     ///
     /// <paramref name="spawnTimes"/>가 주어지면(채보 재생 경로) 이미 구운 스폰 시각을 그대로 사용하고,
-    /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)로 <see cref="ComputeFallDuration"/>을 그 자리에서 계산한다.
+    /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)를 그대로 수축 시간으로 쓴다.
     /// </summary>
     public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null)
     {
@@ -275,18 +281,18 @@ public class PatternHandler : MonoBehaviour
         {
             int pointIndex = active.GetPointIndex(i);
             float spawnOffset;
-            float fallDuration;
+            float shrinkDuration;
 
             if (spawnTimes != null && i < spawnTimes.Count)
             {
                 spawnOffset = spawnTimes[i];
-                fallDuration = active.GetInputTime(i) - spawnOffset;
+                shrinkDuration = active.GetInputTime(i) - spawnOffset;
             }
             else
             {
                 float exposureDuration = exposureDurations != null && i < exposureDurations.Count ? exposureDurations[i] : DefaultExposureDuration;
-                fallDuration = ComputeFallDuration(pointIndex, exposureDuration);
-                spawnOffset = active.GetInputTime(i) - fallDuration;
+                shrinkDuration = ComputeFallDuration(pointIndex, exposureDuration);
+                spawnOffset = active.GetInputTime(i) - shrinkDuration;
             }
 
             scheduledSpawns.Add(new ScheduledSpawn
@@ -294,12 +300,16 @@ public class PatternHandler : MonoBehaviour
                 owner = active,
                 position = i,
                 spawnTime = active.StartTime + spawnOffset,
-                fallDuration = fallDuration
+                shrinkDuration = shrinkDuration
             });
         }
 
         bool becomesJudgeTarget = activePatterns.Count == 0;
         activePatterns.Add(active);
+
+        // 판정 대상이 되는지와 무관하게 호출한다 — 큐에 얹히기만 한 패턴도 링은 지금부터 스폰되므로,
+        // 그 링이 앉을 노브가 같은 시각에 떠 있어야 한다(감춰진 노브 위에서 링이 줄어들면 타이밍 단서가 깨진다).
+        ApplyKnobVisibility(knobFadeDuration);
 
         // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
         OnPatternQueued?.Invoke(new PatternQueuedInfo(
@@ -320,28 +330,21 @@ public class PatternHandler : MonoBehaviour
             OnJudgeTargetBegan?.Invoke(new JudgeTargetInfo(target.Template, target.FirstNodeTime, target.LastNodeTime, target.Deadline));
     }
 
-    /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 낙하 노드를 정리한다.</summary>
+    /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 포커스 링을 정리한다.</summary>
     public void ClearAllPatterns()
     {
-        for (int i = activeFallingNodes.Count - 1; i >= 0; i--)
-            ReleaseFallingNode(activeFallingNodes[i].view);
-        activeFallingNodes.Clear();
+        for (int i = activeFocusRings.Count - 1; i >= 0; i--)
+            ReleaseFocusRing(activeFocusRings[i].view);
+        activeFocusRings.Clear();
         scheduledSpawns.Clear();
         activePatterns.Clear();
 
         ResetPointColors();
         TriggerLineFadeOut();
         RefreshJudgeTargetVisuals();
+        ApplyKnobVisibility(knobFadeDuration);
 
         OnAllPatternsCleared?.Invoke();
-    }
-
-    /// <summary>루트 Canvas의 실제 화면 상단 경계를 fallingNodeParent 로컬 좌표로 변환한다 (Canvas는 Screen Space Overlay라 이 경계 밖은 Mask 없이도 실제로 렌더링되지 않는다).</summary>
-    private float ComputeScreenTopY()
-    {
-        RectTransform canvasRect = (RectTransform)canvas.transform;
-        Vector3 topWorld = canvasRect.TransformPoint(new Vector3(0f, canvasRect.rect.yMax, 0f));
-        return WorldToLocal(fallingNodeParent, topWorld).y;
     }
 
     /// <summary>씬/캔버스 참조가 아직 없으면(에디터에서 Play 모드 없이 굽는 툴이 호출하는 경우 포함) 초기화한다.</summary>
@@ -350,41 +353,16 @@ public class PatternHandler : MonoBehaviour
         if (canvas != null) return;
         canvas = GetComponentInParent<Canvas>();
         canvasCamera = canvas != null ? canvas.worldCamera : null;
-        screenTopY = ComputeScreenTopY();
     }
 
     /// <summary>
-    /// 생성 위치(fallSpawnPositionY, fallingNodeParent 로컬 좌표 기준 절대 Y, 사용자가 직접 설정)는 모든 행에서
-    /// 동일하게 유지하되, 화면 실제 경계(screenTopY) 밖에서 시작하는 상단 행 노드는 화면 밖 구간이 길어 노출
-    /// 시간이 짧아지므로, 경계 안쪽 구간(visibleDistance)만 exposureDuration 동안
-    /// 이동하도록 전체 낙하 시간을 역산한다 — 결과적으로 행마다 낙하 속도가 달라진다.
+    /// 노출 시간을 그대로 수축 시간으로 돌려준다. 링은 Point 자리에서 크기만 줄어들 뿐 이동하지 않으므로
+    /// 화면 기하가 개입할 여지가 없다 — 낙하 노드 시절 행마다 속도를 역산하던 계산은 사라졌다.
+    /// <paramref name="pointIndex"/>는 쓰이지 않지만 굽기 툴(PatternChartWindow)이 호출하는 시그니처라 유지한다.
     /// </summary>
     public float ComputeFallDuration(int pointIndex, float exposureDuration)
     {
-        EnsureLayoutInitialized();
-        Vector3 worldPosition = patternPoints[pointIndex].transform.position;
-        Vector2 targetLocalPos = WorldToLocal(fallingNodeParent, worldPosition);
-
-        float totalDistance = Mathf.Max(fallSpawnPositionY - targetLocalPos.y, 0f);
-        if (totalDistance <= 0f)
-            return exposureDuration;
-
-        float visibleDistance = Mathf.Clamp(screenTopY - targetLocalPos.y, 0f, totalDistance);
-
-        if (visibleDistance <= 0f)
-            return exposureDuration;
-
-        return totalDistance * exposureDuration / visibleDistance;
-    }
-
-    private void OnDrawGizmos()
-    {
-        if (fallingNodeParent == null) return;
-
-        Gizmos.color = Color.yellow;
-        Vector3 left = fallingNodeParent.TransformPoint(new Vector3(fallingNodeParent.rect.xMin, fallSpawnPositionY, 0f));
-        Vector3 right = fallingNodeParent.TransformPoint(new Vector3(fallingNodeParent.rect.xMax, fallSpawnPositionY, 0f));
-        Gizmos.DrawLine(left, right);
+        return exposureDuration;
     }
 
     private void OnPointPressed(int index)
@@ -507,6 +485,32 @@ public class PatternHandler : MonoBehaviour
             patternPoints[i].SetHitAreaRatio(hitAreaUsage[i] ? 1f : inactiveHitAreaRatio);
     }
 
+    /// <summary>
+    /// 살아 있는 <b>모든</b> 패턴(<see cref="activePatterns"/>)이 쓰는 Point의 노브만 표시한다.
+    ///
+    /// 판정 대상(<see cref="JudgeTarget"/>) 기준인 <see cref="ApplyHitAreas"/>와 기준이 다르다는 점에 주의 —
+    /// 링은 큐에 얹히기만 한 패턴에도 스폰되므로, 판정 대상만 기준으로 하면 아직 감춰진 노브 위에서
+    /// 다음 패턴의 링이 줄어드는 구간이 생긴다. 판정 영역 축소는 입력 오인 방지가 목적이라 지금처럼
+    /// 판정 대상 기준을 유지하고, 노브 표시는 시선 유도가 목적이라 합집합으로 잡는다.
+    ///
+    /// 합집합이라 "이전 패턴의 마지막 노드 = 다음 패턴의 첫 노드"가 같은 Point인 인수인계 구간에서도
+    /// 노브가 꺼졌다 켜지지 않는다.
+    /// </summary>
+    private void ApplyKnobVisibility(float duration)
+    {
+        for (int i = 0; i < knobUsage.Length; i++)
+            knobUsage[i] = false;
+
+        foreach (var active in activePatterns)
+        {
+            foreach (var data in active.Template.AllData)
+                knobUsage[data.index] = true;
+        }
+
+        for (int i = 0; i < patternPoints.Length; i++)
+            patternPoints[i].SetKnobVisible(knobUsage[i], duration);
+    }
+
     private void AppendPointToLine(int index)
     {
         if (connectedIndices.Count > 0 && connectedIndices[^1] == index)
@@ -583,10 +587,10 @@ public class PatternHandler : MonoBehaviour
         NodeType nodeType = target.GetNodeType(position);
         Vector3 worldPosition = patternPoints[index].transform.position;
 
-        ReleaseNodeOf(target, position);
+        ReleaseRingOf(target, position);
 
         OnJudged?.Invoke(result, index);
-        OnFallingNodeResolved?.Invoke(index, nodeType, worldPosition, result);
+        OnFocusRingResolved?.Invoke(index, nodeType, worldPosition, result);
 
         target.Advance();
 
@@ -621,6 +625,7 @@ public class PatternHandler : MonoBehaviour
         ResetPointColors(); // 판정 색(Perfect/Good/Miss)이 다음 패턴까지 남지 않도록 되돌린다
         TriggerLineFadeOut();
         RefreshJudgeTargetVisuals();
+        ApplyKnobVisibility(knobFadeDuration); // 남은 패턴들이 안 쓰는 노브만 페이드아웃
         RaiseJudgeTargetBegan(); // 승계된 다음 판정 대상의 성공 애니 예약 (다음이 없으면 no-op)
     }
 
@@ -630,86 +635,86 @@ public class PatternHandler : MonoBehaviour
             p.ResetColor();
     }
 
-    private void ProcessFallingNodeSpawns()
+    private void ProcessFocusRingSpawns()
     {
         for (int i = scheduledSpawns.Count - 1; i >= 0; i--)
         {
             if (Time.time < scheduledSpawns[i].spawnTime) continue;
 
-            SpawnFallingNode(scheduledSpawns[i].owner, scheduledSpawns[i].position, scheduledSpawns[i].fallDuration);
+            SpawnFocusRing(scheduledSpawns[i].owner, scheduledSpawns[i].position, scheduledSpawns[i].shrinkDuration);
             scheduledSpawns.RemoveAt(i);
         }
     }
 
-    private void SpawnFallingNode(ActivePattern owner, int position, float duration)
+    private void SpawnFocusRing(ActivePattern owner, int position, float duration)
     {
         int pointIndex = owner.GetPointIndex(position);
-        Color color = fallingNodeColorPalette != null && fallingNodeColorPalette.Length > 0
-            ? fallingNodeColorPalette[spawnCounter % fallingNodeColorPalette.Length]
+        Color color = focusRingColorPalette != null && focusRingColorPalette.Length > 0
+            ? focusRingColorPalette[spawnCounter % focusRingColorPalette.Length]
             : Color.white;
         spawnCounter++;
 
         Vector3 worldPosition = patternPoints[pointIndex].transform.position;
-        Vector2 targetLocalPos = WorldToLocal(fallingNodeParent, worldPosition);
+        Vector2 targetLocalPos = WorldToLocal(focusRingParent, worldPosition);
         NodeType nodeType = owner.GetNodeType(position);
 
-        var node = Pool.Instance.Get<FallingNodeView>(PoolKey.FallingNode, n =>
+        var ring = Pool.Instance.Get<FocusRingView>(PoolKey.FocusRing, r =>
         {
-            n.transform.SetParent(fallingNodeParent, false);
-            n.Initialize(pointIndex + 1, color, nodeType, targetLocalPos, fallSpawnPositionY, duration);
+            r.transform.SetParent(focusRingParent, false);
+            r.Initialize(pointIndex + 1, color, nodeType, targetLocalPos, focusRingStartScale, duration);
         });
-        node.OnArrived += HandleFallingNodeArrived;
+        ring.OnArrived += HandleFocusRingArrived;
 
-        activeFallingNodes.Add(new ActiveNode { owner = owner, position = position, view = node });
+        activeFocusRings.Add(new ActiveNode { owner = owner, position = position, view = ring });
 
-        OnFallingNodeSpawned?.Invoke(pointIndex, nodeType, worldPosition);
+        OnFocusRingSpawned?.Invoke(pointIndex, nodeType, worldPosition);
     }
 
-    private void HandleFallingNodeArrived(FallingNodeView node)
+    private void HandleFocusRingArrived(FocusRingView ring)
     {
-        node.OnArrived -= HandleFallingNodeArrived;
+        ring.OnArrived -= HandleFocusRingArrived;
 
-        RemoveNodeEntry(node);
+        RemoveRingEntry(ring);
 
-        Vector3 worldPosition = patternPoints[node.PointIndex].transform.position;
-        OnFallingNodeMissedArrival?.Invoke(node.PointIndex, node.Type, worldPosition);
+        Vector3 worldPosition = patternPoints[ring.PointIndex].transform.position;
+        OnFocusRingMissedArrival?.Invoke(ring.PointIndex, ring.Type, worldPosition);
 
-        Pool.Instance.Return(PoolKey.FallingNode, node);
+        Pool.Instance.Return(PoolKey.FocusRing, ring);
     }
 
-    private void RemoveNodeEntry(FallingNodeView node)
+    private void RemoveRingEntry(FocusRingView ring)
     {
-        for (int i = 0; i < activeFallingNodes.Count; i++)
+        for (int i = 0; i < activeFocusRings.Count; i++)
         {
-            if (activeFallingNodes[i].view != node) continue;
+            if (activeFocusRings[i].view != ring) continue;
 
-            activeFallingNodes.RemoveAt(i);
+            activeFocusRings.RemoveAt(i);
             return;
         }
     }
 
-    /// <summary>판정된 노드 하나를 회수한다.</summary>
-    private void ReleaseNodeOf(ActivePattern owner, int position)
+    /// <summary>판정된 링 하나를 회수한다.</summary>
+    private void ReleaseRingOf(ActivePattern owner, int position)
     {
-        for (int i = 0; i < activeFallingNodes.Count; i++)
+        for (int i = 0; i < activeFocusRings.Count; i++)
         {
-            if (activeFallingNodes[i].owner != owner || activeFallingNodes[i].position != position) continue;
+            if (activeFocusRings[i].owner != owner || activeFocusRings[i].position != position) continue;
 
-            ReleaseFallingNode(activeFallingNodes[i].view);
-            activeFallingNodes.RemoveAt(i);
+            ReleaseFocusRing(activeFocusRings[i].view);
+            activeFocusRings.RemoveAt(i);
             return;
         }
     }
 
-    /// <summary>패턴 완료/만료 시 그 패턴에 속한 낙하 노드와 남은 스폰 예약을 즉시 정리한다.</summary>
+    /// <summary>패턴 완료/만료 시 그 패턴에 속한 포커스 링과 남은 스폰 예약을 즉시 정리한다.</summary>
     private void ClearNodesOf(ActivePattern owner)
     {
-        for (int i = activeFallingNodes.Count - 1; i >= 0; i--)
+        for (int i = activeFocusRings.Count - 1; i >= 0; i--)
         {
-            if (activeFallingNodes[i].owner != owner) continue;
+            if (activeFocusRings[i].owner != owner) continue;
 
-            ReleaseFallingNode(activeFallingNodes[i].view);
-            activeFallingNodes.RemoveAt(i);
+            ReleaseFocusRing(activeFocusRings[i].view);
+            activeFocusRings.RemoveAt(i);
         }
 
         for (int i = scheduledSpawns.Count - 1; i >= 0; i--)
@@ -720,9 +725,9 @@ public class PatternHandler : MonoBehaviour
         }
     }
 
-    private void ReleaseFallingNode(FallingNodeView node)
+    private void ReleaseFocusRing(FocusRingView ring)
     {
-        node.OnArrived -= HandleFallingNodeArrived;
-        Pool.Instance.Return(PoolKey.FallingNode, node);
+        ring.OnArrived -= HandleFocusRingArrived;
+        Pool.Instance.Return(PoolKey.FocusRing, ring);
     }
 }

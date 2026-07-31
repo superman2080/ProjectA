@@ -62,7 +62,9 @@
       "Bash(git status *)",
       "Bash(cp __TRACKED_VAR__/Pattern.cs 'Assets/02. Scripts/Pattern/Pattern.cs')",
       "Bash(cp __TRACKED_VAR__/PatternHandler.cs 'Assets/02. Scripts/UI/PatternHandler.cs')",
-      "Bash(cp __TRACKED_VAR__/CLAUDE.md CLAUDE.md)"
+      "Bash(cp __TRACKED_VAR__/CLAUDE.md CLAUDE.md)",
+      "Bash(npm install:*)",
+      "Bash(git checkout *)"
     ]
   }
 }

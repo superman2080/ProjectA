@@ -1,3 +1,5 @@
+> ⚠️ **이 설계는 `docs/FocusRing/`으로 대체되었습니다.** 낙하 노드는 제거되고, 입력할 Point 자리에서 줄어드는 포커스 링으로 바뀌었습니다. 아래 내용은 이력으로만 남겨둡니다.
+
 # Plan_FallingNode.md — 패턴 노드 역할(시작/진행/끝) + 낙하 노드 시각화 구현
 
 > 기반 문서: `Research_FallingNode.md`
