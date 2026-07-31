@@ -30,15 +30,27 @@ namespace ChartGen
                 Play();
         }
 
+        // 구독한 대상을 그대로 들고 있다가 그 대상에서 해제한다. OnDisable에서 SoundManager.Instance를 다시 부르면
+        // 종료 순서상 SoundManager가 먼저 죽었을 때 게터가 새 인스턴스를 만들어 씬에 미아 오브젝트를 남긴다.
+        private SoundManager subscribedSoundManager;
+
         private void OnEnable()
         {
-            SoundManager.Instance.OnVolumeChanged += HandleVolumeChanged;
+            subscribedSoundManager = SoundManager.Instance;
+
+            if (subscribedSoundManager != null)
+                subscribedSoundManager.OnVolumeChanged += HandleVolumeChanged;
+
             ApplyMusicVolume();
         }
 
         private void OnDisable()
         {
-            SoundManager.Instance.OnVolumeChanged -= HandleVolumeChanged;
+            if (subscribedSoundManager == null)
+                return;
+
+            subscribedSoundManager.OnVolumeChanged -= HandleVolumeChanged;
+            subscribedSoundManager = null;
         }
 
         private void HandleVolumeChanged(VolumeChannel channel)
