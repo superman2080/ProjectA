@@ -23,8 +23,6 @@ namespace SliceSpace
     public class SliceTargetDirector : MonoBehaviour
     {
         [Header("References")]
-        [SerializeField] private PatternHandler handler;
-
         [Tooltip("칼이 지나가는 월드 지점. 표적은 여기로 다가와 갈라진다.")]
         [SerializeField] private Transform impactAnchor;
 
@@ -43,8 +41,9 @@ namespace SliceSpace
         [SerializeField] private float scatterJitter = 0.8f;
         [Tooltip("조각 회전 속도의 범위(도/초).")]
         [SerializeField] private float scatterSpin = 180f;
-        [Tooltip("조각에 걸리는 가속도. 0이면 직선으로 흩어지고, 아래로 주면 처지며 날아간다.")]
-        [SerializeField] private Vector3 scatterGravity = Vector3.zero;
+
+        [Tooltip("조각에 적용할 레이어. 조각끼리의 충돌은 자동으로 꺼진다(바닥하고만 부딪힌다).")]
+        [SerializeField] private int pieceLayer;
 
         [Header("Cleanup")]
         [Tooltip("절단/소멸 후 조각을 회수하기까지의 시간(초).")]
@@ -90,10 +89,6 @@ namespace SliceSpace
         private readonly List<Reservation> reservations = new List<Reservation>();
         private readonly List<Reservation> active = new List<Reservation>();
 
-        // 패턴 인스턴스 토큰 — OnPatternQueued에서 발급하고 완료 이벤트와 FIFO로 매칭한다.
-        private readonly Queue<int> pendingTokens = new Queue<int>();
-        private int nextToken;
-
         // 프리팹별 자체 큐(EffectManager 선례). Pool(PoolKey 단일 매핑)은 표적 프리팹 수 증가에 맞지 않는다.
         private readonly Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
         private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
@@ -113,34 +108,32 @@ namespace SliceSpace
             Prewarm();
         }
 
-        void OnEnable()
+        // ── 공개 API (EnemyDirector가 유일한 호출자) ────────────────────────────
+        //
+        // 이 클래스는 더 이상 PatternHandler 이벤트를 직접 구독하지 않는다.
+        // 예약 소스를 한 곳(EnemyDirector)으로 모아야 토큰 발급·성패 확정이 한 줄로 흐른다 —
+        // 두 디렉터가 같은 이벤트를 각자 구독하면 구독 순서에 따라 결과가 달라진다.
+
+        /// <summary>
+        /// 투사체 하나를 예약한다. 도착 시각은 <b>판정이 끝나는 순간</b>이어야 닿을 때 성패가 이미 확정되어 있다.
+        /// 접근시간은 패턴이 살아 있는 구간으로 클램프된다 — 투사체는 첫 노드보다 먼저 나타날 수 없다.
+        /// </summary>
+        /// <param name="token">패턴 인스턴스 토큰. <see cref="Resolve"/>가 같은 값으로 성패를 확정한다.</param>
+        /// <param name="spawnOverride">발사 지점. 지정하면 <c>spawnAnchor</c> 대신 이 위치에서 날아온다(쏘는 적의 링 위치).</param>
+        public void Reserve(int token, SliceSet set, float startTime, float impactTime, Vector2 offset, Vector3? spawnOverride = null)
         {
-            if (handler == null) return;
-            handler.OnPatternQueued += HandlePatternQueued;
-            handler.OnPatternComplete += HandlePatternComplete;
-            handler.OnJudgeTargetFirstMiss += HandleFirstMiss;
-            handler.OnAllPatternsCleared += HandleAllCleared;
-        }
-
-        void OnDisable()
-        {
-            if (handler == null) return;
-            handler.OnPatternQueued -= HandlePatternQueued;
-            handler.OnPatternComplete -= HandlePatternComplete;
-            handler.OnJudgeTargetFirstMiss -= HandleFirstMiss;
-            handler.OnAllPatternsCleared -= HandleAllCleared;
-        }
-
-        // ── 이벤트 처리 ──────────────────────────────────────────────────────────
-
-        private void HandlePatternQueued(PatternQueuedInfo info)
-        {
-            int token = nextToken++;
-            pendingTokens.Enqueue(token);
-
-            var template = info.Template;
-            var set = template != null ? template.SliceTarget : null;
             if (set == null) return; // 무연출
+
+            // 휴머노이드(스킨드) 세트는 시체 프리팹이 산출물이라 조각 배열이 비어 있다.
+            // IsUsable은 그쪽 기준으로 true를 돌려주므로 여기서 따로 거른다 —
+            // 안 거르면 원본만 날아와 조각 없이 사라지는, 원인 찾기 어려운 무연출이 된다.
+            if (set.Skinned)
+            {
+                Debug.LogWarning(
+                    $"[SliceTargetDirector] '{set.name}'은 휴머노이드(시체) 세트라 투사체로 쓸 수 없습니다. " +
+                    "채보의 '원거리 오브젝트'에는 일반 메쉬 모드로 구운 세트를 지정하세요.", set);
+                return;
+            }
 
             if (!set.IsUsable)
             {
@@ -148,27 +141,37 @@ namespace SliceSpace
                 return;
             }
 
-            // 판정이 끝나는 순간에 도착시킨다 — 그래야 닿을 때 성패가 이미 확정되어 있다.
-            float impactTime = info.Deadline + template.SliceTargetImpactOffset;
-
-            // 표적은 첫 노드보다 먼저 나타날 수 없으므로, 접근시간의 상한은 패턴이 살아 있는 구간 전체다.
-            float approach = Mathf.Min(approachDuration, impactTime - info.StartTime);
+            float approach = Mathf.Min(approachDuration, impactTime - startTime);
             approach = Mathf.Max(approach, 0.01f);
 
             // 배치 오프셋은 스폰·임팩트 양쪽에 똑같이 실린다 — 경로가 기울지 않고 나란히 평행이동하도록.
             Vector3 anchor = impactAnchor != null ? impactAnchor.position : transform.position;
-            var offset = new Vector3(template.SliceTargetOffset.x, template.SliceTargetOffset.y, 0f);
+            var offset3 = new Vector3(offset.x, offset.y, 0f);
 
             reservations.Add(new Reservation
             {
                 token = token,
                 set = set,
-                spawnPos = SpawnBase(anchor) + offset,
-                impactPos = anchor + offset,
+                spawnPos = (spawnOverride ?? SpawnBase(anchor)) + offset3,
+                impactPos = anchor + offset3,
                 spawnTime = impactTime - approach,
                 impactTime = impactTime,
                 outcome = Outcome.Pending
             });
+        }
+
+        /// <summary>예약/활성 투사체의 성패를 확정한다. 이미 확정된 것은 건드리지 않는다.</summary>
+        public void Resolve(int token, bool success)
+        {
+            SetOutcome(token, success ? Outcome.Success : Outcome.Failure);
+        }
+
+        /// <summary>곡 중단 등으로 전부 정리한다.</summary>
+        public void ClearAll()
+        {
+            for (int i = active.Count - 1; i >= 0; i--) Recycle(active[i]);
+            active.Clear();
+            reservations.Clear();
         }
 
         /// <summary>표적이 등장하는 기준 지점. 앵커가 없으면 임팩트 지점에서 +Z로 물러난 곳을 쓴다.</summary>
@@ -177,31 +180,6 @@ namespace SliceSpace
             return spawnAnchor != null
                 ? spawnAnchor.position
                 : anchor + Vector3.forward * fallbackSpawnDistance;
-        }
-
-        private void HandlePatternComplete(PatternCompletionInfo info)
-        {
-            // PatternCompletionInfo는 Template만 주므로 매칭은 큐 순서(FIFO)로 한다 —
-            // 판정 대상은 언제나 선두 하나이고 완료도 선두부터 순서대로 일어나므로 안전하다.
-            if (pendingTokens.Count == 0) return;
-            int token = pendingTokens.Dequeue();
-
-            SetOutcome(token, info.AllCorrect ? Outcome.Success : Outcome.Failure);
-        }
-
-        private void HandleFirstMiss()
-        {
-            // 현재 판정 대상 = 아직 확정되지 않은 가장 오래된 토큰.
-            if (pendingTokens.Count == 0) return;
-            SetOutcome(pendingTokens.Peek(), Outcome.Failure);
-        }
-
-        private void HandleAllCleared()
-        {
-            for (int i = active.Count - 1; i >= 0; i--) Recycle(active[i]);
-            active.Clear();
-            reservations.Clear();
-            pendingTokens.Clear();
         }
 
         private void SetOutcome(int token, Outcome outcome)
@@ -250,7 +228,9 @@ namespace SliceSpace
             {
                 var r = active[i];
                 if (r.view == null) { active.RemoveAt(i); continue; }
-                if (!r.view.Resolved || r.view.TimeSinceResolved < debrisLifetime) continue;
+                // 수명이 다했거나, 조각이 전부 잠들었으면(바닥에 눕고 멈춤) 이르게 회수한다.
+                if (!r.view.Resolved) continue;
+                if (r.view.TimeSinceResolved < debrisLifetime && !r.view.AllPiecesSettled) continue;
 
                 Recycle(r);
                 active.RemoveAt(i);
@@ -309,7 +289,7 @@ namespace SliceSpace
                 spawned.Add(piece);
             }
 
-            r.view.Slice(spawned, scatterSpeed, scatterJitter, scatterSpin, scatterGravity, r.token);
+            r.view.Slice(spawned, scatterSpeed, scatterJitter, scatterSpin, r.token, pieceLayer);
             PlayEffect(sliceEffectPrefab, r.impactPos);
         }
 

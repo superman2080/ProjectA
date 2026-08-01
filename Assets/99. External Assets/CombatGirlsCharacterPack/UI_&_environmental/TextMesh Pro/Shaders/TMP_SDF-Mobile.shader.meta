@@ -9,8 +9,9 @@ ShaderImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 322644
-  packageName: CombatGirls_KatanaCharacterPack
-  packageVersion: 1.1
-  assetPath: Assets/CombatGirlsCharacterPack/UI_&_environmental/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader
-  uploadId: 838896
+  productId: 127325
+  packageName: Particle Pack
+  packageVersion: 3.1
+  assetPath: Assets/99. External Assets/CombatGirlsCharacterPack/UI_&_environmental/TextMesh
+    Pro/Shaders/TMP_SDF-Mobile.shader
+  uploadId: 896138

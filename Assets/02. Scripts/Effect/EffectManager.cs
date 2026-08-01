@@ -13,6 +13,8 @@ public class EffectManager : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private PatternHandler handler;
+    [Tooltip("전투 연출 트리거(적 처치 등). 비우면 그 트리거만 무연출.")]
+    [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
     [Tooltip("판정/라인연결 이펙트가 재생되는 전경 컨테이너(패턴인풋 앞).")]
     [SerializeField] private RectTransform overlayLayer;
     [Tooltip("배경 앰비언트가 배치되는 후경 컨테이너(패턴인풋 뒤).")]
@@ -55,6 +57,8 @@ public class EffectManager : MonoBehaviour
             handler.OnNodeConnected += HandleNodeConnected;
             handler.OnPatternComplete += HandlePatternComplete;
         }
+
+        if (enemyDirector != null) enemyDirector.OnEnemyKilled += HandleEnemyKilled;
     }
 
     void OnDisable()
@@ -65,6 +69,15 @@ public class EffectManager : MonoBehaviour
             handler.OnNodeConnected -= HandleNodeConnected;
             handler.OnPatternComplete -= HandlePatternComplete;
         }
+
+        if (enemyDirector != null) enemyDirector.OnEnemyKilled -= HandleEnemyKilled;
+    }
+
+    /// <summary>적이 갈라지는 자리에 처치 이펙트. 카탈로그가 비면 무연출이라 배선 없이도 안전하다.</summary>
+    private void HandleEnemyKilled(EnemySpace.EnemyView view)
+    {
+        if (view == null) return;
+        Play(EffectTrigger.EnemyKilled, view.transform.position);
     }
 
     // ─────────────────────────── 풀 구성 ───────────────────────────

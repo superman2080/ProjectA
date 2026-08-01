@@ -6,6 +6,7 @@ public enum CameraTrigger
     PatternSuccess, // 표적이 갈라지는 순간(Deadline)
     PatternMiss,    // 첫 미스 순간 — 피격(Hit) 애니메이션과 동기
     PatternFailure, // 표적이 충돌·소멸하는 순간(Deadline)
+    EnemyKilled,    // 적 처치 — 무쌍 타격감의 주 큐(히트스톱을 못 쓰므로 여기서 낸다)
 }
 
 /// <summary>

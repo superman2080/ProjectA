@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: Enemy_Samurai_Male_DoubleSlice
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 7891724665517407530, guid: 0b6c0dc99f690d6448862df79bfe876c, type: 3}
+  piecePrefabs: []
+  pieceLocalOffsets: []
+  pieceScatterDirs: []
+  bakedPlanes:
+  - normal: {x: 0.09394958, y: -0.9945219, z: 0.04582225}
+    distance: 0.032450404
+  - normal: {x: 0.0939496, y: -0.9945219, z: 0.045822214}
+    distance: -0.7395921
+  shape: 5
+  skinned: 1
+  corpsePrefab: {fileID: 3499337412459899304, guid: ffd9386a0bfa6904dbe4c5777d51801d, type: 3}
+  rootPieceIndex: 6
+  bakedPoseClip: {fileID: 7400000, guid: b09ed3b8cfb710946a0bd35187498bd2, type: 3}
+  bakedPoseTime: 0.25476682
+  initialPoolSize: 2
+  maxPoolSize: 8

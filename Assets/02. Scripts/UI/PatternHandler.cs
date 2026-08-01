@@ -37,6 +37,14 @@ public class PatternHandler : MonoBehaviour
 #if UNITY_EDITOR
     [Header("Debug (Editor Only)")]
     [SerializeField] private Pattern debugTestPattern;
+    [Tooltip("씬 시작에 위 패턴을 자동 투입한다. 끄면 우클릭 메뉴 Debug: Set Test Pattern으로만 투입된다.\n" +
+             "켜면 EnemyDirector.PrepareStage보다 먼저 터져 적 연출이 빠진 채 판정만 돈다.")]
+    [SerializeField] private bool debugAutoRunOnStart = false;
+    [Tooltip("첫 노드까지의 여유(초). 링을 보고 준비할 시간.")]
+    [SerializeField] private float debugLeadTime = 1.0f;
+    [Tooltip("노드 간 간격(초). 채보 최소 간격이 0.4초다.")]
+    [SerializeField] private float debugNodeInterval = 0.4f;
+    [Tooltip("비우거나 노드 수와 다르면 위 두 값으로 자동 생성한다. 특정 리듬을 시험할 때만 채운다.")]
     [SerializeField] private float[] debugInputTimes;
     [SerializeField] private float[] debugExposureDurations;
 
@@ -54,12 +62,41 @@ public class PatternHandler : MonoBehaviour
     private JudgementResult? debugLastUsedMode;
     public JudgementResult? DebugLastUsedMode => debugLastUsedMode;
 
+    /// <summary>
+    /// 채보 없이 패턴 하나를 지금 투입한다. <c>debugInputTimes</c>가 비었거나 노드 수와 안 맞으면
+    /// <b>균등 간격으로 자동 생성</b>한다 — 패턴을 바꿀 때마다 배열을 손보지 않아도 되게.
+    ///
+    /// <para>적 연출까지 보려면 <b>먼저 <c>EnemyDirector</c>의 <c>Debug: Prepare Stage</c></b>를 눌러야 한다.
+    /// 정상 재생에서는 <c>ChartPlayer</c>가 카운트다운에서 무대를 세우지만 이 경로엔 그게 없다.</para>
+    /// </summary>
     [ContextMenu("Debug: Set Test Pattern")]
     private void DebugSetTestPattern()
     {
-        if (debugTestPattern == null || debugInputTimes == null || debugInputTimes.Length == 0)
+        if (debugTestPattern == null)
+        {
+            Debug.LogWarning("[PatternHandler] debugTestPattern이 비어 있습니다.", this);
             return;
-        SetPattern(debugTestPattern, debugInputTimes, null, debugExposureDurations);
+        }
+
+        int nodeCount = debugTestPattern.AllData.Count;
+        float[] times = debugInputTimes != null && debugInputTimes.Length == nodeCount
+            ? debugInputTimes
+            : BuildDebugTimes(nodeCount);
+
+        SetPattern(debugTestPattern, times,
+            null,
+            debugExposureDurations != null && debugExposureDurations.Length == nodeCount ? debugExposureDurations : null);
+
+        Debug.Log($"[PatternHandler] 디버그 투입 '{debugTestPattern.name}' — 노드 {nodeCount}개, " +
+                  $"첫 입력 +{times[0]:0.00}s, 마지막 +{times[nodeCount - 1]:0.00}s.", this);
+    }
+
+    /// <summary>균등 간격 입력 시각(투입 시각 기준 상대). 채보 최소 간격(0.4초)을 기본으로 삼는다.</summary>
+    private float[] BuildDebugTimes(int nodeCount)
+    {
+        var times = new float[nodeCount];
+        for (int i = 0; i < nodeCount; i++) times[i] = debugLeadTime + i * debugNodeInterval;
+        return times;
     }
 
     /// <summary>판정 대상의 다음 노드를 <paramref name="forced"/> 판정으로 강제 입력한다. 기존 입력 파이프라인을 그대로 재사용한다.</summary>
@@ -189,7 +226,9 @@ public class PatternHandler : MonoBehaviour
         RefreshJudgeTargetVisuals();
         ApplyKnobVisibility(0f); // 패턴 없는 초기 상태 → 9개 전부 숨김. 첫 프레임 깜빡임을 막으려 즉시 적용한다.
 
-        DebugSetTestPattern();
+        // 자동 투입은 옵트인이다. 켜 두면 적 무대(EnemyDirector.PrepareStage)가 서기 전에 패턴이 터져
+        // 전투 연출이 통째로 빠진 채 판정만 도는 그림이 된다.
+        if (debugAutoRunOnStart) DebugSetTestPattern();
     }
 
     void OnDestroy()

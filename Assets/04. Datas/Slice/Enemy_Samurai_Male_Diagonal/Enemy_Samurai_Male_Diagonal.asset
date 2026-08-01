@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: Enemy_Samurai_Male_Diagonal
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 100150, guid: 8afe723514f619143a45ea089476b2cc, type: 3}
+  piecePrefabs: []
+  pieceLocalOffsets: []
+  pieceScatterDirs: []
+  bakedPlanes:
+  - normal: {x: 0.18648484, y: 0.73370177, z: -0.65337974}
+    distance: 0.53266525
+  shape: 5
+  skinned: 1
+  corpsePrefab: {fileID: 4943474227827327861, guid: e1620ed21195cc849a5b90805256c5cf, type: 3}
+  rootPieceIndex: 0
+  bakedPoseClip: {fileID: 7400000, guid: a7ced0bb2e3d3ac499044e59fc812ea4, type: 2}
+  bakedPoseTime: 0.04723985
+  initialPoolSize: 2
+  maxPoolSize: 8
