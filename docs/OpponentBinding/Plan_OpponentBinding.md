@@ -204,3 +204,6 @@ float speed = Mathf.Clamp(clipLength / window, 1f, maxQuickshiftSpeed);   // max
 - `killOnSuccess = false` 엔트리의 연출 (지금 채보는 전부 true)
 - 링 인원·반경 튜닝
 - 승격 규칙 자체의 변경 (D-3 — 건드리지 않는다)
+
+> **일부 폐기(2026-08-02).** `StageOnDeck`/`bindToImpactWindow`는 무대 고정으로 제거됐다.
+> **상대 배정을 판정 대상 승계 시점에 한다는 규칙은 그대로 살아 있고**, 창으로 표적을 고르게 되면서 오히려 더 중요해졌다. → `docs/StageTraversal/`

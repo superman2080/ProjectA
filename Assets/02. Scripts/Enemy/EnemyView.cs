@@ -32,11 +32,24 @@ namespace EnemySpace
         [Tooltip("공격 슬롯에 물려 있는 placeholder 클립.")]
         [SerializeField] private AnimationClip attackPlaceholder;
         [SerializeField] private string attackSpeedParam = "AttackSpeed";
+        [Tooltip("사망 슬롯 스테이트 이름. 패턴이 준 사망 클립이 런타임에 주입된다.")]
+        [SerializeField] private string deathStateName = "Death";
+        [Tooltip("사망 슬롯에 물려 있는 placeholder 클립. 패턴에 사망 클립이 없으면 이게 그대로 재생된다(폴백).")]
+        [SerializeField] private AnimationClip deathPlaceholder;
+        [SerializeField] private string deathSpeedParam = "DeathSpeed";
+        [Tooltip("죽으면서 결투 위치를 비켜 주는 거리(m). 다음 상대가 같은 자리로 들어오기 때문.\n" +
+                 "루트 모션이 있는 사망 클립이면 0으로 둬서 끈다.")]
+        [SerializeField] private float deathClearOffset = 0.6f;
         [SerializeField] private string idleStateName = "Idle";
         [Tooltip("이동 구간에만 드러낼 로코모션 스테이트. 기본 자세는 Idle이고 움직일 때만 여기로 바뀐다.")]
         [SerializeField] private string moveStateName = "Run";
         [Tooltip("이 거리(m) 이하로 움직이면 로코모션을 켜지 않는다 — 제자리에서 뛰는 것처럼 보이지 않게.")]
         [SerializeField] private float minMoveDistance = 0.3f;
+        [Tooltip("결투 위치로 접근할 때의 이동 속도(m/s). 도착 시각까지 시간이 남으면 이 속도로 먼저 가서 선다.")]
+        [SerializeField] private float moveSpeed = 3f;
+
+        /// <summary>이 적이 접근에 쓰는 속도(m/s). 디렉터가 "창 안에 닿을 수 있는가"를 판단할 때 같은 값을 봐야 한다.</summary>
+        public float MoveSpeed => moveSpeed;
         [Tooltip("리액션(피격·회피)이 로코모션에 덮이지 않게 지키는 시간(초). 리액션 클립 길이에 맞춘다.")]
         [SerializeField] private float reactionHoldDuration = 0.6f;
 
@@ -120,6 +133,8 @@ namespace EnemySpace
         private AnimatorOverrideController overrideController;
         private int attackStateHash;
         private int attackSpeedHash;
+        private int deathStateHash;
+        private int deathSpeedHash;
         private MaterialPropertyBlock propertyBlock;
         private Renderer[] renderers;
         private int dissolveId;
@@ -130,6 +145,8 @@ namespace EnemySpace
 
             attackStateHash = Animator.StringToHash(attackStateName);
             attackSpeedHash = Animator.StringToHash(attackSpeedParam);
+            deathStateHash = Animator.StringToHash(deathStateName);
+            deathSpeedHash = Animator.StringToHash(deathSpeedParam);
             dissolveId = Shader.PropertyToID(dissolveProperty);
             renderers = GetComponentsInChildren<Renderer>(true);
             propertyBlock = new MaterialPropertyBlock();
@@ -319,15 +336,33 @@ namespace EnemySpace
             }
 
             ScheduleFace(faceTarget);
-            ScheduleMove(transform.position, duelPosition, Time.time, arriveTime);
+            ScheduleMove(transform.position, duelPosition, Time.time, EarliestArrival(transform.position, duelPosition, arriveTime));
+        }
+
+        /// <summary>
+        /// <b>도착 시각을 앞당긴다</b> — <paramref name="latest"/>까지 끌지 않고 <see cref="moveSpeed"/>로 갈 수 있는 만큼 빨리 간다.
+        ///
+        /// <para>이게 없으면 <b>적이 도착하는 순간이 곧 베이는 순간</b>이라 서 있는 구간이 아예 없다.
+        /// 거리는 1m 남짓인데 창은 1초가 넘으므로 <c>Lerp</c>가 초속 0.7m로 기어가고,
+        /// 화면에는 <b>제자리에 선 것처럼 보이는데 Run이 계속 도는</b> 그림이 된다
+        /// (<c>moving</c>이 true인 동안 <see cref="ApplyLocomotion"/>이 로코모션을 유지하므로).</para>
+        ///
+        /// <para>앞당기는 건 <b>언제나 안전하다</b> — "클립 시작 전에 도착해 있어야 한다"는 제약의 방향과 같다.
+        /// 남는 시간에는 서서 <see cref="TickGaze"/>가 상대를 바라본다.</para>
+        /// </summary>
+        private float EarliestArrival(Vector3 from, Vector3 to, float latest)
+        {
+            if (moveSpeed <= 0f) return latest;
+
+            float distance = Vector3.ProjectOnPlane(to - from, Vector3.up).magnitude;
+            return Mathf.Min(latest, Time.time + distance / moveSpeed);
         }
 
         /// <summary>
         /// 성패 확정 — 리액션을 재생하고 <b>짧게 물러난다</b>.
         ///
-        /// <para><b>링까지 돌아가지 않는다.</b> 실패해도 교전은 같은 상대와 이어지므로, 링(6m) 복귀는
-        /// 그 자체로 틀렸다 — 다음 패턴에서 다시 6m를 달려와야 한다. 링 복귀는 <b>상대 자격을 잃을 때만</b>
-        /// 한다(<see cref="ReturnToRing"/>).</para>
+        /// <para><b>제자리로 돌아가지 않는다.</b> 무대에 자기 자리가 따로 있는 게 아니라
+        /// <b>물러난 그 자리가 새 자리</b>다 — 플레이어가 다시 찾아온다.</para>
         ///
         /// <para>이 후퇴는 <b>덮이지 않는다</b> — 곧바로 이어지는 <see cref="AssignAttack"/>이
         /// <see cref="ScheduleMoveAfter"/>로 뒤에 붙기 때문. 그래서 "물러났다가 다시 붙는" 그림이 실제로 렌더된다.</para>
@@ -353,19 +388,6 @@ namespace EnemySpace
             float duration = Mathf.Max(retreatDuration, 0.01f);
             retreatUntil = Time.time + duration;
             ScheduleMove(transform.position, target, Time.time, retreatUntil);
-        }
-
-        /// <summary>상대 자격을 잃었다 — 링의 제자리로 돌아간다.</summary>
-        public void ReturnToRing(float returnDuration)
-        {
-            if (Current == Phase.Dying) return;
-
-            hasPendingAttack = false;
-            Current = Phase.Recover;
-            retreatUntil = 0f;
-
-            ScheduleFace(RingPosition + (RingPosition - transform.position));
-            ScheduleMove(transform.position, RingPosition, Time.time, Time.time + Mathf.Max(returnDuration, 0.01f));
         }
 
         /// <summary>
@@ -500,7 +522,8 @@ namespace EnemySpace
             if (hasQueuedMove)
             {
                 hasQueuedMove = false;
-                ScheduleMove(moveTo, queuedTo, Time.time, queuedEnd);
+                // 이어받는 구간도 끝까지 끌지 않는다 — 후퇴 뒤 접근이 기어가면 같은 증상이 난다.
+                ScheduleMove(moveTo, queuedTo, Time.time, EarliestArrival(moveTo, queuedTo, queuedEnd));
                 ScheduleFace(queuedFace);
                 return;
             }
@@ -528,6 +551,81 @@ namespace EnemySpace
             PlayAttack(pendingAttack, speed);
             attackStarted = true;
             Current = Phase.Windup;
+        }
+
+        /// <summary>
+        /// 사망 클립을 재생하고 <b>절단이 일어날 시각</b>(트림 끝)을 돌려준다.
+        ///
+        /// <para><b>공유하는 것은 임팩트 순간 하나뿐이다.</b> 플레이어 공격과 이 클립은 길이도 저작 배속도
+        /// 압축을 유발하는 제약도 달라 배속이 같아질 이유가 없다 — 시작이나 끝을 맞추는 정렬은 성립하지 않는다.
+        /// 각자 <paramref name="impactTime"/>이라는 같은 절대 시각에 <b>자기 임팩트 프레임</b>이 오도록
+        /// 자기 시작 시점과 자기 배속을 역산한다.</para>
+        ///
+        /// <para><b>지금 즉시 시작한다.</b> 처치 확정보다 이른 시각은 알 수가 없기 때문 —
+        /// 성패가 마지막 노드 입력에서야 정해진다. 그래서 임팩트까지 남은 실시간은
+        /// <c>goodWindow</c>(0.1초) + <c>impactOffset</c>뿐이고, 정렬은 배속이 담당한다.</para>
+        ///
+        /// <para>⚠ <b>배속은 클립 전체에 걸린다.</b> <c>ResolvePlaySpeed</c>는 임팩트 <i>이전</i> 구간을
+        /// 남은 시간에 맞추려 배속을 올리는데, 그 값이 Speed Multiplier라 <b>쓰러지는 구간까지 같이 빨라지고
+        /// 반환하는 절단 시각도 그만큼 당겨진다.</b> 즉 사망 클립의 ImpactTime 위치가 쓰러지는 속도를 정한다 —
+        /// 트림 시작 근처에 찍어야 한다(죽는 모션은 원래 '맞는 순간'이 시작점이라 자연스럽게 맞는다).</para>
+        /// </summary>
+        public float AssignDeath(ClipAlignment death, float impactTime, float maxSpeed)
+        {
+            hasPendingAttack = false;
+            Current = Phase.Dying;
+            reactionUntil = 0f;
+            retreatUntil = 0f;
+
+            // 클립이 없으면 예전 그대로 임팩트에 터진다. placeholder가 물려 있으면 그게 재생된다.
+            if (death == null || !death.IsUsable)
+            {
+                ClearDuelSpot(impactTime);
+                return impactTime;
+            }
+
+            float speed = death.ResolvePlaySpeed(Time.time, impactTime, maxSpeed, out bool clamped);
+            if (clamped)
+            {
+                Debug.LogWarning(
+                    $"[EnemyView] '{name}' 사망 클립이 배속 상한({maxSpeed:0.0})에 걸려 임팩트 정렬이 어긋납니다. " +
+                    $"클립의 ImpactTime을 트림 시작 쪽으로 당기세요.", this);
+            }
+
+            PlayDeath(death, speed);
+
+            float burstTime = Time.time + death.ResolvedDuration / Mathf.Max(speed, 0.01f);
+            ClearDuelSpot(burstTime);
+            return burstTime;
+        }
+
+        /// <summary>
+        /// 죽으면서 결투 위치를 비켜 준다. 승격은 처치 확정 즉시 일어나므로
+        /// <b>다음 상대가 시체가 선 자리로 걸어 들어온다</b> — 예전에는 임팩트에 사라져 문제가 없었다.
+        /// </summary>
+        private void ClearDuelSpot(float until)
+        {
+            if (deathClearOffset <= 0f) return;
+
+            Vector3 back = Vector3.ProjectOnPlane(-transform.forward, Vector3.up);
+            if (back.sqrMagnitude < 1e-6f) return;
+
+            // ApplyLocomotion은 Phase.Dying에서 스스로 물러나므로 사망 클립을 덮지 않는다.
+            ScheduleMove(transform.position, transform.position + back.normalized * deathClearOffset, Time.time, until);
+        }
+
+        private void PlayDeath(ClipAlignment alignment, float speed)
+        {
+            if (animator == null) return;
+
+            // 슬롯을 Attack과 나눈다 — 적이 공격 도중에 죽으면 같은 슬롯을 덮어 진행 중인 클립이 튄다.
+            if (overrideController != null && deathPlaceholder != null)
+                overrideController[deathPlaceholder] = alignment.Clip;
+
+            animator.SetFloat(deathSpeedHash, speed);
+
+            // fixedTimeOffset은 '스테이트 재생 초'라 speed가 곱해진다 — 클립 초를 speed로 나눠 넘겨야 맞다.
+            animator.CrossFadeInFixedTime(deathStateHash, crossFadeDuration, 0, alignment.StartOffset / Mathf.Max(speed, 0.01f));
         }
 
         private void PlayAttack(ClipAlignment alignment, float speed)

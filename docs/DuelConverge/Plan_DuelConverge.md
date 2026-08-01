@@ -204,3 +204,6 @@ playerTarget = center + clamp(playerTarget − center, maxOffset)
 ## 5. 피드백
 
 >>> 여기에 `>>>`로 의견을 남겨 주세요.
+
+> **폐기됨(2026-08-02).** 리시(`maxOffset`/`ArenaOrigin`)와 대기석 전진 배치는 무대가 월드에 고정되면서 사라졌다.
+> 수렴 자체는 남았고 비율만 `playerShare`(0.85)로 저작값이 됐다. → `docs/StageTraversal/`

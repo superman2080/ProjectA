@@ -539,11 +539,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62cbe53ec0e8b004ab83d7b663b93274, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Hovl.HS_SwordMeshTrail
-  preset: {fileID: 11400000, guid: e471f36a59da71745af10f6f55feb009, type: 2}
+  preset: {fileID: 11400000, guid: 9dac58285ee354444871625d6a5d064d, type: 2}
   trailMaterial: {fileID: 0}
   dissolvePropertyName: _Dissolve
   maximumDissolve: 0
-  trailLifetime: 0.3
+  trailLifetime: 0.25
   minimumSectionDistance: 0.015
   sampleInterval: 0
   linesAlongTrail: 2
@@ -563,11 +563,11 @@ MonoBehaviour:
     - serializedVersion: 3
       time: 1
       value: 0
-      inSlope: -0.068746336
-      outSlope: -0.068746336
+      inSlope: -2.1748688
+      outSlope: -2.1748688
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0.14634144
+      inWeight: 0.08048779
       outWeight: 0
     m_PreInfinity: 2
     m_PostInfinity: 2
@@ -577,8 +577,8 @@ MonoBehaviour:
   smoothLowFps: 1
   maximumSmoothedSectionDistance: 0.08
   maxIntermediateSectionsPerFrame: 8
-  pointA: {fileID: 553264686}
-  pointB: {fileID: 277461036}
+  pointA: {fileID: 277461036}
+  pointB: {fileID: 553264686}
   automaticAxis: 0
   recalculatePointsOnAwake: 0
   pointAInset: 0
@@ -587,9 +587,8 @@ MonoBehaviour:
   sortingOrder: 0
   receiveShadows: 0
   shadowCastingMode: 0
-  presetPointAEffectInstances:
-  - {fileID: 749151192}
-  appliedEffectPreset: {fileID: 11400000, guid: e471f36a59da71745af10f6f55feb009, type: 2}
+  presetPointAEffectInstances: []
+  appliedEffectPreset: {fileID: 11400000, guid: 9dac58285ee354444871625d6a5d064d, type: 2}
 --- !u!1 &277461035
 GameObject:
   m_ObjectHideFlags: 0
@@ -600,7 +599,7 @@ GameObject:
   m_Component:
   - component: {fileID: 277461036}
   m_Layer: 0
-  m_Name: Trail Point B
+  m_Name: Trail Point A
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -615,7 +614,7 @@ Transform:
   m_GameObject: {fileID: 277461035}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.02, y: 0.9409, z: -0}
+  m_LocalPosition: {x: 0.02, y: 0.9409, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1483,7 +1482,7 @@ GameObject:
   m_Component:
   - component: {fileID: 553264686}
   m_Layer: 0
-  m_Name: Trail Point A
+  m_Name: Trail Point B
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1501,8 +1500,7 @@ Transform:
   m_LocalPosition: {x: 0, y: 0.09, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 749151195}
+  m_Children: []
   m_Father: {fileID: 261642896}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &618781547
@@ -1882,16 +1880,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &749151192 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5872680933739280104, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-  m_PrefabInstance: {fileID: 1771815894}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &749151195 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-  m_PrefabInstance: {fileID: 1771815894}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &791079312
 GameObject:
   m_ObjectHideFlags: 0
@@ -3901,24 +3889,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemySpace.EnemyDirector
   handler: {fileID: 1565592730}
-  arenaCenter: {fileID: 6328205791487977058}
+  arenaCenter: {fileID: 1979404807}
   duelAnchor: {fileID: 1923274461}
   viewCamera: {fileID: 330585545}
   projectileDirector: {fileID: 1621256090}
-  ringRadius: 12.5
-  radiusJitter: 1
-  minAngleGap: 30
+  stageRadius: 8
   ringCount: 6
-  entryDistanceMul: 2.2
-  entryDuration: 2
+  minSpacing: 2.5
+  minPlayerDistance: 4
+  spawnCandidateCount: 24
   rosterPool:
   - {fileID: 11400000, guid: 717046d96ae1fdd48a90a1a922ee9cac, type: 2}
-  returnDuration: 0.5
   maxAttackSpeed: 2.5
-  minConvergeTime: 0.25
-  approachSpeed: 3
-  stagingDistance: 2
-  bindToImpactWindow: 0.45
+  playerShare: 0.85
+  cruiseSpeed: 4.5
+  minTargetDistance: 2
   failRetreatDistance: 1.5
   retreatDuration: 0.25
   scatterSpeed: 2.5
@@ -3935,7 +3920,6 @@ MonoBehaviour:
   drawGizmos: 1
   gizmoRingColor: {r: 0.3, g: 0.8, b: 1, a: 1}
   gizmoDuelColor: {r: 1, g: 0.35, b: 0.2, a: 1}
-  maxOffset: 10
 --- !u!4 &1729954865
 Transform:
   m_ObjectHideFlags: 0
@@ -3951,63 +3935,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &1771815894
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 553264686}
-    m_Modifications:
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.00000009848731
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0.0000001639127
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0.00000003539024
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: -90
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5475699194613571405, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5872680933739280104, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
-      propertyPath: m_Name
-      value: SlashDarkSubstance
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 7657f2429680ed04186c1f1c1ca92d8d, type: 3}
 --- !u!1 &1840902469
 GameObject:
   m_ObjectHideFlags: 0
@@ -4272,6 +4199,37 @@ MonoBehaviour:
         LookAt: {fileID: 6328205791487977058}
         Offset: {x: 0, y: 1.2, z: 0}
         Easing: 1
+--- !u!1 &1979404806
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1979404807}
+  m_Layer: 0
+  m_Name: Stage
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1979404807
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1979404806}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2059985556
 GameObject:
   m_ObjectHideFlags: 0
@@ -4425,6 +4383,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1565592730}
     - target: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: sprintClip
+      value: 
+      objectReference: {fileID: 7400000, guid: c6ce09bd2c3f38645b61adeccab81781, type: 2}
+    - target: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: enemyDirector
       value: 
       objectReference: {fileID: 1729954864}
@@ -4529,10 +4491,10 @@ PrefabInstance:
       addedObject: {fileID: 1923274461}
     - targetCorrespondingSourceObject: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 553264686}
+      addedObject: {fileID: 277461036}
     - targetCorrespondingSourceObject: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 277461036}
+      addedObject: {fileID: 553264686}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 5179727832080608963, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       insertIndex: -1
@@ -4616,3 +4578,4 @@ SceneRoots:
   - {fileID: 1621256091}
   - {fileID: 1729954865}
   - {fileID: 42391668}
+  - {fileID: 1979404807}

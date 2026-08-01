@@ -14,24 +14,32 @@ using UnityEngine;
 /// 여유가 모자란 경우는 디렉터가 애초에 "플레이어 제자리" 계획을 준다.</para>
 ///
 /// <para><b>원위치로 돌아가지 않는다.</b> 벤 자리에서 다음 적을 향해 나아가는 것이 무쌍의 흐름이고,
-/// 교전마다 중앙으로 끌려가면 왕복하는 그림이 된다. 누적 표류(리시)는 디렉터가 수렴 목표를
-/// <c>maxOffset</c>(<b>고정 원점</b> 기준)으로 클램프해 막으므로, 복귀로 리셋할 필요가 없다.</para>
+/// 교전마다 중앙으로 끌려가면 왕복하는 그림이 된다. 무대가 월드에 고정돼 있고 표적도 그 안에서만
+/// 골라지므로 <b>플레이어는 자동으로 무대 안에 남는다</b> — 리시로 붙잡을 이유가 없다.</para>
+///
+/// <para><b>회전은 이동과 따로 돈다</b>(<c>turnDuration</c>). 한 벌로 묶으면 회전이 이동 시간에 끌려가
+/// 무대를 가로지르는 내내 목을 천천히 돌리는 그림이 된다.</para>
 /// </summary>
 public class PlayerCombatMover : MonoBehaviour
 {
     [SerializeField] private EnemyDirector enemyDirector;
 
     [Header("Rotation")]
-    [Tooltip("교전 상대가 바뀔 때 새 상대 쪽으로 도는 시간(초). 위치는 바뀌지 않는다.")]
-    [SerializeField] private float turnDuration = 0.3f;
+    [Tooltip("상대 쪽으로 도는 시간(초). 이동 시간과 무관하게 이 값만큼만 걸린다.")]
+    [SerializeField] private float turnDuration = 0.15f;
 
     private Vector3 moveFrom;
     private Vector3 moveTo;
-    private Quaternion turnFrom;
-    private Quaternion turnTo;
     private float moveStart;
     private float moveEnd;
     private bool moving;
+
+    // 회전은 이동과 따로 돈다 — 스케줄을 한 벌로 묶으면 회전 시간이 이동 시간에 끌려간다.
+    private Quaternion turnFrom;
+    private Quaternion turnTo;
+    private float turnStart;
+    private float turnEnd;
+    private bool turning;
 
     void Start()
     {
@@ -55,8 +63,8 @@ public class PlayerCombatMover : MonoBehaviour
     }
 
     /// <summary>
-    /// 디렉터가 정한 자리로 간다. 계획이 "제자리"면(여유 부족) 이동 없이 회전만 맞춘다 —
-    /// 그래도 적을 바라보게는 해 둬야 칼이 옆구리로 들어오지 않는다.
+    /// 디렉터가 정한 자리로 간다. 이동은 도착 시각까지, <b>회전은 <c>turnDuration</c>만큼</b> —
+    /// 달려가는 내내 도는 게 아니라 먼저 상대를 보고 그 다음에 달린다.
     /// </summary>
     private void HandleDuelScheduled(EnemyDirector.DuelPlan plan)
     {
@@ -67,51 +75,66 @@ public class PlayerCombatMover : MonoBehaviour
         Quaternion rotation = facing.sqrMagnitude < 1e-6f ? transform.rotation : Quaternion.LookRotation(facing);
 
         // 도착 시각은 디렉터가 정한다(= 클립 시작). 이미 지났으면 즉시 붙인다.
-        float duration = Mathf.Max(plan.ArriveTime - Time.time, 0.01f);
-        ScheduleMove(target, rotation, duration);
+        ScheduleMove(target, Mathf.Max(plan.ArriveTime - Time.time, 0.01f));
+        ScheduleTurn(rotation);
     }
 
     /// <summary>
     /// 교전 상대가 바뀌면 <b>선 자리에서 새 상대 쪽으로 돌기만 한다.</b>
     ///
     /// <para>중앙으로 되돌리지 않는다 — 벤 자리에서 다음 적을 향해 나아가는 것이 무쌍의 흐름이고,
-    /// 매번 원점으로 끌려가면 교전마다 왕복하는 그림이 된다.
-    /// 표류는 <see cref="EnemyDirector"/>가 수렴 목표를 <c>maxOffset</c>(고정 원점 기준)으로
-    /// 클램프해 막으므로, 복귀로 리셋할 필요가 없다.</para>
+    /// 매번 원점으로 끌려가면 교전마다 왕복하는 그림이 된다.</para>
     /// </summary>
     private void HandleOpponentChanged(EnemyView previous, EnemyView next)
     {
         if (next == null) return;
 
-        // 링 슬롯이 아니라 '지금 서 있는 자리'를 본다 — 승격된 적은 이미 대기석에 나와 있어
-        // 링 좌표를 보면 엉뚱한 쪽으로 돌아선다.
+        // 무대 위 '지금 서 있는 자리'를 본다.
         Vector3 direction = Vector3.ProjectOnPlane(next.transform.position - transform.position, Vector3.up);
         if (direction.sqrMagnitude < 1e-6f) return;
 
-        ScheduleMove(transform.position, Quaternion.LookRotation(direction), turnDuration);
+        ScheduleTurn(Quaternion.LookRotation(direction));
     }
 
-    private void ScheduleMove(Vector3 target, Quaternion rotation, float duration)
+    private void ScheduleMove(Vector3 target, float duration)
     {
         moveFrom = transform.position;
         moveTo = target;
-        turnFrom = transform.rotation;
-        turnTo = rotation;
         moveStart = Time.time;
         moveEnd = Time.time + Mathf.Max(duration, 0.01f);
         moving = true;
     }
 
+    /// <summary>
+    /// <b>회전은 이동과 별개로 스케줄한다.</b> 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가
+    /// 목을 천천히 돌리는 그림이 된다 — 무대를 가로지르는 동안 상대를 안 보고 달리는 셈이다.
+    ///
+    /// <para><see cref="HandleOpponentChanged"/>의 회전이 같은 프레임의 <see cref="HandleDuelScheduled"/>에
+    /// 덮이던 것도 이 분리로 사라진다(둘 다 회전만 갱신하므로 나중 값이 이기는 게 옳다).</para>
+    /// </summary>
+    private void ScheduleTurn(Quaternion rotation)
+    {
+        turnFrom = transform.rotation;
+        turnTo = rotation;
+        turnStart = Time.time;
+        turnEnd = Time.time + Mathf.Max(turnDuration, 0.01f);
+        turning = true;
+    }
+
     void Update()
     {
+        if (turning)
+        {
+            float t = Mathf.Clamp01((Time.time - turnStart) / (turnEnd - turnStart));
+            transform.rotation = Quaternion.Slerp(turnFrom, turnTo, Mathf.SmoothStep(0f, 1f, t));
+            if (t >= 1f) turning = false;
+        }
+
         if (!moving) return;
 
-        float t = Mathf.Clamp01((Time.time - moveStart) / (moveEnd - moveStart));
-        float eased = Mathf.SmoothStep(0f, 1f, t);
+        float m = Mathf.Clamp01((Time.time - moveStart) / (moveEnd - moveStart));
+        transform.position = Vector3.Lerp(moveFrom, moveTo, Mathf.SmoothStep(0f, 1f, m));
 
-        transform.position = Vector3.Lerp(moveFrom, moveTo, eased);
-        transform.rotation = Quaternion.Slerp(turnFrom, turnTo, eased);
-
-        if (t >= 1f) moving = false;
+        if (m >= 1f) moving = false;
     }
 }

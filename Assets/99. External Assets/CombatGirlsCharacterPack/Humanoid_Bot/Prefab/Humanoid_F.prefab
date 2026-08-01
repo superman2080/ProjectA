@@ -698,7 +698,16 @@ MonoBehaviour:
   attackStateName: Attack
   attackPlaceholder: {fileID: 7400000, guid: b286c5239db57e24aac24ca9f7e4dc2e, type: 2}
   attackSpeedParam: AttackSpeed
+  deathStateName: Death
+  deathPlaceholder: {fileID: 7400000, guid: 89bedd3c3d69cdb408cd45639f767304, type: 2}
+  deathSpeedParam: DeathSpeed
+  deathClearOffset: 0.6
   idleStateName: Idle
+  moveStateName: Run
+  minMoveDistance: 0.3
+  moveSpeed: 3
+  reactionHoldDuration: 0.6
+  gazeTurnSpeed: 360
   knockBackStateName: KnockBack
   evadeStateName: Evade
   crossFadeDuration: 0.12

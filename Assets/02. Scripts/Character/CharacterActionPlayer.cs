@@ -81,8 +81,12 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private string quickshiftSpeedParam = "QuickshiftSpeed";
     [Tooltip("Quickshift 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
     [SerializeField] private AnimationClip quickshiftClip;
-    [Tooltip("이 거리(m) 이하로 움직이면 Sprint(뛰기), 넘으면 Quickshift(대시)를 쓴다.")]
-    [SerializeField] private float sprintMaxDistance = 1.0f;
+    [Tooltip("Sprint 스테이트의 Speed Multiplier 파라미터 이름.")]
+    [SerializeField] private string sprintSpeedParam = "SprintSpeed";
+    [Tooltip("Sprint 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
+    [SerializeField] private AnimationClip sprintClip;
+    [Tooltip("Sprint 배속의 기준 이동 속도(m/s). 이 속도로 갈 때 클립이 1배속이 된다.")]
+    [SerializeField] private float sprintReferenceSpeed = 4.5f;
     [Tooltip("이 거리(m) 미만이면 로코모션을 켜지 않는다 — 제자리에서 발을 구르지 않게.")]
     [SerializeField] private float convergeMinDistance = 0.15f;
     [Tooltip("수렴 로코모션의 판단 근거를 콘솔에 찍는다(에디터 전용). 모션이 안 나올 때 원인을 가른다.")]
@@ -145,6 +149,7 @@ public class CharacterActionPlayer : MonoBehaviour
     private int sprintStateHash;
     private int quickshiftStateHash;
     private int quickshiftSpeedHash;
+    private int sprintSpeedHash;
 
     /// <summary>
     /// 이 시각까지는 <b>수렴 로코모션이 base 레이어의 주인</b>이다.
@@ -214,6 +219,7 @@ public class CharacterActionPlayer : MonoBehaviour
         sprintStateHash = Animator.StringToHash(sprintStateName);
         quickshiftStateHash = Animator.StringToHash(quickshiftStateName);
         quickshiftSpeedHash = Animator.StringToHash(quickshiftSpeedParam);
+        sprintSpeedHash = Animator.StringToHash(sprintSpeedParam);
         currentBaseStateHash = idleStateHash; // base 레이어의 default 스테이트는 Idle이다.
 
         // 없는 스테이트로 CrossFade하면 Unity가 조용히 무시한다 — base가 이전 포즈에 굳어 버린다.
@@ -349,16 +355,20 @@ public class CharacterActionPlayer : MonoBehaviour
     /// 목표가 현재와 같으면 즉시 반환해 매 프레임 재진입을 막는다. 전환은 Attack 웨이트에 가려진 동안 일어나므로 눈에 띄지 않는다.
     /// </summary>
     /// <summary>
-    /// 결투 수렴 구간의 로코모션. <b>거리로 갈린다</b> — 가까우면 Sprint, 멀면 Quickshift(대시).
+    /// 결투 수렴 구간의 로코모션. <b>창으로 갈린다</b> — 거리가 아니다.
     ///
-    /// <para><b>Quickshift는 창 안에 완주하도록 배속을 역산한다.</b> 수렴은 클립 시작 전에 끝나야 해서
-    /// 창(<c>ArriveTime − now</c>)이 짧고, 그냥 재생하면 앞부분만 나오다 잘려 <b>발을 딛다 만 그림</b>이 된다.
-    /// 클립 길이(1초)를 창으로 나눈 값이 필요한 배속이다.</para>
+    /// <para>기준은 <b>"클립 하나가 창을 채우는가"</b>다. Quickshift(대시)는 <b>루프가 아니라 1초짜리 단발</b>이라
+    /// 창이 그보다 길면 클립이 먼저 끝나고 남은 시간은 그냥 미끄러진다 — 예전엔 거리로 갈라서
+    /// 평균 창(1.48초) 대부분이 이 구멍에 빠졌다. Sprint는 루프라 길이에 상관없이 채운다.</para>
+    ///
+    /// <list type="bullet">
+    /// <item>창 &gt; 클립 길이 → <b>Sprint</b>. 이동 속도에 맞춰 배속(다리와 몸이 따로 놀지 않게)</item>
+    /// <item>창 ≤ 클립 길이 → <b>Quickshift</b>. 창 안에 완주하도록 배속을 역산</item>
+    /// </list>
     ///
     /// <para><b>배속에 상한을 두지 않는다.</b> 자르면 클립이 창 안에 완주하지 못해 몸은 도착했는데
-    /// 다리는 대시 도중에 끊긴다 — 실패 후퇴처럼 창이 짧을수록 그 절단이 확실하게 걸린다.
-    /// 상한이 필요 없는 이유는 <b>배속이 올라가는 만큼 화면에 남는 시간도 같이 줄기</b> 때문이다:
-    /// 8배속 Quickshift는 0.12초짜리라 "튀는 클립"이 아니라 순식간에 붙는 그림으로 읽힌다.</para>
+    /// 다리는 대시 도중에 끊긴다. 상한이 필요 없는 이유는 <b>배속이 올라가는 만큼 화면에 남는 시간도 같이 줄기</b>
+    /// 때문이다: 8배속 Quickshift는 0.12초짜리라 "튀는 클립"이 아니라 순식간에 붙는 그림으로 읽힌다.</para>
     ///
     /// <para>거의 안 움직이는 경우(<see cref="convergeMinDistance"/> 미만)는 아무것도 하지 않는다 —
     /// 제자리에서 발을 구르면 더 부자연스럽다.</para>
@@ -375,19 +385,24 @@ public class CharacterActionPlayer : MonoBehaviour
         // 도착할 때까지 base의 주인은 수렴이다. 복귀 로직이 매 프레임 되찾아가지 못하게 막는다.
         convergeUntil = plan.ArriveTime;
 
-        if (distance <= sprintMaxDistance)
+        float dashLength = quickshiftClip != null ? quickshiftClip.length : 1f;
+
+        if (window > dashLength)
         {
-            SwitchBaseState(sprintStateHash);
-            LogConverge("Sprint", distance, window);
+            // 실제 이동 속도에 배속을 맞춘다 — 안 맞추면 발이 지면을 긁는다.
+            float runSpeed = Mathf.Max(0.1f, distance / window) / Mathf.Max(sprintReferenceSpeed, 0.01f);
+            animator.SetFloat(sprintSpeedHash, runSpeed);
+
+            // 배속이 바뀌었으므로 같은 스테이트라도 처음부터 다시 건다(SwitchBaseState는 같으면 조기 반환).
+            animator.CrossFadeInFixedTime(sprintStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
+            currentBaseStateHash = sprintStateHash;
+            LogConverge($"Sprint x{runSpeed:0.00}", distance, window);
             return;
         }
 
         // 클립 길이 / 남은 시간 = 완주에 필요한 배속. 하한 1(느리게 늘이지 않는다), 상한은 없다.
-        float clipLength = quickshiftClip != null ? quickshiftClip.length : 1f;
-        float speed = Mathf.Max(1f, clipLength / window);
+        float speed = Mathf.Max(1f, dashLength / window);
         animator.SetFloat(quickshiftSpeedHash, speed);
-
-        // 같은 스테이트라도 매번 처음부터 다시 재생해야 한다 — 배속이 바뀌었고, 이전 재생이 끝나 있을 수 있다.
         animator.CrossFadeInFixedTime(quickshiftStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
         currentBaseStateHash = quickshiftStateHash;
         LogConverge($"Quickshift x{speed:0.00}", distance, window);
@@ -404,7 +419,7 @@ public class CharacterActionPlayer : MonoBehaviour
 
         Debug.Log($"[CharacterActionPlayer] 수렴 로코모션 → {decision}  " +
                   $"(거리 {distance:0.00}m / 창 {window:0.00}s / " +
-                  $"임계 {sprintMaxDistance:0.00} · 최소 {convergeMinDistance:0.00})", this);
+                  $"대시클립 {(quickshiftClip != null ? quickshiftClip.length : 1f):0.00}s · 최소거리 {convergeMinDistance:0.00})", this);
     }
 
     private void WarnIfMissingBaseState(int stateHash, string stateName)

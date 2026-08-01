@@ -150,7 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SoundManager
   initialVolumes:
   - channel: 0
-    volume: 1
+    volume: 0.3
   - channel: 1
     volume: 0.3
   - channel: 2

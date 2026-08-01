@@ -60,8 +60,9 @@ namespace PatternSpace
         [Tooltip("무방비 적을 베는 플레이어 공격. Attacker.Player일 때 재생된다. 비우면 무연출.")]
         [SerializeField] private ClipAlignment playerAttack = new ClipAlignment();
 
-        [Tooltip("적이 베어지는 클립. 슬라이서가 이 임팩트 프레임 포즈로 굽는다(저작 보조). " +
-                 "런타임 정합성 요구는 아니다 — 조각이 스키닝을 유지해 어떤 포즈든 따라가기 때문.")]
+        [Tooltip("적이 죽는 클립. 임팩트 프레임이 플레이어 공격 임팩트와 같은 시각에 오도록 배속을 역산해 재생한다.\n" +
+                 "절단(시체 교체·폭발)은 이 클립의 트림 끝에 일어난다. 비우면 임팩트에 바로 갈라진다.\n" +
+                 "⚠ ImpactTime은 트림 시작 근처에 찍을 것 — 배속이 클립 전체에 걸려 쓰러지는 속도까지 빨라진다.")]
         [SerializeField] private ClipAlignment enemyDeath = new ClipAlignment();
 
         [Tooltip("이 패턴에서 등장할 베이는 표적. 비우면 표적 없음.")]
@@ -98,8 +99,8 @@ namespace PatternSpace
         public ClipAlignment PlayerAttack => playerAttack;
 
         /// <summary>
-        /// 적이 베어지는 클립. <b>굽기 툴의 저작 기준</b>이다 — 이 임팩트 프레임 포즈로 절단 프록시를 굽는다.
-        /// 런타임 포즈와 일치할 필요는 없다(조각이 스키닝을 유지하므로). 가까울수록 관절 뒤틀림만 줄어든다.
+        /// 적이 죽는 클립. <b>런타임에 재생된다</b> — 임팩트 프레임을 <c>Deadline + ImpactOffset</c>에 맞추고
+        /// <b>트림 끝에서 절단</b>이 일어난다. 굽기 툴은 그 트림 끝 포즈로 절단 프록시를 굽는다.
         /// </summary>
         public ClipAlignment EnemyDeath => enemyDeath;
 

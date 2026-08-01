@@ -193,7 +193,7 @@ public class CameraDirector : MonoBehaviour
 
         if (enemyDirector != null)
         {
-            enemyDirector.OnEnemyKilled += HandleEnemyKilled;
+            enemyDirector.OnEnemyBurst += HandleEnemyKilled;
             enemyDirector.OnOpponentChanged += HandleOpponentChanged;
 
             // 구독보다 먼저 승격이 끝났을 수 있다 — 이벤트만으로는 지금 상태를 알 수 없어 한 번 읽는다.
@@ -213,7 +213,7 @@ public class CameraDirector : MonoBehaviour
 
         if (enemyDirector != null)
         {
-            enemyDirector.OnEnemyKilled -= HandleEnemyKilled;
+            enemyDirector.OnEnemyBurst -= HandleEnemyKilled;
             enemyDirector.OnOpponentChanged -= HandleOpponentChanged;
         }
 
@@ -261,7 +261,13 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void HandlePlayerHit() => PlayCue(CameraTrigger.PatternMiss);
 
-    /// <summary>적 처치 — 히트스톱을 못 쓰는 대신 타격감을 내는 주 큐다.</summary>
+    /// <summary>
+    /// 적이 갈라지는 순간 — 히트스톱을 못 쓰는 대신 타격감을 내는 주 큐다.
+    ///
+    /// <para><b>처치 확정(<c>OnEnemyKilled</c>)이 아니라 절단(<c>OnEnemyBurst</c>)을 듣는다.</b>
+    /// 확정은 마지막 노드 입력 순간이고 절단은 사망 클립이 끝난 뒤라, 확정에 걸면
+    /// 적이 쓰러지기도 전에 화면이 흔들린다. 큐 시각은 언제나 <b>화면에서 사건이 일어나는 순간</b>이다.</para>
+    /// </summary>
     private void HandleEnemyKilled(EnemySpace.EnemyView view) => PlayCue(CameraTrigger.EnemyKilled);
 
     private void HandleAllCleared()

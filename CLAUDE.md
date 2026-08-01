@@ -26,6 +26,7 @@ Assets/
 │   │   ├── InputHandler.cs          # 키보드 1~9 입력 → 인덱스(0~8) 이벤트 발행
 │   │   └── IngameInputs.cs          # Input System 자동생성 래퍼 (수정 금지)
 │   ├── Pattern/
+│   │   ├── Core/ClipAlignment.cs    # 임팩트 프레임 정렬(플레이어·적 공용, asmdef)
 │   │   ├── Pattern.cs               # ScriptableObject - 패턴 '모양 원본'(+NodeType, PatternData)
 │   │   ├── ActivePattern.cs         # 재생 중 패턴 하나의 런타임 상태
 │   │   ├── JudgementResult.cs       # enum: Perfect/Good/Miss
@@ -45,8 +46,10 @@ Assets/
 │   │   ├── Editor/                  # PatternChartWindow(굽기 툴), PatternTemplateLibrary
 │   │   └── Tests/                   # 코어 유닛테스트(asmdef)
 │   ├── Character/
-│   │   ├── CharacterActionPlayer.cs # 패턴 완료 시 베기/피격 애니메이션 재생
-│   │   └── WeaponTrailController.cs # 스윙 구간에만 칼날 트레일 on/off
+│   │   ├── CharacterActionPlayer.cs # 베기/피격 애니메이션 + 수렴 로코모션
+│   │   ├── PlayerCombatMover.cs     # 결투 이동·회전(OnDuelScheduled 구독)
+│   │   ├── WeaponTrailController.cs # 스윙 구간에만 칼날 트레일 on/off
+│   │   └── Editor/                  # AnimationClipTrimmerWindow(짝 저작 툴)
 │   ├── Slice/                       # 베이는 표적(연출 전용)
 │   │   ├── SliceSet.cs              # ScriptableObject - 굽기 산출물(원본+조각 프리팹 N개+절단 평면)
 │   │   ├── SliceTargetDirector.cs   # 표적 유일 관리 지점(예약·확정·풀링)
@@ -56,8 +59,15 @@ Assets/
 │   │   ├── Editor/                  # MeshSliceBakerWindow(획 긋기 굽기 툴)
 │   │   └── Tests/                   # 절단 코어 유닛테스트(asmdef)
 │   ├── Camera/                      # 카메라 연출
-│   │   ├── CameraDirector.cs        # 카메라 연출 유일 관리 지점(쉐이크 예약·재생)
+│   │   ├── CameraDirector.cs        # 유일 관리 지점 — 쉐이크 · 프레이밍(TargetGroup) · 인트로(스플라인)
 │   │   └── CameraCueCatalog.cs      # CameraTrigger enum + CameraCueEntry(트리거→쉐이크 설정)
+│   ├── Enemy/                       # 무쌍 전투(무대 · 상대 배정 · 처치)
+│   │   ├── EnemyDirector.cs         # 유일 관리 지점(무대 배치·표적 선택·결투 계획·처치)
+│   │   ├── EnemyView.cs             # 적 하나의 이동/클립/사망
+│   │   ├── EnemyDefinition.cs       # 적 종류(프리팹 + DeathSliceSet)
+│   │   ├── EnemyCue.cs              # Attacker enum + 채보 엔트리의 전투 지시
+│   │   ├── Core/EnemyRing.cs        # 무대 배치·표적 선택의 순수 계산(asmdef)
+│   │   └── Tests/                   # 배치·선택 유닛테스트(asmdef)
 │   ├── Effect/                      # Canvas 이펙트 시스템
 │   │   ├── EffectManager.cs         # 이펙트 유일 관리 지점(PatternHandler 이벤트 구독)
 │   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
@@ -176,6 +186,8 @@ Assets/
 
 ### 6. 캐릭터 액션 (CharacterActionPlayer)
 - `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.SuccessAnimationClip`), 실패면 공용 피격(Hit) 클립**을 번갈아 재생.
+- **⚠ 두 배우를 맞추는 규칙 — 공유하는 것은 임팩트 순간 하나뿐이다.** 플레이어 공격과 적 클립(공격/패링/사망)은 길이도, 저작 배속도, 압축을 유발하는 제약도 다르다(플레이어는 다음 패턴까지의 여유, 적은 처치 확정~임팩트 간격). **배속이 같아질 이유가 없으므로 시작이나 끝을 맞추는 정렬은 원리적으로 성립하지 않는다.** 각 배우는 `Deadline + Pattern.ImpactOffset`이라는 **같은 절대 시각**에 **자기 임팩트 프레임**이 오도록 **자기 시작 시점과 자기 배속을 역산**한다(`ClipAlignment.ResolveScheduleStart` / `ResolvePlaySpeed`가 전부 `impactAlignTime`을 받는 이유). 시작·끝·배속이 서로 달라도 칼이 닿는 순간은 구조적으로 일치한다.
+- **⚠ 배속은 클립 전체에 걸린다**(Animator Speed Multiplier). `ResolvePlaySpeed`는 **임팩트 이전** 구간만 보고 배속을 정하지만 그 값이 이후에도 적용된다 → **`ImpactTime`을 뒤에 찍을수록 마무리 동작까지 빨라진다.** 사망 클립에서 특히 직접적이다(§11-3).
 - **정렬 앵커는 '임팩트 프레임'이다.** 칼날이 표적을 지나가는 프레임(`Pattern.AnimationImpactTime`, 클립 절대 초)이 **표적이 갈라지는 시각과 같은 식**(`Deadline + Pattern.ImpactOffset`)에 오도록 시작 시점과 배속을 역산한다 — 트림 끝을 `LastNodeTime`에 맞추던 예전 방식은 "칼은 지나갔는데 뒤늦게 갈라지는" 어긋남을 낳았다. 임팩트 **이후** 잔여 트림 구간은 같은 배속으로 이어 재생되어 마무리 동작이 뒤에 남는다. 미오서링(0 이하/범위 밖)이면 트림 끝으로 폴백. 오서링은 `Tools/Animation Clip Trimmer`(Start/**Impact**/End 세 마크). 상세: `docs/SliceImpactFrame/`
 - `AnimatorOverrideController`로 단일 슬롯(`Attack`) 스테이트의 placeholder 클립을 런타임에 덮어쓴 뒤 그 스테이트를 `CrossFadeInFixedTime`으로 재생. Attack Layer는 휴지 시 웨이트 0, 재생 중 1, 종료 후 0으로 페이드.
 - **겹침 방지 배속**: 다음 패턴까지의 여유(`NextLastNodeTime`)보다 클립이 길면 `AttackSpeed`로 압축하되 `maxAttackSpeed`(기본 2.5) 상한. 상한으로도 안 담기면 다음 액션 CrossFade가 현재 액션을 끊는다(의도된 동작). 상세: `docs/CharacterAction/`
@@ -247,13 +259,29 @@ Assets/
 - **결투 계획은 `EnemyView.Destination`(갈 곳)으로 세운다**, `transform.position`이 아니라. 배정 순간 적이 이동 중이면(후퇴·대기석 진입·링 등장) 현재 위치는 곧 떠날 위치라, 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
 - 상세: `docs/OpponentBinding/`
 
-### 11-2. 결투 수렴과 대기석
-- **플레이어와 적이 서로 마주 달려가 중간에서 만난다**(`BuildDuelPlan` → `OnDuelScheduled`). 디렉터는 두 위치를 아는 유일한 곳이라 계산도 여기서 하지만 **플레이어를 모른다** — `PlayerCombatMover`/`CharacterActionPlayer`가 구독해 자기 몫만 움직인다.
-- **리시는 고정 원점 기준**(`ArenaOrigin`, `Awake`에서 캐시)으로 `maxOffset`까지. `arenaCenter`가 플레이어를 가리키므로 `Center`로 재면 "중앙 이탈"이 아니라 "한 걸음 길이"를 재게 되어 매 교전 링 쪽으로 표류한다.
-- **대기석은 자리를 옮기지 않는다** — 다음 상대를 미리 *뽑아만* 둔다. 예전엔 결투 앵커 옆으로 미리 걸어 나오게 했지만, **수렴이 절반을 플레이어가 부담하면서 그 이유가 사라졌다.** 미리 나와 있으면 링이 헐거워 보이고, 플레이어가 딴 데로 뛰면 혼자 서 있는 그림이 된다.
-- 예외로 `StageOnDeck`이 **못 닿을 때만** 미리 들여보낸다(`stagingDistance` 2m, 자기 링 방향 유지). **판단 창은 지금 패턴의 창이 아니라 `bindToImpactWindow`(0.45초) 고정값**이다 — 배정이 판정 대상 승계 시점이라(§11-1) 적에게 실제로 주어지는 시간은 지금 패턴 길이와 무관하다. **적이 제때 못 붙으면 이 값과 `stagingDistance`를 본다.**
-- 플레이어 로코모션은 `sprintMaxDistance`(1m)로 갈린다 — 이하 Sprint, 초과 Quickshift. **Quickshift 배속에는 상한이 없다**(`clipLength / window`, 하한 1). 자르면 클립이 창 안에 완주하지 못해 다리가 대시 도중에 끊긴다. 배속이 오르는 만큼 화면에 남는 시간도 줄어 튀어 보이지 않는다.
-- 상세: `docs/DuelConverge/`, `docs/OpponentBinding/`
+### 11-2. 무대와 결투 배치 (⚠ "플레이어 중앙 고정 · 전진 이동 없음"은 폐기됐다)
+- **무대는 월드에 고정된 원형이다.** `EnemyDirector.arenaCenter`는 **씬의 `Stage` 오브젝트**(원점)를 가리킨다 — **절대 플레이어를 가리키면 안 된다.** 예전엔 플레이어였고, 그래서 배치·스폰·계획이 전부 플레이어를 따라다녔다. 거기에 월드 고정점(리시) 개념을 하나만 덧댄 탓에 **모델이 둘**이었고 표류 버그가 그 증상이었다. `Center`가 상수가 되면 그 부류가 원천 소멸한다.
+- **적은 무대 원 '안'에 흩어져 선다**(`stageRadius` 8, `minSpacing` 2.5m). 링 궤도가 아니다. 배치는 `EnemyRing.PickStagePosition` — 원 안 2D 후보 샘플링이고, **시야 판정은 각도 근사가 아니라 실제 절두체**(`GeometryUtility`)다. 무대가 고정되면 적도 플레이어도 원 안 어디에나 있어 각도로는 화면 안인지 알 수 없다.
+- **스폰은 화면 밖에서 즉시 일어난다.** 아무도 못 보므로 걸어 들어올 이유가 없다 — 등장 이동(`entryDuration`)을 통째로 없앴다. ⚠ 플레이어가 홱 돌면 방금 나타난 적이 보일 수 있다(감수).
+- **다음 표적은 창이 고른다** — 여기가 속도감의 심장이다(`TakeTargetForWindow`). 창은 음악이 정해 0.5~2.1초로 4배 흔들리므로, 거리를 고정하면 속도가 그만큼 흔들린다. 거꾸로 `목표거리 = cruiseSpeed × 창 / playerShare + duelDistance`로 잡으면 **체감 속도가 일정**해지고 짧은 구간은 근거리 난타, 긴 구간은 무대 횡단 대시로 갈린다. **`playerShare`로 나누는 항을 빼면 비율을 올릴수록 오히려 느려진다.**
+- **만나는 지점의 비율은 `playerShare`(0.85)** — 8:2 남짓. 예전엔 0.5 고정 + 리시 1.5m라 플레이어가 **초속 1m, 걷는 것보다 느렸다.** 1로 두지 않는 이유: 적이 정지 표적으로 읽힌다. 적 몫(1m 남짓)이 창 전체로 늘어져 기어가는 문제는 `EnemyView.EarliestArrival`이 막는다(빨리 가서 서고 플레이어를 바라본다).
+- **상대 선택은 `BindReservation`이 한다** — 창을 알 수 있는 유일한 시점이기 때문(§11-1). `KillOpponent`는 죽은 상대를 놓아주기만 한다. 둘은 `ResolveReservation` 한 호출 안이라 같은 프레임이다.
+- **실패한 적은 짧게 물러난 그 자리에 선다**(`failRetreatDistance`). 돌아갈 제자리가 없다 — 플레이어가 다시 찾아온다.
+- **⚠ 적은 도착 시각까지 끌지 않고 `moveSpeed`(3 m/s)로 빨리 가서 선다**(`EnemyView.EarliestArrival`). 안 그러면 **도착하는 순간이 곧 베이는 순간**이라 서 있는 구간이 아예 없다 — `ScheduleMove`가 선형 보간이라 1m를 1.3초에 펴면 초속 0.77m로 기어가고, 화면에는 *"제자리에 선 것 같은데 Run이 계속 도는"* 그림이 된다(`moving`이 true인 동안 로코모션이 유지되므로). **앞당기는 건 언제나 안전하다** — "클립 시작 전에 도착"이라는 제약과 방향이 같다.
+  - 다만 이건 **결투 접근(`ApproachDuel`)에만** 건다. 후퇴·등장은 "이만큼 걸리는 동작"이라 저작된 지속시간을 그대로 쓴다(후퇴를 속도로 자르면 회피의 날카로움이 죽는다).
+- **플레이어 로코모션은 창으로 갈린다**(거리가 아니다): `창 > 대시클립 길이 → Sprint`(루프, 이동속도에 맞춰 배속) / `이하 → Quickshift`(단발, 창 안에 완주하도록 배속, **상한 없음**). 거리로 가르면 평균 창(1.48초) > Quickshift 클립(1초)이라 **클립이 먼저 끝나고 나머지는 미끄러진다.**
+- **⚠ 플레이어 회전은 이동과 별개 스케줄이다**(`PlayerCombatMover.turnDuration` 0.15초). 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가 **무대를 가로지르는 내내 목을 천천히 돌린다.** 예전엔 `OnOpponentChanged`의 회전이 같은 프레임 `OnDuelScheduled`에 통째로 덮여 `turnDuration`이 한 번도 안 쓰였다. 지금은 **먼저 상대를 보고 그 다음에 달린다.**
+- 상세: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
+### 11-3. 적 사망 클립과 절단 시점
+- **`Pattern.EnemyDeath`는 런타임에 재생된다.** 임팩트 프레임이 플레이어 공격과 **같은 절대 시각**(`Deadline + ImpactOffset`)에 오도록 배속을 역산한다(§6의 두 배우 규칙).
+- **절단(시체 교체·폭발)은 사망 클립의 트림 끝**이다. 임팩트가 아니다 — 쓰러지는 것을 다 보고 나서 갈라진다. 절단 시각은 배속을 아는 `EnemyView.AssignDeath`가 계산해 돌려주고, `PendingKill.burstTime`이 그 값이다. **클립이 없으면 `burstTime = impactTime`**이라 예전 동작 그대로다.
+- **재생은 처치 확정 즉시 시작한다.** 그보다 이른 시각은 알 수 없다(성패가 마지막 노드에서 정해진다). 그래서 임팩트까지 남는 실시간은 `goodWindow`(0.1초) + `impactOffset`뿐이고, **사망 클립의 `ImpactTime`은 트림 시작 근처에 찍어야 한다.** 죽는 모션은 원래 '맞는 순간'이 시작점이라 자연스럽게 맞는다. 뒤에 찍으면 정렬이 깨지기 전에 **쓰러지는 속도부터 빨라진다**(§6의 배속 경고).
+- **슬롯은 `Attack`과 나눈다**(`Death` 스테이트 + `DeathSlot_Placeholder` + `DeathSpeed`). 적이 공격 도중 죽을 때 같은 슬롯을 덮으면 진행 중인 클립이 튄다.
+- **죽는 적은 결투 위치를 비켜 준다**(`deathClearOffset` 0.6m). 승격은 확정 즉시 일어나 다음 상대가 같은 자리로 들어오기 때문 — 예전엔 임팩트에 사라져 문제가 없었다. 루트 모션이 있는 사망 클립이면 0으로 끈다.
+- **이벤트가 둘로 갈린다.** `OnEnemyKilled`는 **확정**(승격·링 보충과 같은 시점, 화면에는 아직 아무 일도 없다), `OnEnemyBurst`는 **절단**(화면에서 사건이 일어나는 순간). **카메라 쉐이크는 `OnEnemyBurst`를 듣는다** — 확정에 걸면 적이 쓰러지기도 전에 화면이 흔들린다.
+- **굽기 포즈도 트림 끝**이다(`MeshSliceBakerWindow.BakePoseTime`). 터지는 순간의 포즈로 구울수록 관절 뒤틀림이 준다.
+- 상세: `docs/EnemyDeathClip/`
+
 
 ---
 

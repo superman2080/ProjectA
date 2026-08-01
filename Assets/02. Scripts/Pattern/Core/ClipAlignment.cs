@@ -10,6 +10,17 @@ namespace PatternSpace
     /// 이 타입의 존재 이유다. 칼이 지나가는 순간을 양쪽이 같은 식으로 계산해야
     /// "적 칼이 지나가는 순간 = 플레이어 칼이 지나가는 순간"이 구조적으로 성립한다.</para>
     ///
+    /// <para><b>공유하는 것은 임팩트 순간 하나뿐이다.</b> 두 클립은 길이도, 저작 배속도, 압축을 유발하는 제약도
+    /// 다르므로(플레이어는 다음 패턴까지의 여유, 적은 처치 확정~임팩트 간격) 배속이 같아질 이유가 없다.
+    /// 그래서 <b>시작이나 끝을 맞추는 정렬은 원리적으로 성립하지 않는다</b> — 시작을 맞춰도 배속이 다르면
+    /// 임팩트가 어긋난다. 각 배우는 같은 절대 시각에 자기 임팩트 프레임이 오도록
+    /// <b>자기 시작 시점(<see cref="ResolveScheduleStart"/>)과 자기 배속(<see cref="ResolvePlaySpeed"/>)을 역산</b>한다.
+    /// 그래서 이 두 메서드가 전부 <c>impactAlignTime</c>을 받는다.</para>
+    ///
+    /// <para>⚠ <b>배속은 클립 전체에 걸린다</b>(Animator의 Speed Multiplier). <see cref="ResolvePlaySpeed"/>는
+    /// <i>임팩트 이전</i> 구간만 보고 배속을 정하지만 그 값이 임팩트 이후에도 적용되므로,
+    /// <see cref="ImpactTime"/>을 뒤에 찍을수록 마무리 동작까지 빨라진다.</para>
+    ///
     /// <para>오서링은 <c>Tools/Animation Clip Trimmer</c>(Start/Impact/End)로 한다.</para>
     /// </summary>
     [Serializable]

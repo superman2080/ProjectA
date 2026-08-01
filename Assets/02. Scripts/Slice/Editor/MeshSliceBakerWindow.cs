@@ -331,6 +331,19 @@ namespace SliceSpace.EditorTools
             }
         }
 
+        /// <summary>
+        /// 굽는 포즈의 클립 시각 = <b>트림 끝</b>.
+        ///
+        /// <para>임팩트 프레임이 아니다 — 적은 임팩트에 맞고 <b>사망 클립이 끝난 뒤에</b> 갈라진다.
+        /// 조각이 스키닝을 유지하므로 어떤 포즈든 따라가지만, <b>터지는 순간의 포즈로 구울수록</b>
+        /// 관절 뒤틀림이 준다.</para>
+        /// </summary>
+        private static float BakePoseTime(PatternSpace.ClipAlignment death)
+        {
+            if (death == null || death.Clip == null) return 0f;
+            return death.StartOffset + death.ResolvedDuration;
+        }
+
         private void DrawPoseInfo()
         {
             if (targetPattern == null) return;
@@ -345,7 +358,7 @@ namespace SliceSpace.EditorTools
                 return;
             }
 
-            EditorGUILayout.LabelField("굽기 포즈", $"{death.Clip.name} @ {death.ImpactTime:0.000}s");
+            EditorGUILayout.LabelField("굽기 포즈", $"{death.Clip.name} @ {BakePoseTime(death):0.000}s (트림 끝)");
         }
 
         // ── 획 목록 ─────────────────────────────────────────────────────────────
@@ -799,7 +812,7 @@ namespace SliceSpace.EditorTools
             int index = Mathf.Clamp(enemyRendererIndex, 0, renderers.Length - 1);
             var death = targetPattern != null ? targetPattern.EnemyDeath : null;
             var clip = death?.Clip;
-            float time = death != null ? death.ImpactTime : 0f;
+            float time = BakePoseTime(death);
 
             bool valid = posedCache != null
                 && posedSource == enemyPrefab
@@ -1277,7 +1290,7 @@ namespace SliceSpace.EditorTools
             var death = targetPattern != null ? targetPattern.EnemyDeath : null;
 
             var set = SaveSetPreservingGuid(SetAssetPath());
-            set.EditorAssignSkinned(enemyPrefab, corpsePrefab, rootPiece, planes.ToArray(), death?.Clip, death?.ImpactTime ?? 0f);
+            set.EditorAssignSkinned(enemyPrefab, corpsePrefab, rootPiece, planes.ToArray(), death?.Clip, BakePoseTime(death));
             EditorUtility.SetDirty(set);
 
             WireToDefinition(set);

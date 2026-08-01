@@ -22,53 +22,50 @@ namespace EnemySpace
         [Header("References")]
         [SerializeField] private PatternHandler handler;
 
-        [Tooltip("아레나 중앙(플레이어 위치). 비우면 이 오브젝트의 위치.")]
+        [Tooltip("원형 무대의 중심. ⚠ 플레이어가 아니라 '무대' 오브젝트를 넣을 것 — 월드에 고정돼 있어야 한다. 비우면 이 오브젝트의 위치.")]
         [SerializeField] private Transform arenaCenter;
 
         [Tooltip("칼이 만나는 지점. 플레이어의 자식이어야 한다 — 이게 곧 결투 지점이다.")]
         [SerializeField] private Transform duelAnchor;
 
-        [Tooltip("시야 기준 카메라. 추가 스폰을 등 뒤에 배치하는 데 쓴다. 비우면 Camera.main.")]
+        [Tooltip("시야 기준 카메라. 스폰을 화면 밖에 배치하는 데 쓴다(절두체 판정). 비우면 Camera.main.")]
         [SerializeField] private Camera viewCamera;
 
         [Tooltip("투사체 연출. 비우면 원거리 오브젝트 없음.")]
         [SerializeField] private SliceTargetDirector projectileDirector;
 
-        [Header("Ring")]
-        [SerializeField] private float ringRadius = 6f;
-        [Tooltip("링 반경의 ± 편차. 배치에 다양성을 준다.")]
-        [SerializeField] private float radiusJitter = 1f;
-        [Tooltip("적끼리 유지할 최소 각 간격(도).")]
-        [SerializeField] private float minAngleGap = 35f;
-        [Tooltip("링에 유지할 적 수. 기즈모를 보며 화각에 맞춰 잡는다.")]
+        [Header("Stage")]
+        [Tooltip("원형 무대의 반경(m). 적은 이 원 '안'에 흩어져 서고 플레이어가 그 사이를 오간다.")]
+        [SerializeField] private float stageRadius = 8f;
+        [Tooltip("무대에 유지할 적 수.")]
         [SerializeField] private int ringCount = 6;
-        [Tooltip("등장 시작 거리 배율. 링보다 바깥에서 걸어 들어온다(팝인 방지).")]
-        [SerializeField] private float entryDistanceMul = 2.2f;
-        [SerializeField] private float entryDuration = 2f;
+        [Tooltip("적끼리 유지할 최소 거리(m).")]
+        [SerializeField] private float minSpacing = 2.5f;
+        [Tooltip("플레이어 코앞에 튀어나오지 않게 하는 최소 거리(m).")]
+        [SerializeField] private float minPlayerDistance = 4f;
+        [Tooltip("무대 배치 후보 수. 늘리면 간격이 고르지만 스폰 비용이 는다.")]
+        [SerializeField] private int spawnCandidateCount = 24;
 
         [Header("Roster")]
         [Tooltip("등장시킬 적 종류. 여러 종을 넣으면 같은 모델 반복이 티 나지 않는다.")]
         [SerializeField] private EnemyDefinition[] rosterPool;
 
         [Header("Duel")]
-        [Tooltip("리액션 후 링으로 돌아가는 시간(초).")]
-        [SerializeField] private float returnDuration = 0.5f;
         [Tooltip("적 공격 클립의 자동 배속 상한. 넘으면 정렬이 깨지므로 경고가 뜬다.")]
         [SerializeField] private float maxAttackSpeed = 2.5f;
 
-        [Tooltip("클립 시작까지 이만큼의 여유가 없으면 수렴을 생략하고 적만 붙는다(플레이어는 제자리).\n" +
-                 "순간이동처럼 미끄러지는 것보다 낫고, 어느 쪽이든 간격은 항상 지켜진다.")]
-        [SerializeField] private float minConvergeTime = 0.25f;
+        [Tooltip("만나는 지점의 플레이어 몫. 0.85면 간격의 85%를 플레이어가, 15%를 적이 좁힌다.\n" +
+                 "1로 두면 적이 정지 표적으로 보인다 — 한 걸음이라도 나와야 교전으로 읽힌다.")]
+        [Range(0.5f, 1f)]
+        [SerializeField] private float playerShare = 0.85f;
 
-        [Tooltip("적이 걸어서 좁힐 수 있는 속도(m/s). 승격 후 이 속도로 창 안에 못 닿을 거리면 대기석이 미리 들어온다.")]
-        [SerializeField] private float approachSpeed = 3f;
-        [Tooltip("대기석이 미리 들어와 서는 반경(m). 아레나 중심 기준이며, 자기 링 방향은 유지한 채 좁혀 든다.")]
-        [SerializeField] private float stagingDistance = 2f;
-        [Tooltip("상대 배정 후 임팩트까지 실제로 주어지는 시간(초). 대기석을 미리 들여보낼지 판단하는 기준이다.\n" +
-                 "채보의 최소 엔트리 간격에 맞춰 보수적으로 잡는다 — 넉넉히 잡으면 적이 못 닿는다.")]
-        [SerializeField] private float bindToImpactWindow = 0.45f;
+        [Tooltip("플레이어의 목표 이동 속도(m/s). 다음 표적까지의 거리를 이 속도로 역산해 고른다.\n" +
+                 "창은 음악이 정해 못 바꾸므로 이 값이 곧 체감 속도다.")]
+        [SerializeField] private float cruiseSpeed = 4.5f;
+        [Tooltip("표적 선택의 최소 거리(m). 너무 가까운 적만 고르면 제자리 난타가 된다.")]
+        [SerializeField] private float minTargetDistance = 2f;
 
-        [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 링까지 돌아가지 않는다 — 교전이 이어지기 때문.")]
+        [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 물러난 그 자리에 선다 — 플레이어가 다시 찾아간다.")]
         [SerializeField] private float failRetreatDistance = 1.5f;
         [Tooltip("후퇴에 걸리는 시간(초). 이 시간이 지나야 다시 접근을 시작한다.")]
         [SerializeField] private float retreatDuration = 0.25f;
@@ -106,15 +103,21 @@ namespace EnemySpace
         [SerializeField] private bool drawGizmos = true;
         [SerializeField] private Color gizmoRingColor = new Color(0.3f, 0.8f, 1f);
         [SerializeField] private Color gizmoDuelColor = new Color(1f, 0.35f, 0.2f);
-        [Tooltip("플레이어가 중앙에서 벗어날 수 있는 최대 거리(리시). 수렴 계획을 여기로 클램프한다 — " +
-                 "안 걸면 교전마다 중점으로 끌려가 링 쪽으로 표류한다.")]
-        [SerializeField] private float maxOffset = 1.5f;
 
         /// <summary>교전 상대가 바뀌는 순간. 카메라 재프레이밍·UI·SFX가 본체 수정 없이 붙는다.</summary>
         public event Action<EnemyView, EnemyView> OnOpponentChanged;
 
-        /// <summary>적이 처치된 순간. 이펙트/카메라 큐가 구독한다.</summary>
+        /// <summary>
+        /// 적의 <b>죽음이 확정된 순간</b>(패턴 완료). 승격·링 보충과 같은 시점이라 이 셋은 갈라지면 안 된다.
+        /// <b>화면에서는 아직 아무 일도 안 일어났다</b> — 갈라지는 순간은 <see cref="OnEnemyBurst"/>다.
+        /// </summary>
         public event Action<EnemyView> OnEnemyKilled;
+
+        /// <summary>
+        /// 적이 <b>실제로 갈라지는 순간</b>(사망 클립의 트림 끝). 화면에서 사건이 일어나는 시각이라
+        /// 카메라 쉐이크처럼 '보이는 것에 붙는' 연출은 이쪽을 구독한다.
+        /// </summary>
+        public event Action<EnemyView> OnEnemyBurst;
 
         /// <summary>
         /// 이번 교전에서 <b>둘이 어디서 만날지</b>. 두 위치를 동시에 아는 곳이 여기뿐이라 계산도 여기서 한다.
@@ -204,7 +207,9 @@ namespace EnemySpace
         {
             public EnemyView opponent;
             public SliceSet set;
-            public float impactTime;
+
+            /// <summary>실제로 갈라지는 시각 = <b>사망 클립의 트림 끝</b>. 클립이 없으면 임팩트 시각(예전 동작).</summary>
+            public float burstTime;
         }
 
         /// <summary>교체된 시체 하나. 수명은 조각이 잠들거나 <c>debrisLifetime</c>이 지나면 끝난다.</summary>
@@ -222,14 +227,13 @@ namespace EnemySpace
         private readonly List<Debris> debris = new List<Debris>();
         private readonly List<PendingKill> pendingKills = new List<PendingKill>();
         private readonly List<Corpse> corpses = new List<Corpse>();
-        private readonly List<float> angleScratch = new List<float>();
+        private readonly List<Vector3> positionScratch = new List<Vector3>();
         private int nextToken;
 
         // BakeMesh 대상 메쉬 재사용 큐. 교체마다 new Mesh()를 만들면 GC 압박이 된다.
         private readonly Queue<Mesh> frozenMeshPool = new Queue<Mesh>();
 
         private EnemyView currentOpponent;
-        private EnemyView onDeck;
 
         /// <summary>
         /// 지금 교전 중인 상대. 없으면 null.
@@ -244,16 +248,34 @@ namespace EnemySpace
         private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
         private Transform poolRoot;
 
+        /// <summary>
+        /// 무대의 중심. <b>월드에 고정된 상수다</b> — <c>arenaCenter</c>는 무대 오브젝트를 가리켜야 하며
+        /// 플레이어를 가리키면 안 된다.
+        ///
+        /// <para>예전에는 여기가 플레이어였고, 그래서 배치·스폰·계획이 전부 플레이어를 따라다녔다.
+        /// 그 위에 월드 고정점(리시) 개념을 하나만 덧댄 탓에 <b>모델이 둘</b>이었고, 표류 버그가 그 증상이었다.
+        /// 무대를 고정하면 이 값이 상수가 되어 그 부류가 원천적으로 사라진다.</para>
+        /// </summary>
         private Vector3 Center => arenaCenter != null ? arenaCenter.position : transform.position;
 
-        /// <summary>
-        /// 리시(표류) 판정의 <b>고정 기준점</b>. <c>Center</c>는 보통 플레이어를 가리켜 함께 움직이므로
-        /// 그걸로 이탈을 재면 "한 걸음의 길이"를 재는 꼴이 되어 표류를 전혀 못 막는다.
-        /// 그래서 시작 시점의 위치를 한 번 잡아 두고 그것만 쓴다.
-        /// </summary>
-        private Vector3 ArenaOrigin => arenaOrigin;
+        /// <summary>플레이어 위치. 배치·표적 선택이 "플레이어에게서 얼마나 먼가"를 재는 데 쓴다.</summary>
+        private Vector3 PlayerPosition => duelAnchor != null ? duelAnchor.position : Center;
 
-        private Vector3 arenaOrigin;
+        // 절두체 평면 6장. 스폰마다 배열을 새로 만들지 않도록 재사용한다.
+        private readonly Plane[] frustumScratch = new Plane[6];
+
+        /// <summary>
+        /// "이 위치가 화면 안인가"를 판정하는 함수를 만든다. 적의 몸을 대략적인 구로 보고
+        /// <b>발밑 한 점이 아니라 부피</b>로 판정한다 — 한 점만 보면 머리가 화면에 걸린 채로 통과한다.
+        /// </summary>
+        private System.Func<Vector3, bool> BuildVisibilityTest(Camera cam)
+        {
+            GeometryUtility.CalculateFrustumPlanes(cam, frustumScratch);
+            var size = new Vector3(1.2f, 2f, 1.2f);
+
+            return position => GeometryUtility.TestPlanesAABB(
+                frustumScratch, new Bounds(position + Vector3.up, size));
+        }
 
         private Vector3 ViewForward
         {
@@ -271,8 +293,6 @@ namespace EnemySpace
             rootGo.SetActive(false);
             poolRoot = rootGo.transform;
 
-            // 표류 기준점을 한 번만 잡는다 — Center는 플레이어를 따라 움직여 기준으로 쓸 수 없다.
-            arenaOrigin = Center;
         }
 
         void OnEnable()
@@ -305,9 +325,9 @@ namespace EnemySpace
             Prewarm();
 
             for (int i = ring.Count; i < ringCount; i++)
-                SpawnIntoRing(instant: true);
+                SpawnIntoStage();
 
-            PromoteOpponent();
+            ReleaseCurrentOpponent();
         }
 
 #if UNITY_EDITOR
@@ -377,21 +397,34 @@ namespace EnemySpace
             }
         }
 
-        /// <summary>링에 적 하나를 채운다. 등장 각도는 <b>시야 반대편</b>에서 고른다(§3-5).</summary>
-        private EnemyView SpawnIntoRing(bool instant)
+        /// <summary>
+        /// 무대에 적 하나를 세운다. 위치는 <b>플레이어 시야 밖</b>에서 고른다.
+        ///
+        /// <para><b>걸어 들어오지 않는다.</b> 어차피 화면 밖에서 나타나므로 등장 이동은 아무도 못 본다 —
+        /// 그 구간을 없애 팝인 연출과 그 비용을 같이 지웠다.</para>
+        ///
+        /// <para>시야 판정은 각도 근사가 아니라 <b>실제 절두체</b>다. 무대가 월드에 고정되면
+        /// 적도 플레이어도 원 안 어디에나 있어서 "카메라 yaw와의 각차"로는 화면 안인지 알 수 없다.</para>
+        /// </summary>
+        private EnemyView SpawnIntoStage()
         {
             var definition = PickDefinition();
             if (definition == null) return null;
 
-            angleScratch.Clear();
-            foreach (var e in ring) angleScratch.Add(e.RingAngle);
+            positionScratch.Clear();
+            foreach (var e in ring) positionScratch.Add(e.transform.position);
+            if (currentOpponent != null) positionScratch.Add(currentOpponent.transform.position);
 
-            float viewYaw = EnemyRing.DirectionToAngle(ViewForward);
-            float angle = EnemyRing.PickSpawnAngle(angleScratch, viewYaw, minAngleGap);
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            System.Func<Vector3, bool> isVisible = cam != null ? BuildVisibilityTest(cam) : null;
 
-            float radius = ringRadius + UnityEngine.Random.Range(-radiusJitter, radiusJitter);
-            Vector3 ringPos = EnemyRing.AngleToPosition(Center, angle, radius);
-            Vector3 entryPos = instant ? ringPos : EnemyRing.AngleToPosition(Center, angle, radius * Mathf.Max(entryDistanceMul, 1f));
+            Vector3 stagePos = EnemyRing.PickStagePosition(
+                positionScratch, Center, stageRadius,
+                PlayerPosition,
+                cam != null ? cam.transform.position : Center,
+                ViewForward,
+                minSpacing, minPlayerDistance,
+                isVisible, () => UnityEngine.Random.value, spawnCandidateCount);
 
             var go = Rent(definition.Prefab, definition.MaxPoolSize);
             if (go == null) return null;
@@ -399,10 +432,11 @@ namespace EnemySpace
             var view = go.GetComponent<EnemyView>();
             if (view == null) view = go.AddComponent<EnemyView>();
 
-            view.Setup(definition, angle, ringPos, entryPos, instant ? 0.01f : entryDuration, Center);
+            float angle = EnemyRing.DirectionToAngle(stagePos - Center);
+            view.Setup(definition, angle, stagePos, stagePos, 0.01f, PlayerPosition);
 
-            // 링에 선 적 전원이 플레이어를 노려본다. 대상은 트랜스폼이라 플레이어가 움직여도 따라간다.
-            view.SetGazeTarget(arenaCenter != null ? arenaCenter : transform);
+            // 무대에 선 적 전원이 플레이어를 노려본다. 대상은 트랜스폼이라 플레이어가 움직여도 따라간다.
+            view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
             ring.Add(view);
             return view;
@@ -424,43 +458,41 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 대기석을 승격시키고 링에서 새 대기석을 뽑는다.
-        /// <b>대기석은 자리를 옮기지 않는다</b> — 다음 상대를 미리 <i>뽑아만</i> 둔다.
+        /// 죽은 상대를 놓아준다. <b>다음 상대를 고르지 않는다</b> — 고르는 일은 <see cref="BindReservation"/>이 한다.
         ///
-        /// <para>예전에는 결투 앵커 옆으로 미리 걸어 나오게 했다. 적이 링(반경 6m)을 통째로 건너와야 해서
-        /// 클립 시작 전에 못 닿는 일이 잦았기 때문이다. <b>수렴이 들어오면서 그 이유가 사라졌다</b> —
-        /// 이제 플레이어가 절반을 마중 나가므로 링에서 바로 출발해도 시간이 맞는다.
-        /// 미리 나와 있으면 오히려 링이 헐거워 보이고, 플레이어가 딴 데로 뛰면 혼자 서 있는 그림이 된다.</para>
+        /// <para>표적을 창(음악이 정한다)으로 고르는데, 창은 배정 시점에서야 알 수 있기 때문이다.
+        /// 둘은 <see cref="ResolveReservation"/> 한 호출 안이라 <b>같은 프레임</b>이고, 그래서 옮겨도
+        /// <see cref="OnOpponentChanged"/> 발행 타이밍이 실질적으로 바뀌지 않는다.</para>
         /// </summary>
-        private void PromoteOpponent()
+        private void ReleaseCurrentOpponent()
         {
-            var previous = currentOpponent;
-
-            currentOpponent = onDeck ?? TakeNextFromRing(previous);
-            onDeck = TakeNextFromRing(currentOpponent);
-
-            // 이전 상대가 살아 있는데 자리를 넘겼다면 링으로 돌려보낸다.
-            // 실패 후퇴(짧게 물러남)와 달리 여기는 진짜 이탈이다 — 그래서 목적지도 다르다.
-            if (previous != null && previous != currentOpponent && previous.Current != EnemyView.Phase.Dying)
-            {
-                previous.ReturnToRing(returnDuration);
-                if (!ring.Contains(previous)) ring.Add(previous);
-            }
-
-            if (currentOpponent != previous)
-                OnOpponentChanged?.Invoke(previous, currentOpponent);
+            currentOpponent = null;
         }
 
-        /// <summary>링 각도 순으로 다음 적을 뽑는다. 배치는 랜덤이되 선택은 순서라야 아레나를 한 바퀴 훑는 그림이 된다.</summary>
-        private EnemyView TakeNextFromRing(EnemyView reference)
+        /// <summary>
+        /// <b>다음 표적을 창이 고른다</b> — 여기가 속도감의 심장이다.
+        ///
+        /// <para>창은 음악이 정해 0.5~2.1초로 4배 흔들린다. 거리를 고정하면 <b>속도가 그만큼 흔들린다.</b>
+        /// 거꾸로 <c>cruiseSpeed × 창</c>을 목표 거리로 삼으면 <b>체감 속도가 일정</b>해지고,
+        /// 짧은 구간은 근거리 난타 / 긴 구간은 무대 횡단 대시로 자연히 갈린다.</para>
+        ///
+        /// <para><b><c>playerShare</c>로 나누는 것이 핵심이다.</b> 플레이어는 간격의 일부만 가므로
+        /// 그 몫이 <c>cruiseSpeed × 창</c>이 되려면 간격은 그보다 커야 한다.
+        /// 안 나누면 비율을 올릴수록 오히려 느려진다.</para>
+        /// </summary>
+        private EnemyView TakeTargetForWindow(float window, float duelDistance)
         {
             if (ring.Count == 0) return null;
 
-            angleScratch.Clear();
-            foreach (var e in ring) angleScratch.Add(e.RingAngle);
+            Vector3 from = PlayerPosition;
 
-            float from = reference != null ? reference.RingAngle : EnemyRing.DirectionToAngle(ViewForward);
-            int index = EnemyRing.PickNextOpponent(angleScratch, from);
+            float desired = cruiseSpeed * Mathf.Max(window, 0f) / Mathf.Max(playerShare, 0.01f) + duelDistance;
+            desired = Mathf.Clamp(desired, minTargetDistance, stageRadius * 2f);
+
+            positionScratch.Clear();
+            foreach (var e in ring) positionScratch.Add(e.transform.position);
+
+            int index = EnemyRing.PickTargetByDistance(positionScratch, from, desired);
             if (index < 0) return null;
 
             var picked = ring[index];
@@ -469,72 +501,52 @@ namespace EnemySpace
             return picked;
         }
 
-        private Vector3 DuelDirection()
-        {
-            if (duelAnchor == null) return Vector3.forward;
-
-            Vector3 dir = duelAnchor.position - Center;
-            dir.y = 0f;
-            return dir.sqrMagnitude < 1e-6f ? Vector3.forward : dir.normalized;
-        }
-
         /// <summary>
         /// 이번 패턴에서 둘이 유지할 간격(m). <b>앵커가 기준 거리의 단일 출처다</b> —
-        /// 앵커는 플레이어 자식이므로 중앙까지의 평면 거리가 곧 기본 간격이고, 패턴이 리치만큼 보정한다.
+        /// 앵커는 플레이어 자식이므로 플레이어까지의 평면 거리가 곧 기본 간격이고, 패턴이 리치만큼 보정한다.
         /// 툴(<c>짝 에디터</c>·<c>슬라이서</c>)의 `기준 결투 거리`에 같은 값을 넣어야 그림이 일치한다.
         /// </summary>
         private float DuelDistanceOf(Pattern template)
         {
             // 앵커가 없으면 툴 기본값과 같은 1m로 본다 — 두 곳이 다르면 프리뷰와 게임이 어긋난다.
-            float baseDistance = duelAnchor != null
-                ? Vector3.ProjectOnPlane(duelAnchor.position - Center, Vector3.up).magnitude
+            float baseDistance = duelAnchor != null && duelAnchor.parent != null
+                ? Vector3.ProjectOnPlane(duelAnchor.position - duelAnchor.parent.position, Vector3.up).magnitude
                 : 1f;
+
+            if (baseDistance < 0.1f) baseDistance = 1f;
 
             return Mathf.Max(baseDistance + (template != null ? template.DuelDistanceOffset : 0f), 0.1f);
         }
 
         /// <summary>
-        /// 둘이 마주 달려 만나는 배치를 만든다.
+        /// 둘이 만나는 배치를 만든다. <b>비율은 <see cref="playerShare"/>가 정한다</b>(0.85 = 8:2 남짓).
         ///
-        /// <para><b>중점 기준 대칭</b>이라 각자 이동 거리가 절반이 되고, 누가 얼마나 움직였는지가 공평하게 읽힌다.
-        /// 다만 중점으로 그냥 가면 플레이어가 교전마다 링 쪽으로 끌려가므로(누적 표류)
-        /// <see cref="maxOffset"/>으로 <b>클램프한 뒤 적 목표를 다시 계산</b>한다 —
-        /// 순서를 뒤집으면 간격이 <see cref="DuelDistanceOf"/>와 어긋나 칼이 빗나간다.</para>
+        /// <para>예전에는 0.5 고정이라 둘이 똑같이 절반씩 왔고, 거기에 리시까지 걸려 플레이어 몫이
+        /// 1.5m로 잘렸다 — <b>초속 1m, 걷는 것보다 느렸다.</b> 무대가 월드에 고정된 지금은
+        /// 리시가 필요 없다(무대 자체가 경계이고 표적이 무대 안이므로 플레이어도 무대 안에 남는다).</para>
         ///
-        /// <para>여유가 <see cref="minConvergeTime"/> 미만이면 <b>플레이어는 제자리</b>고 적만 붙는다.
-        /// 순간이동처럼 미끄러지는 것보다 낫고, 어느 쪽이든 <b>간격은 항상 지켜진다</b>.</para>
+        /// <para><b>적을 완전히 세우지는 않는다.</b> 1로 두면 정지 표적으로 읽힌다 —
+        /// 한 걸음이라도 마중 나와야 교전으로 보인다. 그 몫이 창 전체로 늘어져 기어가는 문제는
+        /// <c>EnemyView.EarliestArrival</c>이 막는다(빨리 가서 서고 플레이어를 바라본다).</para>
         /// </summary>
         private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime)
         {
-            Vector3 center = Center;
+            Vector3 player = PlayerPosition;
             float distance = DuelDistanceOf(template);
 
-            // 상대가 없으면(디버그 경로) 앵커를 그대로 쓴다.
+            // 상대가 없으면(디버그 경로) 플레이어는 제자리, 적 자리만 앞에 잡아 준다.
             if (opponent == null)
-                return new DuelPlan(center, center + DuelDirection() * distance, arriveTime);
+                return new DuelPlan(player, player + Vector3.forward * distance, arriveTime);
 
-            // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴·대기석 진입·링 등장)
-            // transform.position은 곧 떠날 위치다. 특히 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
-            Vector3 enemyPos = opponent.Destination;
-            Vector3 toEnemy = Vector3.ProjectOnPlane(enemyPos - center, Vector3.up);
-            Vector3 dir = toEnemy.sqrMagnitude < 1e-6f ? DuelDirection() : toEnemy.normalized;
+            // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴 등)
+            // transform.position은 곧 떠날 위치다. 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
+            Vector3 toEnemy = Vector3.ProjectOnPlane(opponent.Destination - player, Vector3.up);
+            Vector3 dir = toEnemy.sqrMagnitude < 1e-6f ? Vector3.forward : toEnemy.normalized;
 
-            bool canConverge = (arriveTime - Time.time) >= minConvergeTime;
-            if (!canConverge)
-                return new DuelPlan(center, center + dir * distance, arriveTime);
+            Vector3 meet = player + toEnemy * playerShare;
+            Vector3 playerTarget = meet - dir * (distance * playerShare);
+            playerTarget.y = player.y;
 
-            Vector3 mid = center + toEnemy * 0.5f;
-            Vector3 playerTarget = mid - dir * (distance * 0.5f);
-
-            // 리시 — 아레나 원점에서 너무 멀어지면 클램프한다. 플레이어가 덜 가고 적이 그만큼 더 온다.
-            //
-            // 기준점은 반드시 '고정된 원점'이어야 한다. arenaCenter가 플레이어를 가리키면
-            // Center가 플레이어와 함께 움직여, 이 식이 "중앙에서의 이탈"이 아니라 "한 걸음의 길이"를 재게 된다
-            // → 매 교전 1.5m씩 링 쪽으로 걸어 나가도 아무도 막지 못한다.
-            Vector3 offset = Vector3.ProjectOnPlane(playerTarget - ArenaOrigin, Vector3.up);
-            if (offset.magnitude > maxOffset) playerTarget = ArenaOrigin + offset.normalized * maxOffset;
-
-            playerTarget.y = center.y;
             return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime);
         }
 
@@ -598,8 +610,6 @@ namespace EnemySpace
             };
             reservations.Add(reservation);
 
-            StageOnDeck(impactTime);
-
             // 선두 예약(앞에 미확정 예약이 없다)은 지금이 곧 판정 대상이 되는 순간이다 — 즉시 배정한다.
             // 첫 패턴과 곡 중간 공백 뒤가 이 경로를 탄다.
             if (IsHeadReservation(reservation)) BindReservation(reservation);
@@ -620,22 +630,34 @@ namespace EnemySpace
         /// <summary>
         /// <b>배정</b> — 이 패턴이 판정 대상이 되는 순간에 상대를 확정하고 결투를 건다.
         ///
-        /// <para>여기가 <c>currentOpponent</c>를 읽는 <b>유일한 지점</b>이다. 호출 시점이 곧
-        /// "이전 패턴의 성패가 반영된 뒤"라서, 승격했든 안 했든 언제나 정답이 들어 있다.</para>
+        /// <para>여기가 <c>currentOpponent</c>를 <b>정하는</b> 유일한 지점이다. 호출 시점이 곧
+        /// "이전 패턴의 성패가 반영된 뒤"이고, 동시에 <b>창을 알 수 있는 유일한 시점</b>이라
+        /// 표적 선택(<see cref="TakeTargetForWindow"/>)도 여기서 한다.</para>
         /// </summary>
         private void BindReservation(Reservation r)
         {
             if (r.bound) return;
             r.bound = true;
 
-            var opponent = currentOpponent;
-            r.opponent = opponent;
-
             // 도착 시각 = 클립 시작 시각. 클립이 없으면 임팩트까지가 여유다.
             // AssignAttack이 내부에서 같은 식을 쓰지만(순수 함수) 계획을 먼저 세워야 해서 여기서 한 번 더 부른다.
             float arriveTime = r.attack != null && r.attack.IsUsable
                 ? r.attack.ResolveScheduleStart(r.impactTime, Time.time)
                 : r.impactTime;
+
+            float duelDistance = DuelDistanceOf(r.template);
+
+            // 상대가 비어 있으면(직전 교전이 처치로 끝났다) 창에 맞는 거리의 적을 새로 고른다.
+            // 살아 있으면 그대로 이어 싸운다 — "실패하면 같은 상대와 계속"이 여기서 지켜진다.
+            if (currentOpponent == null)
+            {
+                var previous = currentOpponent;
+                currentOpponent = TakeTargetForWindow(arriveTime - Time.time, duelDistance);
+                if (currentOpponent != previous) OnOpponentChanged?.Invoke(previous, currentOpponent);
+            }
+
+            var opponent = currentOpponent;
+            r.opponent = opponent;
 
             var plan = BuildDuelPlan(opponent, r.template, arriveTime);
             lastPlan = plan;
@@ -660,40 +682,6 @@ namespace EnemySpace
                 BindReservation(r);
                 return;
             }
-        }
-
-        /// <summary>
-        /// 대기석을 <b>지금 패턴이 입력되는 동안</b> 결투 지점 쪽으로 미리 걸어 들여보낸다.
-        ///
-        /// <para>승격은 처치 순간에 일어나고, 다음 패턴의 창은 노드 개수가 정한다(대략 0.6~1.4초).
-        /// 링 반경(6m)에서 출발하면 짧은 패턴에서는 그 시간에 도저히 못 닿아 미끄러지듯 끌려온다.
-        /// <b>그래서 걸을 시간이 있을 때 미리 걷는다</b> — 지금 패턴의 입력 구간이 통째로 남는다.</para>
-        ///
-        /// <para><b>항상 들여보내지는 않는다.</b> 창 안에 <see cref="approachSpeed"/>로 닿을 거리면
-        /// 링에 그대로 둔다 — 그래야 링이 헐거워 보이지 않고, 수렴이 원래 하려던 "서로 마주 달려가는" 그림이 산다.</para>
-        ///
-        /// <para><b>판단 창은 지금 패턴의 창이 아니라 고정값(<see cref="bindToImpactWindow"/>)이다.</b>
-        /// 상대 배정이 판정 대상 승계 시점으로 내려간 뒤로, 승격된 적에게 실제로 주어지는 시간은
-        /// "지금 패턴이 얼마나 긴가"와 무관하게 <b>배정~임팩트 구간</b>뿐이다. 지금 패턴의 창으로 재면
-        /// 긴 패턴이 지나갈 때 "여유 있다"고 링에 두는데, 정작 배정 직후엔 0.4초밖에 없다.</para>
-        /// </summary>
-        private void StageOnDeck(float arriveTime)
-        {
-            if (onDeck == null) return;
-
-            Vector3 center = Center;
-            Vector3 radial = Vector3.ProjectOnPlane(onDeck.transform.position - center, Vector3.up);
-
-            // 배정 후 주어질 시간 안에 뛰어올 수 있으면 손대지 않는다.
-            if (radial.magnitude - stagingDistance <= approachSpeed * bindToImpactWindow) return;
-
-            // 자기 링 방향을 유지한 채 좁혀 든다 — 링을 가로질러 순간이동하는 것처럼 보이지 않는다.
-            Vector3 dir = radial.sqrMagnitude < 1e-6f ? -DuelDirection() : radial.normalized;
-            Vector3 target = center + dir * stagingDistance;
-            target.y = onDeck.transform.position.y;
-
-            onDeck.ScheduleFace(center);
-            onDeck.ScheduleMove(onDeck.transform.position, target, Time.time, arriveTime);
         }
 
         /// <summary>보정 없는 기준선. 기즈모가 쓴다 — 특정 패턴에 묶이지 않는다.</summary>
@@ -737,7 +725,7 @@ namespace EnemySpace
                 // killOnSuccess를 성공하면 처치, 실패하면 죽지 않고 교전이 이어진다.
                 // 이 분기가 "실패하면 같은 상대와 계속"의 유일한 소유자다 — 아래 배정은 그 결과를 읽기만 한다.
                 if (r.cue.killOnSuccess && playerSucceeded)
-                    KillOpponent(opponent, ResolveDeathSet(r), r.impactTime); // 안에서 PromoteOpponent
+                    KillOpponent(opponent, ResolveDeathSet(r), r.impactTime, r.template?.EnemyDeath); // 안에서 상대 해제
                 else
                     opponent.Resolve(playerSucceeded, AttackerOf(r.template), failRetreatDistance, retreatDuration);
             }
@@ -766,26 +754,29 @@ namespace EnemySpace
         /// 처치. <b>죽는 연출을 기다리지 않는다</b> — 죽는 적은 그 자리에 버려두고 즉시 다음 상대로 넘어간다.
         /// 무쌍 감각의 핵심이 이거다(베고 뒤도 안 돌아본다).
         ///
-        /// <para>다만 <b>연출만은 임팩트 시각까지 기다린다</b>(<see cref="PendingKill"/>).
-        /// 상대 전환·링 보충은 여기서 즉시 하고, 갈라짐만 예약한다.</para>
+        /// <para>다만 <b>연출은 기다린다</b>(<see cref="PendingKill"/>). 상대 전환·링 보충은 여기서 즉시 하고,
+        /// 사망 클립을 임팩트에 정렬해 재생한 뒤 <b>그 클립의 트림 끝</b>에 갈라짐을 예약한다 —
+        /// 쓰러지는 것을 다 보고 나서 갈라진다. 클립이 없으면 예전대로 임팩트에 갈라진다.</para>
         /// </summary>
-        private void KillOpponent(EnemyView opponent, SliceSet set, float impactTime)
+        private void KillOpponent(EnemyView opponent, SliceSet set, float impactTime, ClipAlignment death)
         {
             opponent.MarkDying();
 
-            pendingKills.Add(new PendingKill { opponent = opponent, set = set, impactTime = impactTime });
+            // 절단 시각은 배속을 아는 쪽(뷰)이 계산한다 — 여기서 따로 추정하면 두 값이 갈라진다.
+            float burstTime = opponent.AssignDeath(death, impactTime, maxAttackSpeed);
+
+            pendingKills.Add(new PendingKill { opponent = opponent, set = set, burstTime = burstTime });
 
             OnEnemyKilled?.Invoke(opponent);
 
             if (currentOpponent == opponent) currentOpponent = null;
-            if (onDeck == opponent) onDeck = null;
 
             // 링을 다시 채우고(등 뒤에서 걸어 들어온다) 다음 상대로 전환한다.
-            if (ring.Count < ringCount) SpawnIntoRing(instant: false);
-            PromoteOpponent();
+            if (ring.Count < ringCount) SpawnIntoStage();
+            ReleaseCurrentOpponent();
         }
 
-        /// <summary>임팩트 시각에 도달한 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
+        /// <summary>사망 클립이 끝난 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
         private void TickPendingKills()
         {
             float now = Time.time;
@@ -793,7 +784,7 @@ namespace EnemySpace
             for (int i = pendingKills.Count - 1; i >= 0; i--)
             {
                 var pending = pendingKills[i];
-                if (now < pending.impactTime) continue;
+                if (now < pending.burstTime) continue;
 
                 pendingKills.RemoveAt(i);
                 ExecuteKill(pending);
@@ -804,6 +795,8 @@ namespace EnemySpace
         {
             var opponent = pending.opponent;
             if (opponent == null) return;
+
+            OnEnemyBurst?.Invoke(opponent);
 
             var set = pending.set;
 
@@ -887,7 +880,6 @@ namespace EnemySpace
         {
             foreach (var e in ring) e?.Dissolve(dissolveDuration);
             currentOpponent?.Dissolve(dissolveDuration);
-            onDeck?.Dissolve(dissolveDuration);
         }
 
         /// <summary>소멸 연출까지 전부 끝났는지. 스테이지 종료 신호를 낼 시점 판단에 쓴다.</summary>
@@ -901,7 +893,6 @@ namespace EnemySpace
                 }
 
                 if (currentOpponent != null && !currentOpponent.DissolveFinished) return false;
-                if (onDeck != null && !onDeck.DissolveFinished) return false;
 
                 return true;
             }
@@ -977,11 +968,6 @@ namespace EnemySpace
                 currentOpponent = null;
             }
 
-            if (onDeck != null && onDeck.DissolveFinished)
-            {
-                ReleaseEnemy(onDeck);
-                onDeck = null;
-            }
         }
 
         private void RecycleDebris()
@@ -1124,35 +1110,23 @@ namespace EnemySpace
 
             Vector3 center = Center;
 
+            // 무대 경계. 적은 이 원 '안'에 흩어진다.
             Gizmos.color = gizmoRingColor;
-            DrawCircle(center, ringRadius);
+            DrawCircle(center, stageRadius);
 
-            // 배치 가능 범위가 띠로 보이도록 안팎 경계를 같이 그린다.
             var faded = gizmoRingColor;
-            faded.a *= 0.4f;
+            faded.a *= 0.35f;
             Gizmos.color = faded;
-            DrawCircle(center, ringRadius - radiusJitter);
-            DrawCircle(center, ringRadius + radiusJitter);
-            DrawCircle(center, ringRadius * Mathf.Max(entryDistanceMul, 1f));
+            DrawCircle(center, stageRadius * 0.5f);
 
-            // 최소 각 간격을 방사선으로 — 몇 명이 들어가는지 눈으로 센다.
-            Gizmos.color = faded;
-            for (float a = 0f; a < 360f; a += Mathf.Max(minAngleGap, 1f))
-                Gizmos.DrawLine(center, EnemyRing.AngleToPosition(center, a, ringRadius));
-
-            // 보정 없는 기준선만 그린다 — 패턴별 보정까지 그리면 무엇을 보고 있는지 모호해진다.
+            // 플레이어 주변 스폰 금지 반경 — 코앞에 튀어나오는지 눈으로 본다.
             Gizmos.color = gizmoDuelColor;
-            Vector3 duel = DuelAnchorPosition();
-            Gizmos.DrawWireSphere(duel, 0.3f);
-            Gizmos.DrawLine(center, duel);
-            UnityEditor.Handles.color = gizmoDuelColor;
-            UnityEditor.Handles.Label(duel + Vector3.up * 0.4f,
-                $"결투 기준선 {Vector3.Distance(center, duel):0.00}m (패턴별 ± 보정은 별도)");
-            DrawCircle(center, maxOffset);
+            DrawCircle(PlayerPosition, minPlayerDistance);
 
             UnityEditor.Handles.color = gizmoRingColor;
             UnityEditor.Handles.Label(center + Vector3.up * 0.5f,
-                $"ring r={ringRadius:0.0}±{radiusJitter:0.0}  count={ringCount}  gap={minAngleGap:0}°  (최대 {Mathf.FloorToInt(360f / Mathf.Max(minAngleGap, 1f))}명)");
+                $"stage r={stageRadius:0.0}  count={ringCount}  spacing={minSpacing:0.0}m\n" +
+                $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s");
 
             if (!Application.isPlaying) return;
 
@@ -1161,12 +1135,6 @@ namespace EnemySpace
                 if (e == null) continue;
                 Gizmos.color = gizmoRingColor;
                 Gizmos.DrawWireCube(e.transform.position, Vector3.one * 0.4f);
-            }
-
-            if (onDeck != null)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireCube(onDeck.transform.position, Vector3.one * 0.6f);
             }
 
             if (currentOpponent != null)

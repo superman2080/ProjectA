@@ -114,4 +114,117 @@ public class EnemyRingTests
 
         Assert.That(Vector3.Distance(position, new Vector3(0f, 0f, 4f)), Is.LessThan(0.001f));
     }
+
+    // ── 무대 배치(2D): 시야 밖 · 간격 ────────────────────────────────────────
+
+    /// <summary>결정적 난수원 — 후보를 예측 가능한 순서로 뽑아 테스트가 흔들리지 않게 한다.</summary>
+    private static System.Func<float> Sequence(params float[] values)
+    {
+        int i = 0;
+        return () => values[i++ % values.Length];
+    }
+
+    [Test]
+    public void 무대배치는_화면_안_후보를_피한다()
+    {
+        // +Z 절반을 화면 안으로 본다.
+        System.Func<Vector3, bool> visible = p => p.z > 0f;
+
+        for (int seed = 0; seed < 20; seed++)
+        {
+            Random.InitState(seed);
+            Vector3 pos = EnemyRing.PickStagePosition(
+                new List<Vector3>(), Vector3.zero, 8f,
+                playerPosition: Vector3.zero, viewPosition: new Vector3(0f, 4f, -10f), viewForward: Vector3.forward,
+                minSpacing: 1f, minPlayerDistance: 2f,
+                isVisible: visible, random: () => Random.value);
+
+            Assert.That(visible(pos), Is.False, $"seed={seed} 위치={pos}");
+        }
+    }
+
+    [Test]
+    public void 무대배치는_기존_적과_간격을_지킨다()
+    {
+        var occupied = new List<Vector3> { new Vector3(3f, 0f, -3f), new Vector3(-4f, 0f, -1f) };
+
+        for (int seed = 0; seed < 20; seed++)
+        {
+            Random.InitState(seed);
+            Vector3 pos = EnemyRing.PickStagePosition(
+                occupied, Vector3.zero, 8f,
+                playerPosition: Vector3.zero, viewPosition: new Vector3(0f, 4f, -10f), viewForward: Vector3.forward,
+                minSpacing: 2f, minPlayerDistance: 1f,
+                isVisible: null, random: () => Random.value);
+
+            foreach (var o in occupied)
+                Assert.That(Vector3.Distance(o, pos), Is.GreaterThanOrEqualTo(2f - 0.001f), $"seed={seed}");
+        }
+    }
+
+    [Test]
+    public void 무대배치는_전부_보여도_실패하지_않는다()
+    {
+        Random.InitState(1);
+        Vector3 pos = EnemyRing.PickStagePosition(
+            new List<Vector3>(), Vector3.zero, 8f,
+            playerPosition: Vector3.zero, viewPosition: Vector3.zero, viewForward: Vector3.forward,
+            minSpacing: 1f, minPlayerDistance: 0f,
+            isVisible: _ => true, random: () => Random.value);
+
+        // 폴백은 카메라 전방과 가장 덜 겹치는 후보 = 뒤쪽(-Z).
+        Assert.That(pos.z, Is.LessThan(0f), $"위치={pos}");
+    }
+
+    [Test]
+    public void 무대배치는_무대_밖으로_나가지_않는다()
+    {
+        for (int seed = 0; seed < 20; seed++)
+        {
+            Random.InitState(seed);
+            Vector3 pos = EnemyRing.PickStagePosition(
+                new List<Vector3>(), new Vector3(1f, 0f, 2f), 6f,
+                playerPosition: Vector3.zero, viewPosition: Vector3.zero, viewForward: Vector3.forward,
+                minSpacing: 0f, minPlayerDistance: 0f,
+                isVisible: null, random: () => Random.value);
+
+            Assert.That(Vector3.Distance(new Vector3(1f, 0f, 2f), pos), Is.LessThanOrEqualTo(6f + 0.001f), $"seed={seed}");
+        }
+    }
+
+    // ── 표적 선택: 목표 거리 ────────────────────────────────────────────────
+
+    [Test]
+    public void 목표거리에_가장_가까운_적을_고른다()
+    {
+        var candidates = new List<Vector3>
+        {
+            new Vector3(1f, 0f, 0f),   // 1m
+            new Vector3(5f, 0f, 0f),   // 5m
+            new Vector3(9f, 0f, 0f),   // 9m
+        };
+
+        Assert.That(EnemyRing.PickTargetByDistance(candidates, Vector3.zero, 4.5f), Is.EqualTo(1));
+        Assert.That(EnemyRing.PickTargetByDistance(candidates, Vector3.zero, 0.5f), Is.EqualTo(0));
+        Assert.That(EnemyRing.PickTargetByDistance(candidates, Vector3.zero, 100f), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void 목표거리_선택은_높이를_무시한다()
+    {
+        var candidates = new List<Vector3>
+        {
+            new Vector3(5f, 50f, 0f),  // 평면 5m, 높이 50m
+            new Vector3(9f, 0f, 0f),
+        };
+
+        Assert.That(EnemyRing.PickTargetByDistance(candidates, Vector3.zero, 5f), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void 표적_후보가_없으면_음수다()
+    {
+        Assert.That(EnemyRing.PickTargetByDistance(new List<Vector3>(), Vector3.zero, 5f), Is.EqualTo(-1));
+        Assert.That(EnemyRing.PickTargetByDistance(null, Vector3.zero, 5f), Is.EqualTo(-1));
+    }
 }
