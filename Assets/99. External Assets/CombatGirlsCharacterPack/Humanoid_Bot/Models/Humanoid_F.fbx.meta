@@ -1,7 +1,14 @@
 fileFormatVersion: 2
 guid: b02f7765ace5dff4a866b767512e4a05
+AssetOrigin:
+  serializedVersion: 1
+  productId: 322644
+  packageName: CombatGirls_KatanaCharacterPack
+  packageVersion: 1.1
+  assetPath: Assets/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx
+  uploadId: 838896
 ModelImporter:
-  serializedVersion: 22200
+  serializedVersion: 24200
   internalIDToNameTable: []
   externalObjects:
   - first:
@@ -45,7 +52,7 @@ ModelImporter:
     extraExposedTransformPaths: []
     extraUserProperties: []
     clipAnimations: []
-    isReadable: 0
+    isReadable: 1
   meshes:
     lODScreenPercentages: []
     globalScale: 1
@@ -71,6 +78,9 @@ ModelImporter:
     maxBonesPerVertex: 4
     minBoneWeight: 0.001
     optimizeBones: 1
+    generateMeshLods: 0
+    meshLodGenerationFlags: 0
+    maximumMeshLod: -1
     meshOptimizationFlags: -1
     indexFormat: 0
     secondaryUVAngleDistortion: 8
@@ -554,8 +564,7 @@ ModelImporter:
     - name: spine_03
       parentName: spine_02
       position: {x: -0.09947624, y: -0.00013188123, z: 7.4505804e-11}
-      rotation: {x: 0.0000000037252363, y: 0.0000000012592413, z: -0.00089900004,
-        w: 0.9999996}
+      rotation: {x: 0.0000000037252363, y: 0.0000000012592413, z: -0.00089900004, w: 0.9999996}
       scale: {x: 1, y: 1, z: 1}
     - name: clavicle_l
       parentName: spine_03
@@ -785,8 +794,7 @@ ModelImporter:
     - name: thigh_twist_01_r
       parentName: thigh_r
       position: {x: -0.22478591, y: 0, z: -0.000000047683713}
-      rotation: {x: -0.0000000032341645, y: 0.000000039115548, z: 0.000000032712705,
-        w: 1}
+      rotation: {x: -0.0000000032341645, y: 0.000000039115548, z: 0.000000032712705, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: calf_r
       parentName: thigh_r
@@ -837,10 +845,3 @@ ModelImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 322644
-  packageName: CombatGirls_KatanaCharacterPack
-  packageVersion: 1.1
-  assetPath: Assets/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx
-  uploadId: 838896

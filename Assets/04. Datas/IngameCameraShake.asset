@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.NoiseSettings
   PositionNoise:
   - X:
-      Frequency: 10
-      Amplitude: 1.5
+      Frequency: 20
+      Amplitude: 1.2
       Constant: 0
     Y:
-      Frequency: 10
-      Amplitude: 1.5
+      Frequency: 20
+      Amplitude: 1.2
       Constant: 0
     Z:
       Frequency: 0

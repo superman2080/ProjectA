@@ -150,7 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SoundManager
   initialVolumes:
   - channel: 0
-    volume: 1
+    volume: 0.3
   - channel: 1
     volume: 0.3
   - channel: 2
@@ -511,7 +511,7 @@ MonoBehaviour:
         m_MethodName: SelectChart
         m_Mode: 2
         m_Arguments:
-          m_ObjectArgument: {fileID: 11400000, guid: 29986f97fa376834fa50d19c05b1546b, type: 2}
+          m_ObjectArgument: {fileID: 11400000, guid: 20e067469aa0be549951c1c44cd08f9f, type: 2}
           m_ObjectArgumentAssemblyTypeName: ChartGen.SongChart, Assembly-CSharp
           m_IntArgument: 0
           m_FloatArgument: 0

@@ -12,11 +12,28 @@ namespace ChartGen
         [SerializeField] private AudioSource audioSource;
         [SerializeField] private PatternHandler patternHandler;
 
+        [Tooltip("전투 연출. 비우면 적 없이 패턴만 재생된다(기존 동작).")]
+        [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
+
+        // 이 구간은 프리웜 창이자 인트로 연출 창이다. 어느 쪽으로 봐도 짧아져서 좋을 게 없어 하한을 타입으로 못박는다.
+        [Min(3f)]
         [SerializeField] private float countdownDuration = 3f;
         [SerializeField] private bool playOnStart = false;
 
+        /// <summary>곡이 끝난 순간(마지막 엔트리 소진 + 오디오 종료). 남은 적 소멸·스테이지 종료가 구독한다.</summary>
+        public event System.Action OnSongEnded;
+
+        /// <summary>
+        /// 카운트다운이 시작된 순간. 인자는 곡이 시작되기까지 남은 시간(초)이다.
+        ///
+        /// <para>프리웜(<c>PrepareStage</c>)이 <b>끝난 뒤</b> 발행되므로, 구독자는 적이 이미 배치된 무대를 본다.
+        /// 이 창 안에서 끝나는 연출(카메라 인트로 등)이 구독한다.</para>
+        /// </summary>
+        public event System.Action<float> OnCountdownStarted;
+
         private List<SongChartEntry> pendingEntries;
         private Coroutine playCoroutine;
+        private bool songEndRaised;
 
         /// <summary>GameSession의 선택된 채보를 우선 사용하고, 없으면 debugChart를 사용한다.</summary>
         private SongChart ActiveChart =>
@@ -113,8 +130,18 @@ namespace ChartGen
                 .OrderBy(e => e.spawnTimes[0])
                 .ToList();
 
+            songEndRaised = false;
+
+            // 카운트다운이 곧 프리웜 창이다 — 곡 도중에는 Instantiate가 한 번도 일어나면 안 된다
+            // (스키닝 메쉬 생성 한 프레임이 히치가 되고, 그게 곧 판정 손실이다).
+            // 절단 세트는 EnemyDefinition이 소유하므로 rosterPool을 훑는 것만으로 프리웜이 끝난다.
+            enemyDirector?.PrepareStage();
+
             if (countdownDuration > 0f)
+            {
+                OnCountdownStarted?.Invoke(countdownDuration);
                 yield return new WaitForSeconds(countdownDuration);
+            }
 
             audioSource.clip = ActiveChart.song;
             ApplyMusicVolume();
@@ -125,7 +152,14 @@ namespace ChartGen
 
         private void Update()
         {
-            if (pendingEntries == null || pendingEntries.Count == 0) return;
+            if (pendingEntries == null) return;
+
+            if (pendingEntries.Count == 0)
+            {
+                RaiseSongEndedIfFinished();
+                return;
+            }
+
             if (!audioSource.isPlaying) return;
 
             var next = pendingEntries[0];
@@ -134,9 +168,23 @@ namespace ChartGen
             float baseTime = next.spawnTimes[0];
             var relativeInputTimes = next.onsetTimes.Select(t => t - baseTime).ToArray();
             var relativeSpawnTimes = next.spawnTimes.Select(t => t - baseTime).ToArray();
+
+            // cue를 SetPattern '직전에' 옆으로 밀어 넣는다 — 판정 계층(PatternHandler)은 적을 몰라야 하므로
+            // 페이로드에 싣지 않는다. 디렉터는 OnPatternQueued에서 같은 FIFO 순서로 꺼낸다.
+            enemyDirector?.EnqueueCue(next.enemyCue);
             patternHandler.SetPattern(next.template, relativeInputTimes, relativeSpawnTimes);
 
             pendingEntries.RemoveAt(0);
+        }
+
+        /// <summary>마지막 엔트리까지 소진되고 오디오도 끝나면 곡 종료를 알린다(1회).</summary>
+        private void RaiseSongEndedIfFinished()
+        {
+            if (songEndRaised || audioSource.isPlaying) return;
+
+            songEndRaised = true;
+            enemyDirector?.DissolveAll();
+            OnSongEnded?.Invoke();
         }
     }
 }

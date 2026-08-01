@@ -21,6 +21,32 @@ MonoBehaviour:
   animationDuration: 0.38422722
   animationImpactTime: 0.3148789
   animationSpeed: 1.2
+  attacker: 1
+  enemyAttack:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerAttack:
+    clip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
+    startOffset: 0
+    duration: 0.38422722
+    impactTime: 0.3148789
+    speed: 1.2
+  enemyDeath:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  enemyDeathSliceSet: {fileID: 0}
   sliceTarget: {fileID: 11400000, guid: 0b359d383ee51ab4bba4036115b949d6, type: 2}
   sliceTargetOffset: {x: 0, y: 0}
-  sliceTargetImpactOffset: 0
+  impactOffset: 0

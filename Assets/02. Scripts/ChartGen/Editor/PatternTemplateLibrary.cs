@@ -6,10 +6,31 @@ using UnityEngine;
 
 namespace ChartGen
 {
-    /// <summary>Assets/Patterns/Templates 하위 Pattern 템플릿을 노드 개수 기준으로 스캔/캐싱한다.</summary>
+    /// <summary>
+    /// 굽기에 쓸 Pattern 템플릿을 노드 개수 기준으로 묶어 둔다.
+    ///
+    /// <para>출처는 둘이다 — <b>채보가 지정한 목록</b>(<see cref="SongChart.patternPool"/>)이 있으면 그것만 쓰고,
+    /// 비어 있으면 템플릿 폴더 전체를 스캔한다. 곡마다 어울리는 패턴이 다르므로 지정이 기본이고,
+    /// 폴더 스캔은 아직 고르지 않은 채보를 위한 폴백이다.</para>
+    /// </summary>
     public class PatternTemplateLibrary
     {
-        private const string TemplateFolder = "Assets/04. Datas/Patterns/Templates";
+        public const string TemplateFolder = "Assets/04. Datas/Patterns/Templates";
+
+        /// <summary>폴더 전체가 아니라 지정된 목록만 쓴다. 비었거나 null이면 폴더 스캔으로 넘어간다.</summary>
+        public static PatternTemplateLibrary From(IEnumerable<Pattern> explicitPool)
+        {
+            var list = explicitPool?.Where(p => p != null).ToList();
+            return list != null && list.Count > 0
+                ? new PatternTemplateLibrary(list)
+                : new PatternTemplateLibrary();
+        }
+
+        private PatternTemplateLibrary(IReadOnlyList<Pattern> pool)
+        {
+            foreach (var pattern in pool) Register(pattern);
+            SortNodeCounts();
+        }
 
         private readonly Dictionary<int, List<Pattern>> templatesByNodeCount = new Dictionary<int, List<Pattern>>();
         private readonly Dictionary<int, int> roundRobinIndex = new Dictionary<int, int>();
@@ -31,21 +52,27 @@ namespace ChartGen
 
             var guids = AssetDatabase.FindAssets("t:Pattern", new[] { TemplateFolder });
             foreach (var guid in guids)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var pattern = AssetDatabase.LoadAssetAtPath<Pattern>(path);
-                if (pattern == null) continue;
+                Register(AssetDatabase.LoadAssetAtPath<Pattern>(AssetDatabase.GUIDToAssetPath(guid)));
 
-                int count = pattern.AllData.Count;
-                if (!templatesByNodeCount.TryGetValue(count, out var list))
-                {
-                    list = new List<Pattern>();
-                    templatesByNodeCount[count] = list;
-                }
+            SortNodeCounts();
+        }
 
-                list.Add(pattern);
-            }
+        private void Register(Pattern pattern)
+        {
+            if (pattern == null || pattern.AllData == null) return;
 
+            int count = pattern.AllData.Count;
+            if (count <= 0) return;
+
+            if (!templatesByNodeCount.TryGetValue(count, out var list))
+                templatesByNodeCount[count] = list = new List<Pattern>();
+
+            if (!list.Contains(pattern)) list.Add(pattern); // 같은 패턴을 두 번 넣어도 확률만 왜곡된다
+        }
+
+        private void SortNodeCounts()
+        {
+            availableNodeCounts.Clear();
             availableNodeCounts.AddRange(templatesByNodeCount.Keys.OrderBy(k => k));
         }
 

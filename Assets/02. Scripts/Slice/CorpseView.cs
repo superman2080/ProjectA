@@ -1,0 +1,160 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace SliceSpace
+{
+    /// <summary>
+    /// 시체 하나의 뷰. <b>산 적과 시체는 근본적으로 다른 오브젝트다</b> — 시체는 자기 스켈레톤 사본을 갖는다.
+    ///
+    /// <para>그래서 교체 순간 산 적의 본 포즈만 전사하면 겉모습이 이어지고,
+    /// <b>산 적 인스턴스는 통째로 풀에 반납</b>할 수 있다. 조각을 산 적의 스켈레톤에 물리면
+    /// 그 스켈레톤이 살아 있어야 해서 반납이 불가능하다 — 이 클래스의 존재 이유가 그것이다.</para>
+    ///
+    /// <para>루트 본을 포함한 조각 하나만 스킨드로 남아(래그돌 대상) 스켈레톤을 따라가고,
+    /// 나머지는 교체 순간 굳혀 부모에서 떼고 물리로 넘긴다. 스킨드로 두면 몸에 붙어서 같이 움직인다.</para>
+    /// </summary>
+    [DisallowMultipleComponent]
+    public class CorpseView : MonoBehaviour
+    {
+        [Tooltip("굽기 툴이 채운다. 순서가 SliceSet.RootPieceIndex의 기준이다.")]
+        [SerializeField] private SlicePiece[] pieces;
+
+        [Tooltip("포즈 전사의 기준이 되는 스켈레톤. 조각들의 SkinnedMeshRenderer가 공유한다.")]
+        [SerializeField] private Transform[] bones;
+
+        [Tooltip("스킨드로 남아 래그돌할 조각. 굽기 시점에 결정된다.")]
+        [SerializeField] private int rootPieceIndex = -1;
+
+        private readonly List<SlicePiece> launched = new List<SlicePiece>();
+        private float bornTime;
+
+        public IReadOnlyList<SlicePiece> Pieces => pieces;
+        public Transform[] Bones => bones;
+        public int RootPieceIndex => rootPieceIndex;
+
+        /// <summary>교체된 뒤 흐른 시간. 디렉터가 회수 시점을 잡는 데 쓴다.</summary>
+        public float Age => Time.time - bornTime;
+
+        /// <summary>래그돌이 붙을 조각(후속 플랜). 없으면 null.</summary>
+        public SlicePiece RootPiece =>
+            pieces != null && rootPieceIndex >= 0 && rootPieceIndex < pieces.Length ? pieces[rootPieceIndex] : null;
+
+        /// <summary>
+        /// 산 적의 포즈를 그대로 물려받는다.
+        /// <b>본 배열 순서가 같다는 전제</b>가 성립하는 이유는 굽기 툴이 원본 리그의 본을 순서 그대로 복제하기 때문이다.
+        /// </summary>
+        public void AdoptPose(Transform sourceRoot, Transform[] sourceBones)
+        {
+            if (sourceRoot != null)
+            {
+                transform.position = sourceRoot.position;
+                transform.rotation = sourceRoot.rotation;
+                transform.localScale = sourceRoot.localScale;
+            }
+
+            if (bones == null || sourceBones == null) return;
+
+            int count = Mathf.Min(bones.Length, sourceBones.Length);
+            if (bones.Length != sourceBones.Length)
+            {
+                Debug.LogWarning(
+                    $"[CorpseView] '{name}'의 본 수({bones.Length})가 원본({sourceBones.Length})과 다릅니다. " +
+                    "리그가 바뀌었다면 다시 구우세요 — 포즈가 어긋난 채 교체됩니다.", this);
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                if (bones[i] == null || sourceBones[i] == null) continue;
+                bones[i].localPosition = sourceBones[i].localPosition;
+                bones[i].localRotation = sourceBones[i].localRotation;
+                bones[i].localScale = sourceBones[i].localScale;
+            }
+        }
+
+        /// <summary>
+        /// 갈라뜨린다 — 루트 조각만 스킨드로 남기고 나머지는 굳혀 흩뿌린다.
+        /// </summary>
+        /// <param name="meshPool">굳힘에 재사용할 메쉬 큐. 교체마다 <c>new Mesh()</c>를 만들면 GC 압박이 된다.</param>
+        /// <param name="keepRootSkinned">
+        /// 루트 조각을 스킨드로 남길지. <b>래그돌이 붙어 있을 때만 true여야 한다</b> —
+        /// 래그돌이 없으면 그 조각은 물리도 없이 스켈레톤에 매달려 <b>공중에 그대로 떠 있는다</b>.
+        /// 후속 플랜(<c>docs/EnemyRagdoll/</c>)이 붙기 전까지는 false로 두어 나머지와 같이 떨어뜨린다.
+        /// </param>
+        public void Burst(float scatterSpeed, float scatterSpin, int pieceLayer, Queue<Mesh> meshPool,
+            bool keepRootSkinned = false)
+        {
+            bornTime = Time.time;
+            launched.Clear();
+            if (pieces == null) return;
+
+            int n = pieces.Length;
+            for (int i = 0; i < n; i++)
+            {
+                var piece = pieces[i];
+                if (piece == null) continue;
+
+                piece.gameObject.SetActive(true);
+                if (keepRootSkinned && i == rootPieceIndex) continue; // 스켈레톤에 남아 래그돌한다
+
+                piece.FreezeToStaticMesh(meshPool != null && meshPool.Count > 0 ? meshPool.Dequeue() : null);
+
+                // 바깥 방향은 시체 중심 → 조각 중심. 절단 평면에 의존하지 않아 어떤 절단에도 성립한다.
+                Vector3 outward = piece.transform.position - transform.position;
+                if (outward.sqrMagnitude < 1e-6f)
+                {
+                    float angle = 360f * i / Mathf.Max(n, 1) * Mathf.Deg2Rad;
+                    outward = new Vector3(Mathf.Cos(angle), 0.3f, Mathf.Sin(angle));
+                }
+
+                // 서 있던 적이므로 승계할 이동 속도가 없다 — 그 자리에서 무너진다.
+                piece.Launch(Vector3.zero, outward.normalized, scatterSpeed,
+                    Random.onUnitSphere, Random.Range(-scatterSpin, scatterSpin), pieceLayer);
+                launched.Add(piece);
+            }
+        }
+
+        /// <summary>날아간 조각이 전부 잠들었는지. 디렉터가 이른 회수 판단에 쓴다.</summary>
+        public bool AllPiecesSettled
+        {
+            get
+            {
+                if (launched.Count == 0) return true;
+
+                foreach (var piece in launched)
+                {
+                    if (piece != null && !piece.IsSettled) return false;
+                }
+
+                return true;
+            }
+        }
+
+        /// <summary>풀 반납 직전 복구. 굳힘에 쓴 메쉬는 풀로 돌려준다.</summary>
+        public void ResetState(Queue<Mesh> meshPool)
+        {
+            if (pieces == null) return;
+
+            foreach (var piece in pieces)
+            {
+                if (piece == null) continue;
+
+                var mesh = piece.DetachFrozenMesh();
+                piece.ResetState(); // 부모·로컬 포즈·물리 상태를 제자리로 되돌린다
+
+                if (mesh != null) meshPool?.Enqueue(mesh);
+            }
+
+            launched.Clear();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>굽기 툴 전용 기입 경로. 런타임은 호출하지 않는다.</summary>
+        public void EditorAssign(SlicePiece[] bakedPieces, Transform[] bakedBones, int rootPiece)
+        {
+            pieces = bakedPieces;
+            bones = bakedBones;
+            rootPieceIndex = rootPiece;
+        }
+#endif
+    }
+}

@@ -64,7 +64,32 @@
       "Bash(cp __TRACKED_VAR__/PatternHandler.cs 'Assets/02. Scripts/UI/PatternHandler.cs')",
       "Bash(cp __TRACKED_VAR__/CLAUDE.md CLAUDE.md)",
       "Bash(npm install:*)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "WebFetch(domain:simonschreibt.de)",
+      "WebFetch(domain:github.com)",
+      "mcp__UnityMCP__validate_script",
+      "Bash(sed -i 's/^- \\\\[ \\\\] /- [x] /; s/^      - \\\\[ \\\\] /      - [x] /; s/^\\\\\\(\\\\s*\\\\\\)- \\\\[ \\\\] /\\\\1- [x] /' docs/HumanoidSlice/Plan_HumanoidSlice.md)",
+      "Bash(sed -i 's/^>>>$/>>> ✅ 확정 \\(2026-08-01\\)/' docs/HumanoidSlice/Plan_HumanoidSlice.md)",
+      "Bash(sed -n '/## 5. 후속/,$p' docs/HumanoidSlice/Plan_HumanoidSlice.md)",
+      "Bash(sed -i 's/^- `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`, `PatternQueuedInfo`$/- `PatternSpace`: `Pattern`, `PatternData`, `NodeType`, `Point`, `ActivePattern`, `JudgementResult`, `PatternCompletionInfo`, `PatternQueuedInfo`, `ClipAlignment`\\\\n- `EnemySpace`: `Attacker`, `EnemyCue`, `EnemyDefinition`, `EnemyDirector`, `EnemyView`/' CLAUDE.md)",
+      "Bash(grep -n \"PatternSpace\\\\`:\\\\|EnemySpace\\\\`:\" CLAUDE.md)",
+      "Bash(python3 -)",
+      "Bash(sed -i 's#| 첫 처치에서 히치 | 프리웜 누락 | 패턴에 `enemyDeathSliceSet`이 배선됐는지 확인 \\(프리웜은 채보에서 수집한다\\) |#| 첫 처치에서 히치 | 프리웜 누락 | `EnemyDefinition.deathSliceSet` 배선 + 그 정의가 `rosterPool`에 있는지 확인 |#' \"docs/!Guides/Guide_EnemyCombat.md\")",
+      "Bash(sed -i 's#      - `Player` → `playerAttack`, `enemyDeath`, `enemyDeathSliceSet`#      - `Player` → `playerAttack`, `enemyDeath`#' docs/PatternAttacker/Plan_PatternAttacker.md)",
+      "Bash(sed -i '409s/DuelPosition\\(\\)/DuelPosition\\(info.Template\\)/' \"Assets/02. Scripts/Enemy/EnemyDirector.cs\")",
+      "Bash(sed -i '862s/Vector3 duel = DuelPosition\\(\\);/Vector3 duel = DuelAnchorPosition\\(\\);/' \"Assets/02. Scripts/Enemy/EnemyDirector.cs\")",
+      "Bash(sed -i 's/^>>>$/>>> ✅ 확정 \\(2026-08-01\\)/' docs/DuelConverge/Plan_DuelConverge.md)",
+      "Bash(sed -n '/^### Step 6/,/^---/p' docs/DuelConverge/Plan_DuelConverge.md)",
+      "Bash(sed -n '/private void LoadExisting\\(\\)/,/^        }/p' \"Assets/02. Scripts/ChartGen/Editor/PatternChartWindow.cs\")",
+      "Bash(sed -n '/enemyCue = CloneCue\\(d.enemyCue\\),/,/^        }/p' \"Assets/02. Scripts/ChartGen/Editor/PatternChartWindow.cs\")",
+      "Bash(sed -n '/private void RecomputeSpawnTimes/,/^        }/p' \"Assets/02. Scripts/ChartGen/Editor/PatternChartWindow.cs\")",
+      "Bash(sed -n '/private void DrawSaveButton/,/^        }/p' \"Assets/02. Scripts/ChartGen/Editor/PatternChartWindow.cs\")",
+      "mcp__UnityMCP__unity_reflect",
+      "Bash(grep -n \"^### 11\\\\.\\\\|^### 12\\\\.\\\\|^---$\" CLAUDE.md)",
+      "Bash(awk '/private void TryStartAttack/,/^        }$/' \"Assets/02. Scripts/Enemy/EnemyView.cs\")",
+      "Bash(printf '\\\\n> **폐기됨\\(2026-08-02\\).** 리시\\(`maxOffset`/`ArenaOrigin`\\)와 대기석 전진 배치는 무대가 월드에 고정되면서 사라졌다.\\\\n> 수렴 자체는 남았고 비율만 `playerShare`\\(0.85\\)로 저작값이 됐다. → `docs/StageTraversal/`\\\\n')",
+      "Bash(printf '\\\\n> **일부 폐기\\(2026-08-02\\).** `StageOnDeck`/`bindToImpactWindow`는 무대 고정으로 제거됐다.\\\\n> **상대 배정을 판정 대상 승계 시점에 한다는 규칙은 그대로 살아 있고**, 창으로 표적을 고르게 되면서 오히려 더 중요해졌다. → `docs/StageTraversal/`\\\\n')",
+      "Bash(sed -i 's|^| 무대 | \\\\*\\\\*원형 아레나.\\\\*\\\\* 플레이어 중앙 고정|&|' /dev/null)"
     ]
   }
 }

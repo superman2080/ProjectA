@@ -10,6 +10,10 @@ public enum EffectTrigger
     PatternCompleteFull, // 전체 정답 완성
     PatternComplete,     // 정답 아님(부분) 완성
     NodeConnected,
+    Parried,             // 적 공격을 받아쳐 칼이 맞부딪히는 순간
+    EnemyEvaded,         // 무방비 적을 놓쳐 헛스윙 — 적이 물러나 회피
+    EnemyKilled,         // 적 처치(모델이 갈라지는 순간)
+    ProjectileSliced,    // 원거리 오브젝트 절단
 }
 
 /// <summary>

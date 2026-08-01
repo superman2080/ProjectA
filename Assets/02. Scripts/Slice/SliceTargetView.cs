@@ -65,11 +65,18 @@ namespace SliceSpace
             if (t >= 1f) arrived = true;
         }
 
+        /// <summary>표적이 절단 직전까지 이동하던 속도(월드). 조각의 초기 속도로 그대로 넘어간다.</summary>
+        public Vector3 ApproachVelocity =>
+            (impactPos - spawnPos) / Mathf.Max(impactTime - spawnTime, 1e-4f);
+
         /// <summary>
         /// 성공 — 원본을 감추고 조각으로 교체해 흩뿌린다.
-        /// 조각은 이 뷰의 <b>자식</b>이므로 −Z 진행 속도를 자동으로 승계하고, 로컬 XY로만 흩어진다.
+        ///
+        /// <para>조각은 배치 직후 <b>부모에서 떨어져 물리로 넘어간다</b>(<see cref="SlicePiece.Launch"/>).
+        /// 예전처럼 자식으로 남겨 −Z 속도를 승계하지 않고, <see cref="ApproachVelocity"/>를 초기 속도로 명시해 넘긴다 —
+        /// 그림은 같으면서 바닥에 부딪히고 멈춰 눕는 게 붙는다.</para>
         /// </summary>
-        public void Slice(IReadOnlyList<SlicePiece> spawnedPieces, float scatterSpeed, float scatterJitter, float scatterSpin, Vector3 gravity, int seed)
+        public void Slice(IReadOnlyList<SlicePiece> spawnedPieces, float scatterSpeed, float scatterJitter, float scatterSpin, int seed, int pieceLayer = -1)
         {
             if (resolved) return;
             resolved = true;
@@ -87,6 +94,8 @@ namespace SliceSpace
             // 굽기 결과가 같으면 런타임 결과도 같도록, 표적 인스턴스별 seed로 결정론적 난수를 쓴다.
             var rng = new System.Random(seed);
             float Range(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+
+            Vector3 inherited = ApproachVelocity;
 
             for (int i = 0; i < n; i++)
             {
@@ -107,8 +116,26 @@ namespace SliceSpace
                 Vector3 axis = new Vector3(Range(-1f, 1f), Range(-1f, 1f), Range(-1f, 1f));
                 float spin = Range(-scatterSpin, scatterSpin);
 
+                // 배치는 로컬 기준(굽기 산출물이 로컬 오프셋), 발사 방향은 월드 기준으로 변환한다.
                 pieces[i].Place(transform, i < offsets.Length ? offsets[i] : Vector3.zero);
-                pieces[i].Scatter(new Vector3(xy.x, xy.y, 0f), speed, gravity, axis, spin);
+                Vector3 worldDir = transform.TransformDirection(new Vector3(xy.x, xy.y, 0f));
+                pieces[i].Launch(inherited, worldDir, speed, axis, spin, pieceLayer);
+            }
+        }
+
+        /// <summary>조각이 전부 물리적으로 잠들었는지. 디렉터가 이른 회수 판단에 쓴다.</summary>
+        public bool AllPiecesSettled
+        {
+            get
+            {
+                if (pieces.Count == 0) return false;
+
+                foreach (var piece in pieces)
+                {
+                    if (piece != null && !piece.IsSettled) return false;
+                }
+
+                return true;
             }
         }
 

@@ -4,42 +4,77 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 애니메이션 클립의 실제 휘두르는 구간을 창 안에서 프레임 단위로 보며 찾고,
-/// 그 start/duration(초)을 Pattern 에셋의 AnimationStartOffset/AnimationDuration에 바로 저장하는 에디터 툴.
+/// 패턴 하나의 <b>전투 액션 짝</b>(플레이어 + 적)을 함께 저작하는 툴.
 ///
-/// <para>마크는 <b>세 개</b>다 — Start(트림 시작) / <b>Impact(칼날이 표적을 지나가는 프레임)</b> / End(트림 끝).
-/// Impact는 런타임에서 표적이 갈라지는 시각에 정렬되는 기준점이라, 프리뷰를 프레임 단위로 이송하며
-/// 칼날이 표적을 통과하는 바로 그 프레임에 찍어야 한다. 찍지 않으면(0) 런타임이 트림 끝으로 폴백한다.</para>
+/// <para><b>저작 단위가 클립 하나가 아니라 패턴 하나다.</b> 적이 인터랙티브해지면서
+/// 확인해야 하는 것이 "칼이 적에 닿는가 / 임팩트 순간 적 포즈가 말이 되는가"로 바뀌었고,
+/// 그 판단은 <b>두 마크를 되먹임하며 조정해야 수렴한다</b>. 슬롯을 하나씩 열어 찍고 나가는 방식으로는 안 된다.</para>
+///
+/// <para><b>시간축은 임팩트 기준 상대시간 하나다.</b> <c>t = 0</c>이 두 클립의 임팩트 프레임이고,
+/// 곧 칼이 지나가는 순간 = 적이 베어지는 순간이다. 배속이 서로 달라도
+/// <c>t = 0</c>에서는 식에서 소거되므로 <b>판단이 이루어지는 지점은 언제나 정확하다</b>.</para>
+///
+/// <para><b>상태는 언제나 클립 시간으로 들고 있다</b>(에셋과 같은 단위). <c>t</c>는 뷰 전용 파생값이라
+/// 저장 경로에 변환이 없다 — 조용히 어긋날 코드가 존재하지 않는다. 산술은 전부
+/// <see cref="DuetTimeline"/>(테스트됨)에 있다.</para>
 /// </summary>
 public class AnimationClipTrimmerWindow : EditorWindow
 {
-    private const float PreviewHeight = 320f;
+    private const float PreviewHeight = 340f;
+    private const string WeaponBoneName = "add_weapon_r";
 
     [MenuItem("Tools/Animation Clip Trimmer")]
-    private static void Open() => GetWindow<AnimationClipTrimmerWindow>("Clip Trimmer");
+    private static void Open() => GetWindow<AnimationClipTrimmerWindow>("Pattern Action Editor");
+
+    /// <summary>배우 하나의 저작 상태. <b>전부 클립 절대시간</b>이라 저장 시 변환이 없다.</summary>
+    private class Actor
+    {
+        public string label;
+        public string slotPath;      // Pattern의 ClipAlignment 필드 이름
+        public AnimationClip clip;
+        public float clipStart;
+        public float clipImpact;
+        public float clipEnd;
+        public float speed = 1f;
+
+        public GameObject prefab;    // 프리뷰용
+        public GameObject instance;
+        public GameObject cachedPrefab;
+        public Vector3 placement;
+        public Quaternion facing;
+
+        public bool HasClip => clip != null;
+        public float Duration => clipEnd - clipStart;
+
+        /// <summary>지금 t에서 이 배우가 서 있어야 할 클립 시각(트림으로 잘린 값).</summary>
+        public float SampleTime(float t) => DuetTimeline.ClampToTrim(
+            DuetTimeline.ClipTimeOf(clipImpact, speed, t), clipStart, clipEnd);
+    }
 
     // 입력
-    private AnimationClip clip;
-    private GameObject previewModel;
     private Pattern targetPattern;
+    private float duelBaseDistance = 1f;
+    private float duelDistanceOffset;
+    private bool lockRootPosition = true;
 
-    // 스크럽 상태
-    private float currentTime;
+    private readonly Actor player = new Actor { label = "플레이어" };
+    private readonly Actor enemy = new Actor { label = "적" };
+
+    // 시간축 (임팩트 기준 상대시간)
+    private float t;
     private bool isPlaying;
     private double lastUpdateTime;
 
-    // 마킹
-    private float startTime;
-    private float endTime;
-    private float impactTime;
-
     // 프리뷰
     private PreviewRenderUtility previewUtil;
-    private GameObject previewInstance;
-    private GameObject cachedModel;
     private float yaw = 120f;
     private float pitch = 10f;
     private float zoom = 1f;
+    private Vector2 scroll;
+
+    private float bladeGap = float.NaN;
+
+    private float DuelDistance => duelBaseDistance + duelDistanceOffset;
 
     private void OnEnable()
     {
@@ -50,84 +85,126 @@ public class AnimationClipTrimmerWindow : EditorWindow
     private void OnDisable()
     {
         EditorApplication.update -= OnEditorUpdate;
-        DestroyPreviewInstance();
+        DestroyInstance(player);
+        DestroyInstance(enemy);
         previewUtil?.Cleanup();
         previewUtil = null;
     }
 
     private void OnEditorUpdate()
     {
-        if (!isPlaying || clip == null) return;
+        if (!isPlaying) return;
 
         double now = EditorApplication.timeSinceStartup;
         float dt = (float)(now - lastUpdateTime);
         lastUpdateTime = now;
 
-        currentTime += dt;
-        if (currentTime > clip.length)
-            currentTime = clip.length > 0f ? currentTime % clip.length : 0f;
+        var (min, max) = ScrubRange();
+        t += dt;
+        if (t > max) t = min;
 
         Repaint();
     }
 
+    // ─────────────────────────── 창 ───────────────────────────
+
     private void OnGUI()
     {
-        lastUpdateTime = EditorApplication.timeSinceStartup; // 재생 dt 기준점 갱신(창 비활성 후 점프 방지)
+        lastUpdateTime = EditorApplication.timeSinceStartup; // 창 비활성 후 점프 방지
 
-        DrawInputFields();
+        DrawInputs();
 
-        if (clip == null)
+        if (targetPattern == null)
         {
-            EditorGUILayout.HelpBox("트리밍할 AnimationClip을 지정하세요.", MessageType.Info);
+            EditorGUILayout.HelpBox("Pattern을 지정하면 그 패턴의 역할에 맞는 두 배우가 열립니다.", MessageType.Info);
             return;
         }
 
         DrawPreview();
+        DrawReadouts();
         DrawTimeline();
-        DrawMarking();
+
+        scroll = EditorGUILayout.BeginScrollView(scroll);
+        DrawActorBlock(player);
+        DrawActorBlock(enemy);
+        DrawNotes();
         DrawSwordTrailEvents();
         DrawApply();
+        EditorGUILayout.EndScrollView();
     }
 
-    // ─────────────────────────── 입력 필드 ───────────────────────────
-
-    private void DrawInputFields()
+    private void DrawInputs()
     {
         EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
 
-        clip = (AnimationClip)EditorGUILayout.ObjectField("Clip", clip, typeof(AnimationClip), false);
-        previewModel = (GameObject)EditorGUILayout.ObjectField("Preview Model (rig)", previewModel, typeof(GameObject), true);
-        targetPattern = (Pattern)EditorGUILayout.ObjectField("Target Pattern", targetPattern, typeof(Pattern), false);
+        EditorGUI.BeginChangeCheck();
+        targetPattern = (Pattern)EditorGUILayout.ObjectField("Pattern", targetPattern, typeof(Pattern), false);
+        if (EditorGUI.EndChangeCheck()) LoadFromPattern();
 
-        using (new EditorGUI.DisabledScope(targetPattern == null))
-        {
-            if (GUILayout.Button("Load Clip / Marks from Pattern") && targetPattern != null)
-                LoadFromPattern();
-        }
+        if (targetPattern == null) return;
+
+        bool enemyIsAttacker = targetPattern.Attacker == EnemySpace.Attacker.Enemy;
+        EditorGUILayout.LabelField("역할",
+            enemyIsAttacker ? "Enemy — 적 공격 → 플레이어 패링" : "Player — 플레이어 공격 → 적 사망");
+
+        EditorGUILayout.BeginHorizontal();
+        player.prefab = (GameObject)EditorGUILayout.ObjectField("플레이어 프리팹", player.prefab, typeof(GameObject), false);
+        enemy.prefab = (GameObject)EditorGUILayout.ObjectField("적 프리팹", enemy.prefab, typeof(GameObject), false);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        duelBaseDistance = EditorGUILayout.FloatField(
+            new GUIContent("기준 결투 거리", "씬 결투 앵커의 거리. 가이드 4단계에서 잡은 값을 넣는다."),
+            duelBaseDistance);
+        duelDistanceOffset = EditorGUILayout.FloatField(
+            new GUIContent("거리 보정 (패턴 저장)", "이 모션의 리치에 맞춘 ±m. Apply 때 패턴에 함께 저장된다."),
+            duelDistanceOffset);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.LabelField(" ", $"실제 배치 거리 {DuelDistance:0.00}m", EditorStyles.miniLabel);
+
+        lockRootPosition = EditorGUILayout.Toggle(
+            new GUIContent("루트 위치 고정", "루트 모션이 배우를 밀어내면 프레임마다 거리가 변해 배치 확인이 무의미해진다."),
+            lockRootPosition);
 
         EditorGUILayout.Space();
     }
 
+    /// <summary>패턴의 역할이 짝을 정한다. 두 슬롯을 <b>동시에</b> 읽는다.</summary>
     private void LoadFromPattern()
     {
+        if (targetPattern == null) return;
+
+        bool enemyIsAttacker = targetPattern.Attacker == EnemySpace.Attacker.Enemy;
+
+        player.slotPath = enemyIsAttacker ? "playerParry" : "playerAttack";
+        enemy.slotPath = enemyIsAttacker ? "enemyAttack" : "enemyDeath";
+        player.label = enemyIsAttacker ? "플레이어 — playerParry" : "플레이어 — playerAttack";
+        enemy.label = enemyIsAttacker ? "적 — enemyAttack" : "적 — enemyDeath";
+
         var so = new SerializedObject(targetPattern);
-        var clipProp = so.FindProperty("successAnimationClip");
-        var offProp = so.FindProperty("animationStartOffset");
-        var durProp = so.FindProperty("animationDuration");
-        var impactProp = so.FindProperty("animationImpactTime");
+        LoadActor(so, player);
+        LoadActor(so, enemy);
 
-        if (clipProp != null && clipProp.objectReferenceValue is AnimationClip c)
-            clip = c;
-        if (offProp != null)
-            startTime = offProp.floatValue;
-        if (durProp != null)
-            endTime = startTime + Mathf.Max(durProp.floatValue, 0f);
+        duelDistanceOffset = so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f;
+        t = 0f;
+    }
 
-        // 미오서링(0 이하)이면 런타임 폴백과 같게 트림 끝에 세워 둔다 — 그래야 저장 시 의도치 않은 값이 들어가지 않는다.
-        float loadedImpact = impactProp?.floatValue ?? 0f;
-        impactTime = loadedImpact > 0f ? loadedImpact : endTime;
+    private static void LoadActor(SerializedObject so, Actor actor)
+    {
+        actor.clip = so.FindProperty($"{actor.slotPath}.clip")?.objectReferenceValue as AnimationClip;
+        actor.clipStart = so.FindProperty($"{actor.slotPath}.startOffset")?.floatValue ?? 0f;
+        actor.speed = Mathf.Max(so.FindProperty($"{actor.slotPath}.speed")?.floatValue ?? 1f, 0.01f);
 
-        currentTime = startTime;
+        // duration 0 이하 = "클립 끝까지"(ClipAlignment.ResolvedDuration과 같은 규약).
+        float duration = so.FindProperty($"{actor.slotPath}.duration")?.floatValue ?? 0f;
+        actor.clipEnd = duration > 0f
+            ? actor.clipStart + duration
+            : (actor.clip != null ? actor.clip.length : actor.clipStart);
+
+        // 미오서링(0 이하)이면 런타임 폴백과 같게 트림 끝에 세운다.
+        float impact = so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
+        actor.clipImpact = impact > 0f ? impact : actor.clipEnd;
     }
 
     // ─────────────────────────── 프리뷰 ───────────────────────────
@@ -136,29 +213,87 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         Rect rect = GUILayoutUtility.GetRect(position.width, PreviewHeight, GUILayout.ExpandWidth(true));
 
-        if (previewModel == null)
+        if (player.prefab == null && enemy.prefab == null)
         {
             EditorGUI.DrawRect(rect, new Color(0.15f, 0.15f, 0.15f));
-            EditorGUI.LabelField(rect, "미리보기 모델(리그)을 지정하면 포즈가 표시됩니다.", EditorStyles.centeredGreyMiniLabel);
+            EditorGUI.LabelField(rect, "프리팹을 지정하면 두 배우가 표시됩니다.", EditorStyles.centeredGreyMiniLabel);
             return;
         }
 
         HandlePreviewInput(rect);
+        if (Event.current.type != EventType.Repaint) return;
 
-        if (Event.current.type != EventType.Repaint)
-            return;
+        previewUtil ??= new PreviewRenderUtility();
 
-        EnsurePreview();
-        if (previewInstance == null || previewUtil == null)
-            return;
-
-        clip.SampleAnimation(previewInstance, currentTime);
+        PlaceActors();
+        EnsureInstance(player);
+        EnsureInstance(enemy);
+        PoseActor(player);
+        PoseActor(enemy);
+        bladeGap = MeasureBladeGap();
 
         previewUtil.BeginPreview(rect, GUIStyle.none);
         SetupCameraAndLights();
         previewUtil.Render(true);
-        Texture tex = previewUtil.EndPreview();
-        GUI.DrawTexture(rect, tex, ScaleMode.StretchToFill, false);
+        GUI.DrawTexture(rect, previewUtil.EndPreview(), ScaleMode.StretchToFill, false);
+    }
+
+    /// <summary>플레이어는 원점에서 +Z, 적은 결투 거리 앞에서 마주 본다(슬라이서와 같은 규약).</summary>
+    private void PlaceActors()
+    {
+        player.placement = Vector3.zero;
+        player.facing = Quaternion.identity;
+        enemy.placement = Vector3.forward * DuelDistance;
+        enemy.facing = Quaternion.Euler(0f, 180f, 0f);
+    }
+
+    private void EnsureInstance(Actor actor)
+    {
+        if (actor.prefab == null) { DestroyInstance(actor); return; }
+        if (actor.instance != null && actor.cachedPrefab == actor.prefab) return;
+
+        DestroyInstance(actor);
+
+        actor.instance = Instantiate(actor.prefab);
+        actor.instance.hideFlags = HideFlags.HideAndDontSave;
+        previewUtil.AddSingleGO(actor.instance);
+        actor.cachedPrefab = actor.prefab;
+    }
+
+    private static void DestroyInstance(Actor actor)
+    {
+        if (actor.instance != null) DestroyImmediate(actor.instance);
+        actor.instance = null;
+        actor.cachedPrefab = null;
+    }
+
+    /// <summary>
+    /// 배우를 지금 <c>t</c>의 포즈로 세운다.
+    ///
+    /// <para><b>배치를 샘플링 전에 하면 안 된다.</b> <see cref="AnimationClip.SampleAnimation"/>은
+    /// 루트 트랜스폼을 클립 값으로 <b>덮어쓴다</b> — 배치를 먼저 하면 회전이 날아가
+    /// 두 배우가 모두 클립이 정한 방향을 보게 되고, 적이 등을 돌린 것처럼 보인다.</para>
+    ///
+    /// <para>그래서 <b>중립(원점·무회전)에서 샘플링한 뒤 배치를 그 위에 합성</b>한다.
+    /// 클립이 루트 커브를 갖든 안 갖든 같은 식으로 동작한다.</para>
+    /// </summary>
+    private void PoseActor(Actor actor)
+    {
+        if (actor.instance == null) return;
+
+        var tr = actor.instance.transform;
+
+        // 중립에서 샘플링 — 이래야 나온 값이 순수한 루트 모션이 된다.
+        tr.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        if (actor.HasClip) actor.clip.SampleAnimation(actor.instance, actor.SampleTime(t));
+
+        Quaternion rootRotation = tr.localRotation;
+        Vector3 rootOffset = tr.localPosition;
+
+        // 루트 모션이 배우를 밀어내면 두 배우의 거리가 프레임마다 변해 배치 확인이 무의미해진다.
+        // 위치만 잠그고 회전은 살린다 — 방향 전환은 봐야 한다.
+        Vector3 position = actor.placement + (lockRootPosition ? Vector3.zero : actor.facing * rootOffset);
+        tr.SetPositionAndRotation(position, actor.facing * rootRotation);
     }
 
     private void HandlePreviewInput(Rect rect)
@@ -181,32 +316,10 @@ public class AnimationClipTrimmerWindow : EditorWindow
         }
     }
 
-    private void EnsurePreview()
-    {
-        previewUtil ??= new PreviewRenderUtility();
-
-        if (previewInstance != null && cachedModel == previewModel)
-            return;
-
-        DestroyPreviewInstance();
-
-        previewInstance = Instantiate(previewModel);
-        previewInstance.hideFlags = HideFlags.HideAndDontSave;
-        previewUtil.AddSingleGO(previewInstance);
-        cachedModel = previewModel;
-    }
-
-    private void DestroyPreviewInstance()
-    {
-        if (previewInstance != null)
-            DestroyImmediate(previewInstance);
-        previewInstance = null;
-        cachedModel = null;
-    }
-
     private void SetupCameraAndLights()
     {
-        Bounds b = ComputeBounds(previewInstance);
+        // 두 배우를 합친 bounds로 잡는다 — 한쪽만 보면 상대가 화면 밖으로 잘린다.
+        Bounds b = CombinedBounds();
 
         var cam = previewUtil.camera;
         cam.fieldOfView = 30f;
@@ -236,177 +349,251 @@ public class AnimationClipTrimmerWindow : EditorWindow
         }
     }
 
-    private static Bounds ComputeBounds(GameObject go)
+    private Bounds CombinedBounds()
     {
-        var renderers = go.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0)
-            return new Bounds(go.transform.position, Vector3.one);
+        bool any = false;
+        Bounds result = new Bounds(Vector3.forward * (DuelDistance * 0.5f), Vector3.one);
 
-        Bounds b = renderers[0].bounds;
-        for (int i = 1; i < renderers.Length; i++)
-            b.Encapsulate(renderers[i].bounds);
-        return b;
+        foreach (var actor in new[] { player, enemy })
+        {
+            if (actor.instance == null) continue;
+
+            foreach (var r in actor.instance.GetComponentsInChildren<Renderer>())
+            {
+                if (!any) { result = r.bounds; any = true; }
+                else result.Encapsulate(r.bounds);
+            }
+        }
+
+        return result;
     }
 
-    // ─────────────────────────── 타임라인 ───────────────────────────
+    // ─────────────────────────── 판단 보조 ───────────────────────────
+
+    /// <summary>
+    /// 칼날과 적 사이의 최단거리. <b>t=0에서 음수(관통)여야 벤 것이다</b> —
+    /// 각도를 눈으로 보는 것보다 이 숫자 하나가 확실하다.
+    /// </summary>
+    private float MeasureBladeGap()
+    {
+        if (player.instance == null || enemy.instance == null) return float.NaN;
+
+        Transform weapon = FindDeep(player.instance.transform, WeaponBoneName);
+        var bladeRenderer = weapon != null ? weapon.GetComponentInChildren<Renderer>() : null;
+        if (bladeRenderer == null) return float.NaN;
+
+        var enemyRenderers = enemy.instance.GetComponentsInChildren<Renderer>();
+        if (enemyRenderers.Length == 0) return float.NaN;
+
+        Bounds enemyBounds = enemyRenderers[0].bounds;
+        for (int i = 1; i < enemyRenderers.Length; i++) enemyBounds.Encapsulate(enemyRenderers[i].bounds);
+
+        return BoundsGap(bladeRenderer.bounds, enemyBounds);
+    }
+
+    /// <summary>AABB 두 개의 간격. 겹치면 음수(가장 얕은 축의 침투 깊이).</summary>
+    private static float BoundsGap(Bounds a, Bounds b)
+    {
+        Vector3 gap = new Vector3(
+            Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x),
+            Mathf.Max(a.min.y - b.max.y, b.min.y - a.max.y),
+            Mathf.Max(a.min.z - b.max.z, b.min.z - a.max.z));
+
+        // 세 축이 전부 음수면 겹친 것 — 가장 0에 가까운 값이 침투 깊이다.
+        if (gap.x < 0f && gap.y < 0f && gap.z < 0f)
+            return Mathf.Max(gap.x, Mathf.Max(gap.y, gap.z));
+
+        Vector3 positive = new Vector3(Mathf.Max(gap.x, 0f), Mathf.Max(gap.y, 0f), Mathf.Max(gap.z, 0f));
+        return positive.magnitude;
+    }
+
+    private static Transform FindDeep(Transform root, string name)
+    {
+        if (root.name == name) return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var found = FindDeep(root.GetChild(i), name);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    private void DrawReadouts()
+    {
+        bool atImpact = Mathf.Abs(t) < 1e-3f;
+
+        string gapText = float.IsNaN(bladeGap)
+            ? "칼–적 거리 —  (칼 본 또는 적 프리팹 없음)"
+            : bladeGap < 0f
+                ? $"칼–적 거리  {bladeGap:0.000}m  ▶ 관통 (베고 있음)"
+                : $"칼–적 거리  {bladeGap:0.000}m  ▶ 떨어짐 (안 닿음)";
+
+        var style = new GUIStyle(EditorStyles.helpBox) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+        Color prev = GUI.backgroundColor;
+        GUI.backgroundColor = atImpact
+            ? (bladeGap < 0f ? new Color(0.3f, 0.85f, 0.4f) : new Color(0.95f, 0.6f, 0.3f))
+            : new Color(0.5f, 0.5f, 0.5f);
+
+        GUILayout.Box(atImpact ? $"✦ IMPACT   {gapText}" : gapText, style, GUILayout.Height(22f));
+        GUI.backgroundColor = prev;
+    }
+
+    // ─────────────────────────── 시간축 ───────────────────────────
+
+    private (float min, float max) ScrubRange() => DuetTimeline.Range(
+        player.clipStart, player.clipImpact, player.clipEnd, player.speed,
+        enemy.clipStart, enemy.clipImpact, enemy.clipEnd, enemy.speed);
 
     private void DrawTimeline()
     {
-        EditorGUILayout.Space();
+        var (min, max) = ScrubRange();
+        float frameRate = player.HasClip && player.clip.frameRate > 0f ? player.clip.frameRate : 30f;
 
-        float frameRate = clip.frameRate > 0f ? clip.frameRate : 30f;
-        int totalFrames = Mathf.Max(Mathf.RoundToInt(clip.length * frameRate), 1);
-        int curFrame = Mathf.RoundToInt(currentTime * frameRate);
-
-        // 재생/프레임 컨트롤
         using (new EditorGUILayout.HorizontalScope())
         {
             isPlaying = GUILayout.Toggle(isPlaying, isPlaying ? "❚❚ Pause" : "▶ Play", "Button", GUILayout.Width(80f));
 
-            if (GUILayout.Button("◀ Frame", GUILayout.Width(70f)))
-            {
-                isPlaying = false;
-                currentTime = Mathf.Max((curFrame - 1) / frameRate, 0f);
-            }
-            if (GUILayout.Button("Frame ▶", GUILayout.Width(70f)))
-            {
-                isPlaying = false;
-                currentTime = Mathf.Min((curFrame + 1) / frameRate, clip.length);
-            }
+            if (GUILayout.Button("◀ Frame", GUILayout.Width(70f))) { isPlaying = false; t = Mathf.Max(t - 1f / frameRate, min); }
+            if (GUILayout.Button("Frame ▶", GUILayout.Width(70f))) { isPlaying = false; t = Mathf.Min(t + 1f / frameRate, max); }
+            if (GUILayout.Button("t = 0", GUILayout.Width(50f))) { isPlaying = false; t = 0f; }
 
             GUILayout.FlexibleSpace();
-            EditorGUILayout.LabelField($"time: {currentTime:0.000}s   (frame {curFrame} / {totalFrames})", EditorStyles.boldLabel, GUILayout.Width(240f));
+            EditorGUILayout.LabelField($"t = {t:+0.000;-0.000;0.000}s  (impact 기준, {frameRate:0}fps)",
+                EditorStyles.boldLabel, GUILayout.Width(260f));
         }
 
-        // 스크럽 슬라이더 + 마킹 마커
         Rect sliderRect = GUILayoutUtility.GetRect(position.width, 22f);
-        DrawMarkers(sliderRect);
-        float newTime = GUI.HorizontalSlider(sliderRect, currentTime, 0f, clip.length);
-        if (!Mathf.Approximately(newTime, currentTime))
+        DrawTimelineMarkers(sliderRect, min, max);
+
+        float newT = GUI.HorizontalSlider(sliderRect, t, min, max);
+        if (!Mathf.Approximately(newT, t))
         {
-            currentTime = newTime;
+            t = newT;
             isPlaying = false;
             Repaint();
         }
     }
 
-    private void DrawMarkers(Rect sliderRect)
+    private void DrawTimelineMarkers(Rect rect, float min, float max)
     {
-        if (clip.length <= 0f) return;
+        if (max - min <= 0f) return;
 
-        DrawMarkerLine(sliderRect, startTime / clip.length, new Color(0.3f, 0.85f, 0.4f));   // start=초록
-        DrawMarkerLine(sliderRect, impactTime / clip.length, new Color(0.3f, 0.85f, 0.95f)); // impact=시안
-        DrawMarkerLine(sliderRect, endTime / clip.length, new Color(0.95f, 0.4f, 0.4f));     // end=빨강
+        DrawActorMarkers(rect, min, max, player, new Color(0.3f, 0.85f, 0.4f), new Color(0.95f, 0.4f, 0.4f));
+        DrawActorMarkers(rect, min, max, enemy, new Color(0.4f, 0.7f, 0.95f), new Color(0.9f, 0.5f, 0.9f));
+
+        // t=0 — 두 임팩트가 만나는 지점. 가장 굵게.
+        DrawMarker(rect, Mathf.InverseLerp(min, max, 0f), new Color(1f, 0.9f, 0.2f), 3f);
     }
 
-    private void DrawMarkerLine(Rect sliderRect, float t01, Color color)
+    private static void DrawActorMarkers(Rect rect, float min, float max, Actor actor, Color startColor, Color endColor)
+    {
+        if (!actor.HasClip) return;
+
+        float startT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipStart);
+        float endT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipEnd);
+
+        DrawMarker(rect, Mathf.InverseLerp(min, max, startT), startColor, 2f);
+        DrawMarker(rect, Mathf.InverseLerp(min, max, endT), endColor, 2f);
+    }
+
+    private static void DrawMarker(Rect rect, float t01, Color color, float width)
     {
         if (t01 < 0f || t01 > 1f) return;
-        float x = Mathf.Lerp(sliderRect.x + 4f, sliderRect.xMax - 4f, t01);
-        EditorGUI.DrawRect(new Rect(x - 1f, sliderRect.y, 2f, sliderRect.height), color);
+        float x = Mathf.Lerp(rect.x + 4f, rect.xMax - 4f, t01);
+        EditorGUI.DrawRect(new Rect(x - width * 0.5f, rect.y, width, rect.height), color);
     }
 
-    // ─────────────────────────── 마킹 ───────────────────────────
+    // ─────────────────────────── 배우 블록 ───────────────────────────
 
-    private void DrawMarking()
+    private void DrawActorBlock(Actor actor)
     {
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Trim Marks", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField(actor.label, EditorStyles.boldLabel);
+
+        actor.clip = (AnimationClip)EditorGUILayout.ObjectField("Clip", actor.clip, typeof(AnimationClip), false);
+
+        if (!actor.HasClip)
+        {
+            EditorGUILayout.HelpBox("클립이 비어 있습니다. 이 배우는 바인드 포즈로 서 있습니다.", MessageType.None);
+            EditorGUILayout.EndVertical();
+            return;
+        }
 
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Mark Start = 현재"))
-                startTime = currentTime;
-            if (GUILayout.Button("Mark Impact = 현재"))
-                impactTime = currentTime;
-            if (GUILayout.Button("Mark End = 현재"))
-                endTime = currentTime;
+            if (GUILayout.Button("Mark Start")) actor.clipStart = CurrentClipTime(actor);
+            if (GUILayout.Button("Mark Impact")) MarkImpact(actor);
+            if (GUILayout.Button("Mark End")) actor.clipEnd = CurrentClipTime(actor);
         }
 
-        // 직접 편집도 허용
-        startTime = Mathf.Max(EditorGUILayout.FloatField("Start Offset (s)", startTime), 0f);
-        impactTime = Mathf.Max(EditorGUILayout.FloatField("Impact (s)", impactTime), 0f);
-        endTime = EditorGUILayout.FloatField("End (s)", endTime);
+        // 입력 필드는 클립 시간이다 — 에셋에 들어갈 숫자를 그대로 보여 인스펙터와 눈으로 대조할 수 있게.
+        actor.clipStart = Mathf.Max(EditorGUILayout.FloatField("Start (clip s)", actor.clipStart), 0f);
+        actor.clipImpact = Mathf.Max(EditorGUILayout.FloatField("Impact (clip s)", actor.clipImpact), 0f);
+        actor.clipEnd = EditorGUILayout.FloatField("End (clip s)", actor.clipEnd);
 
-        float duration = endTime - startTime;
-        EditorGUILayout.LabelField("Duration (s)", $"{duration:0.000}");
+        EditorGUILayout.LabelField("Duration", $"{actor.Duration:0.000}s   ·   speed {actor.speed:0.00}");
 
-        if (duration <= 0f)
+        if (actor.Duration <= 0f)
             EditorGUILayout.HelpBox("End가 Start보다 뒤여야 합니다 (Duration > 0).", MessageType.Warning);
+        if (actor.clipImpact < actor.clipStart || actor.clipImpact > actor.clipEnd)
+            EditorGUILayout.HelpBox("Impact가 Start~End 밖입니다. 저장 시 구간 안으로 클램프됩니다.", MessageType.Warning);
 
-        if (impactTime < startTime || impactTime > endTime)
-        {
-            EditorGUILayout.HelpBox(
-                "Impact가 Start~End 구간 밖입니다. 칼날이 표적을 지나가는 프레임에 찍어야 합니다. " +
-                "저장 시 구간 안으로 클램프됩니다.", MessageType.Warning);
-        }
-
-        DrawStatusBox(duration);
+        EditorGUILayout.EndVertical();
     }
 
-    /// <summary>현재 스크럽 위치가 임팩트 프레임인지 / 휘두름 구간 안인지 한눈에 보여준다.</summary>
-    private void DrawStatusBox(float duration)
-    {
-        float frameRate = clip.frameRate > 0f ? clip.frameRate : 30f;
-        bool inSwing = duration > 0f && currentTime >= startTime && currentTime <= endTime;
-        // 마크가 아직 잡히지 않은 상태(전부 0)에서 프레임 0을 IMPACT로 오인하지 않도록 구간 안에서만 판단한다.
-        bool atImpact = inSwing && Mathf.RoundToInt(currentTime * frameRate) == Mathf.RoundToInt(impactTime * frameRate);
-
-        string label;
-        Color background;
-        if (atImpact)
-        {
-            label = "✦ IMPACT (베는 프레임)";
-            background = new Color(0.3f, 0.85f, 0.95f);
-        }
-        else if (inSwing)
-        {
-            label = "▶ IN SWING (휘두름 구간)";
-            background = new Color(0.3f, 0.85f, 0.4f);
-        }
-        else
-        {
-            label = "— (구간 밖)";
-            background = new Color(0.5f, 0.5f, 0.5f);
-        }
-
-        var style = new GUIStyle(EditorStyles.helpBox) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-        Color prev = GUI.backgroundColor;
-        GUI.backgroundColor = background;
-        GUILayout.Box(label, style, GUILayout.Height(22f));
-        GUI.backgroundColor = prev;
-    }
-
-    // ─────────────────────────── 칼날 트레일 이벤트 ───────────────────────────
+    /// <summary>지금 t가 가리키는 이 배우의 클립 시각. 마킹의 유일한 변환 지점이다.</summary>
+    private float CurrentClipTime(Actor actor) => DuetTimeline.ClipTimeOf(actor.clipImpact, actor.speed, t);
 
     /// <summary>
-    /// Start/End 마크 시각에 Hovl HS_SwordTrailAnimationEvents가 받는
-    /// StartSwordTrail/StopSwordTrail AnimationEvent를 클립에 직접 기록한다.
-    /// 기존에 찍힌 같은 이름의 이벤트는 지우고 새 마크 위치로 다시 찍는다(중복 방지).
+    /// 임팩트는 시간축의 원점이다 — 옮기면 원점이 따라 옮겨지고 <c>t</c>는 0이 된다.
+    /// 보정 코드가 아니라 식에서 나오는 결과라, 여기서는 그 결과를 그대로 반영만 한다.
     /// </summary>
+    private void MarkImpact(Actor actor)
+    {
+        actor.clipImpact = CurrentClipTime(actor);
+        t = 0f;
+    }
+
+    private void DrawNotes()
+    {
+        EditorGUILayout.Space();
+        EditorGUILayout.HelpBox(
+            "· 저작 배속 기준입니다. 런타임은 채보 간격과 입력 시각에 따라 압축되며, 그때도 임팩트 프레임은 동일합니다.\n" +
+            "· 두 임팩트는 정의상 같은 시각(t=0)입니다 — 서로 맞출 필요가 없습니다.",
+            MessageType.None);
+    }
+
+    // ─────────────────────────── 칼날 트레일 ───────────────────────────
+
     private void DrawSwordTrailEvents()
     {
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Sword Trail Events", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Sword Trail Events (플레이어 클립)", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("Write StartSwordTrail(Start) / StopSwordTrail(End) to Clip"))
-            ApplySwordTrailEvents();
+        using (new EditorGUI.DisabledScope(!player.HasClip))
+        {
+            if (GUILayout.Button("Write StartSwordTrail(Start) / StopSwordTrail(End) to Clip"))
+                ApplySwordTrailEvents();
+        }
     }
 
     private void ApplySwordTrailEvents()
     {
-        Undo.RecordObject(clip, "Apply Sword Trail Events");
+        Undo.RecordObject(player.clip, "Apply Sword Trail Events");
 
-        var events = new List<AnimationEvent>(AnimationUtility.GetAnimationEvents(clip));
+        var events = new List<AnimationEvent>(AnimationUtility.GetAnimationEvents(player.clip));
         events.RemoveAll(e => e.functionName == "StartSwordTrail" || e.functionName == "StopSwordTrail");
 
-        events.Add(new AnimationEvent { time = startTime, functionName = "StartSwordTrail" });
-        events.Add(new AnimationEvent { time = endTime, functionName = "StopSwordTrail" });
+        events.Add(new AnimationEvent { time = player.clipStart, functionName = "StartSwordTrail" });
+        events.Add(new AnimationEvent { time = player.clipEnd, functionName = "StopSwordTrail" });
         events.Sort((a, b) => a.time.CompareTo(b.time));
 
-        AnimationUtility.SetAnimationEvents(clip, events.ToArray());
+        AnimationUtility.SetAnimationEvents(player.clip, events.ToArray());
 
-        EditorUtility.SetDirty(clip);
+        EditorUtility.SetDirty(player.clip);
         AssetDatabase.SaveAssets();
     }
 
@@ -415,46 +602,115 @@ public class AnimationClipTrimmerWindow : EditorWindow
     private void DrawApply()
     {
         EditorGUILayout.Space();
+        EditorGUILayout.LabelField("창 → Pattern (쓰기)", EditorStyles.miniBoldLabel);
 
-        float duration = endTime - startTime;
+        bool canApply = (player.HasClip && player.Duration > 0f) || (enemy.HasClip && enemy.Duration > 0f);
 
-        using (new EditorGUI.DisabledScope(targetPattern == null || duration <= 0f))
+        using (new EditorGUI.DisabledScope(!canApply))
         {
-            if (GUILayout.Button("Apply to Pattern", GUILayout.Height(28f)))
-                ApplyToPattern(duration);
+            if (GUILayout.Button("▶ Apply to Pattern (두 배우 + 거리 보정)", GUILayout.Height(28f)))
+                ApplyToPattern();
         }
 
-        if (targetPattern != null)
-        {
-            var so = new SerializedObject(targetPattern);
-            float off = so.FindProperty("animationStartOffset")?.floatValue ?? 0f;
-            float dur = so.FindProperty("animationDuration")?.floatValue ?? 0f;
-            float imp = so.FindProperty("animationImpactTime")?.floatValue ?? 0f;
-            EditorGUILayout.LabelField("Pattern 현재값",
-                $"offset {off:0.000}s / impact {imp:0.000}s / duration {dur:0.000}s");
-        }
-        else
-        {
-            EditorGUILayout.HelpBox("Target Pattern을 지정하면 잡은 값을 바로 저장할 수 있습니다.", MessageType.None);
-        }
+        if (!canApply)
+            EditorGUILayout.HelpBox("배우 하나 이상이 클립과 Duration > 0을 가져야 저장할 수 있습니다.", MessageType.Warning);
+
+        DrawSyncState();
     }
 
-    private void ApplyToPattern(float duration)
+    /// <summary>창의 상태와 에셋이 같은지. 다르면 아직 저장 전이라는 뜻이다.</summary>
+    private void DrawSyncState()
     {
-        Undo.RecordObject(targetPattern, "Apply Clip Trim");
+        var so = new SerializedObject(targetPattern);
+        bool synced = ActorSynced(so, player) && ActorSynced(so, enemy)
+                      && Mathf.Approximately(so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f, duelDistanceOffset);
 
-        // 임팩트는 반드시 트림 안에 있어야 한다 — 밖이면 런타임이 트림 끝으로 폴백해 오서링이 조용히 무시된다.
-        float clampedImpact = Mathf.Clamp(impactTime, startTime, endTime);
+        EditorGUILayout.LabelField(" ",
+            synced ? "✔ 저장됨 (창과 에셋이 일치)" : "● 저장 전 — 창의 값이 에셋과 다릅니다",
+            EditorStyles.miniLabel);
+    }
+
+    private static bool ActorSynced(SerializedObject so, Actor actor)
+    {
+        if (actor.slotPath == null) return true;
+
+        var storedClip = so.FindProperty($"{actor.slotPath}.clip")?.objectReferenceValue as AnimationClip;
+        float off = so.FindProperty($"{actor.slotPath}.startOffset")?.floatValue ?? 0f;
+        float dur = so.FindProperty($"{actor.slotPath}.duration")?.floatValue ?? 0f;
+        float imp = so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
+
+        return storedClip == actor.clip
+               && Mathf.Approximately(off, actor.clipStart)
+               && Mathf.Approximately(dur, actor.Duration)
+               && Mathf.Approximately(imp, Mathf.Clamp(actor.clipImpact, actor.clipStart, actor.clipEnd));
+    }
+
+    /// <summary>
+    /// 두 배우와 거리 보정을 <b>한 번에</b> 기록한다 — 한쪽만 저장돼 짝이 어긋난 상태를 만들지 않는다.
+    /// <b>상태가 이미 에셋 단위(클립 시간)라 여기서 시간 변환을 하지 않는다.</b>
+    /// </summary>
+    private void ApplyToPattern()
+    {
+        Undo.RecordObject(targetPattern, "Apply Pattern Actions");
 
         var so = new SerializedObject(targetPattern);
-        so.FindProperty("animationStartOffset").floatValue = startTime;
-        so.FindProperty("animationDuration").floatValue = duration;
-        so.FindProperty("animationImpactTime").floatValue = clampedImpact;
+        if (!WriteActor(so, player) || !WriteActor(so, enemy)) return;
+
+        var offsetProp = so.FindProperty("duelDistanceOffset");
+        if (offsetProp != null) offsetProp.floatValue = duelDistanceOffset;
+
         so.ApplyModifiedProperties();
-
-        impactTime = clampedImpact; // 클램프 결과를 창에도 반영해 저장값과 표시가 어긋나지 않게 한다.
-
         EditorUtility.SetDirty(targetPattern);
         AssetDatabase.SaveAssetIfDirty(targetPattern);
+
+        VerifyRoundTrip();
+
+        Debug.Log(
+            $"[PatternActionEditor] '{targetPattern.name}' 저장 — " +
+            $"{Describe(player)} / {Describe(enemy)} / 거리보정 {duelDistanceOffset:+0.00;-0.00;0.00}m",
+            targetPattern);
     }
+
+    private bool WriteActor(SerializedObject so, Actor actor)
+    {
+        if (actor.slotPath == null || !actor.HasClip) return true; // 빈 슬롯은 건드리지 않는다
+
+        var clipProp = so.FindProperty($"{actor.slotPath}.clip");
+        var offProp = so.FindProperty($"{actor.slotPath}.startOffset");
+        var durProp = so.FindProperty($"{actor.slotPath}.duration");
+        var impProp = so.FindProperty($"{actor.slotPath}.impactTime");
+
+        // 하나라도 안 잡히면 조용히 아무 데도 안 쓰이는 상태가 된다 — 즉시 알린다.
+        if (clipProp == null || offProp == null || durProp == null || impProp == null)
+        {
+            Debug.LogError(
+                $"[PatternActionEditor] '{targetPattern.name}'에서 슬롯 '{actor.slotPath}'의 필드를 찾지 못했습니다. 저장하지 않았습니다.",
+                targetPattern);
+            return false;
+        }
+
+        // 임팩트는 트림 안에 있어야 한다 — 밖이면 런타임이 트림 끝으로 폴백해 오서링이 조용히 무시된다.
+        actor.clipImpact = Mathf.Clamp(actor.clipImpact, actor.clipStart, actor.clipEnd);
+
+        clipProp.objectReferenceValue = actor.clip;
+        offProp.floatValue = actor.clipStart;
+        durProp.floatValue = actor.Duration;
+        impProp.floatValue = actor.clipImpact;
+        return true;
+    }
+
+    /// <summary>저장 직후 에셋을 다시 읽어 상태와 대조한다. 앞의 방어를 다 뚫고 온 것까지 잡는 마지막 그물.</summary>
+    private void VerifyRoundTrip()
+    {
+        var so = new SerializedObject(targetPattern);
+        if (ActorSynced(so, player) && ActorSynced(so, enemy)) return;
+
+        Debug.LogError(
+            $"[PatternActionEditor] '{targetPattern.name}' 저장 후 값이 창과 다릅니다. " +
+            "시간 단위 변환이 저장 경로에 끼어들었는지 확인하세요.", targetPattern);
+    }
+
+    private static string Describe(Actor actor) => actor.HasClip
+        ? $"{actor.slotPath}: {actor.clip.name} [{actor.clipStart:0.000}/{actor.clipImpact:0.000}/{actor.clipEnd:0.000}]"
+        : $"{actor.slotPath}: (비어 있음)";
 }

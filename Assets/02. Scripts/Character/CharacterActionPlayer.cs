@@ -10,7 +10,7 @@ using UnityEngine;
 ///   재생시간은 트림(AnimationStartOffset/Duration/ImpactTime)과 패턴 배속(AnimationSpeed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
 /// - 미스(첫 미스 1회): 그 순간 힛(Hit) 클립을 재생하고 예약/진행 중이던 성공 애니를 취소한다 — 재생 중이던 베기는 힛 크로스페이드로 즉시 끊긴다.
 ///
-/// <b>정렬 앵커는 표적 절단 시각이다.</b> `임팩트정렬시각 = Deadline + Pattern.SliceTargetImpactOffset`으로,
+/// <b>정렬 앵커는 표적 절단 시각이다.</b> `임팩트정렬시각 = Deadline + Pattern.ImpactOffset`으로,
 /// <see cref="SliceSpace.SliceTargetDirector"/>가 표적 도착에 쓰는 식과 <b>동일하다</b>. 그래서 칼날이 지나가는 순간과
 /// 표적이 갈라지는 순간이 구조적으로 일치한다. LastNodeTime이 아니라 Deadline인 이유는 표적 쪽과 같다 —
 /// 마지막 노드를 goodWindow 안에 늦게 눌러도 Good 성공이므로, 성패는 Deadline에서야 확정된다.
@@ -18,15 +18,15 @@ using UnityEngine;
 ///
 /// <b>트림 끝(actionEndTime)은 '재생이 끝나는 시각'이 아니다.</b> 클립은 스테이트에 통째로 물려 있어 그 뒤로도 마무리 동작(follow-through)이 계속 재생된다.
 /// actionEndTime은 '임팩트 정렬이 끝나 복귀를 시작해도 되는 시각'일 뿐이다. 이 시점에 recoveryHoldDuration 동안 마무리 동작을 웨이트 1로 노출한 뒤(세 경로 공통), 아래 세 경로로 갈린다:
-/// - <b>연계 O · 간격 부족</b> — 다음 공격이 comboLinkWindow 안이면서 minRunExposure보다 촘촘히 붙는다. 웨이트를 <b>1로 유지</b>한 채 다음 클립으로 크로스페이드한다(Run·Release 모두 생략). 짧은 연계의 웨이트 깜빡임을 막는다.
+/// - <b>연계 O · 간격 부족</b> — 다음 공격이 comboLinkWindow 안이면서 minRunExposure보다 촘촘히 붙는다. 웨이트를 <b>1로 유지</b>한 채 다음 클립으로 크로스페이드한다(Sprint·Release 모두 생략). 짧은 연계의 웨이트 깜빡임을 막는다.
 /// - <b>연계 O · 간격 여유</b> — comboLinkWindow 안이되 다음 공격까지 minRunExposure 이상 남는다. blendOutDuration 동안 웨이트를 0으로 내려 <b>그 사이 base Sprint(Sprint_HS)를 노출</b>하고, 다음 공격에서 다시 올린다(Release 생략). 실측상 이쪽이 주 경로다(채보 연결의 약 95%).
 /// - <b>연계 X</b> — comboLinkWindow 밖(곡 공백). <b>트림 끝에서 곧바로 Release 스테이트로 CrossFade</b>하고(애니메이터에는 Attack→Release 전이가 없다 — 진입은 코드가 유일하게 통제한다),
-///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> blendOutDuration 동안 base Run으로 페이드한다.
+///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> blendOutDuration 동안 base Idle로 페이드한다.
 ///
-/// <b>base 로코모션은 경로에 따라 클립이 갈린다.</b> base Running Layer는 평소 Run이 기본이고, 연계 O·간격 여유(콤보 사이)를 탈 때 Sprint로,
-/// 연계 X(곡 공백 복귀)를 탈 때 다시 Run으로 CrossFade한다(SwitchBaseState). 전환은 Attack 웨이트에 가려진 동안 일어나 눈에 띄지 않는다.
+/// <b>base 로코모션은 경로에 따라 클립이 갈린다.</b> base Running Layer는 평소 Idle이 기본이고, 연계 O·간격 여유(콤보 사이)를 탈 때 Sprint로,
+/// 연계 X(곡 공백 복귀)를 탈 때 다시 Idle로 CrossFade한다(SwitchBaseState). 전환은 Attack 웨이트에 가려진 동안 일어나 눈에 띄지 않는다.
 /// 콤보 gap 대부분은 시작 순간 Release가 트리거되므로(hasPending이 뒤늦게 섬), "Release를 냈는가"가 아니라 <b>"Release가 releaseEndTime까지 완주했는가"(releaseCompleted)</b>로
-/// 진짜 곡 공백과 콤보 gap을 가른다. 완주했으면 Run, 인터럽트됐으면 Sprint. releaseCompleted는 다음 PlaySlot에서 리셋된다.
+/// 진짜 곡 공백과 콤보 gap을 가른다. 완주했으면 Idle, 인터럽트됐으면 Sprint. releaseCompleted는 다음 PlaySlot에서 리셋된다.
 /// 세 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
 ///
 /// AnimatorOverrideController로 듀얼 슬롯(Attack_A, Attack_B)을 교대로 교체하며 재생해 모션 끊김(Popping)을 방지한다. 재생할 클립이 없으면 무연출로 넘어간다.
@@ -38,6 +38,9 @@ public class CharacterActionPlayer : MonoBehaviour
 {
     [SerializeField] private PatternHandler handler;
     [SerializeField] private Animator animator;
+
+    [Tooltip("누가 휘두르는지(Attacker)를 물어볼 대상. 비우면 언제나 Attacker.Player로 본다(디버그 경로).")]
+    [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
 
     [Header("Animator Slot")]
     [Tooltip("첫 번째 슬롯 스테이트 이름.")]
@@ -62,12 +65,32 @@ public class CharacterActionPlayer : MonoBehaviour
     [Header("Base Locomotion")]
     [Tooltip("base 로코모션 레이어 이름. Attack Layer 웨이트가 0일 때 이 레이어가 드러난다.")]
     [SerializeField] private string runningLayerName = "Running Layer";
-    [Tooltip("연계 X(공백/Release 복귀) 시 드러낼 base 스테이트 이름.")]
-    [SerializeField] private string runStateName = "Run";
-    [Tooltip("연계 O·간격 여유(콤보 사이 노출) 시 드러낼 base 스테이트 이름.")]
+    // FormerlySerializedAs를 쓰지 않는다 — 이 필드는 값이 아니라 '의미'가 바뀌었다(달리는 스테이트 → 서는 스테이트).
+    // 옛 값("Run")을 끌고 오면 삭제된 스테이트를 가리켜 base 전환이 조용히 실패한다.
+    [Tooltip("연계 X(공백/Release 복귀) 시 드러낼 base 스테이트 이름. 곡이 비었으면 달릴 이유가 없으므로 Idle이 기본이다.")]
+    [SerializeField] private string idleStateName = "Katana_Idle";
+    [Tooltip("연계 O·간격 여유(콤보 사이 노출) 시 드러낼 base 스테이트 이름. 다음 적으로 이동하는 구간이다.")]
     [SerializeField] private string sprintStateName = "Sprint";
-    [Tooltip("base 레이어 Run↔Sprint 포즈 블렌딩 시간(초). base가 Attack 웨이트에 가려진 동안 진행된다.")]
+    [Tooltip("base 레이어 Idle↔Sprint 포즈 블렌딩 시간(초). base가 Attack 웨이트에 가려진 동안 진행된다.")]
     [SerializeField] private float baseCrossFadeDuration = 0.2f;
+
+    [Header("Converge Locomotion")]
+    [Tooltip("결투 수렴 구간에서 짧은 이동에 쓸 스테이트 이름.")]
+    [SerializeField] private string quickshiftStateName = "Quickshift";
+    [Tooltip("Quickshift 스테이트의 Speed Multiplier 파라미터 이름.")]
+    [SerializeField] private string quickshiftSpeedParam = "QuickshiftSpeed";
+    [Tooltip("Quickshift 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
+    [SerializeField] private AnimationClip quickshiftClip;
+    [Tooltip("Sprint 스테이트의 Speed Multiplier 파라미터 이름.")]
+    [SerializeField] private string sprintSpeedParam = "SprintSpeed";
+    [Tooltip("Sprint 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
+    [SerializeField] private AnimationClip sprintClip;
+    [Tooltip("Sprint 배속의 기준 이동 속도(m/s). 이 속도로 갈 때 클립이 1배속이 된다.")]
+    [SerializeField] private float sprintReferenceSpeed = 4.5f;
+    [Tooltip("이 거리(m) 미만이면 로코모션을 켜지 않는다 — 제자리에서 발을 구르지 않게.")]
+    [SerializeField] private float convergeMinDistance = 0.15f;
+    [Tooltip("수렴 로코모션의 판단 근거를 콘솔에 찍는다(에디터 전용). 모션이 안 나올 때 원인을 가른다.")]
+    [SerializeField] private bool logConvergeDecision = true;
 
     [Header("Clips")]
     [Tooltip("패턴 실패 시 재생할 피격 리액션 클립들. 번갈아 재생된다.")]
@@ -78,11 +101,11 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private float attackCrossFadeDuration = 0.15f;
     [Tooltip("이 시간(초) 안에 다음 공격이 시작되면 연계로 보고 Release(마무리)를 생략한다.")]
     [SerializeField] private float comboLinkWindow = 1.0f;
-    [Tooltip("연계 중, 다음 공격까지 이 시간(초) 이상 남아 있으면 웨이트를 내려 그 사이 Run을 노출한다. 미만이면 웨이트 1을 유지해 바로 다음 공격으로 잇는다.")]
+    [Tooltip("연계 중, 다음 공격까지 이 시간(초) 이상 남아 있으면 웨이트를 내려 그 사이 Sprint를 노출한다. 미만이면 웨이트 1을 유지해 바로 다음 공격으로 잇는다.")]
     [SerializeField] private float minRunExposure = 0.35f;
     [Tooltip("트림 끝 이후 마무리 동작을 웨이트 1로 노출하는 시간(초). 세 경로 공통.")]
     [SerializeField] private float recoveryHoldDuration = 0.25f;
-    [Tooltip("Run으로 녹아드는 시간(초). 레이어 웨이트를 0으로 내리는 구간.")]
+    [Tooltip("base 로코모션으로 녹아드는 시간(초). 레이어 웨이트를 0으로 내리는 구간.")]
     [SerializeField] private float blendOutDuration = 0.15f;
     [Tooltip("Release(마무리) 스테이트를 이 시간(초) 안에 완주시킨다. 배속은 클립 길이에서 역산된다(길이 2.33초 / 0.9초 ≈ 2.6배).")]
     [SerializeField] private float releaseDuration = 0.9f;
@@ -105,6 +128,12 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     public event Action OnSwingEnded;
 
+    /// <summary>
+    /// 확장 포인트: <b>적 칼이 실제로 플레이어에게 닿는 순간</b>(= <c>impactTime</c>). 첫 미스 순간이 아니다.
+    /// 체력 감소·카메라 피격 큐가 이 이벤트만 구독한다.
+    /// </summary>
+    public event Action OnPlayerHit;
+
     /// <summary>스윙 구간 안인지. 종료 신호가 두 경로(트림 끝 / 인터럽트)로 들어와 중복 발행되지 않게 한다.</summary>
     private bool swingActive;
 
@@ -116,11 +145,21 @@ public class CharacterActionPlayer : MonoBehaviour
     private int releaseStateHash;
     private int releaseSpeedHash;
     private int runningLayerIndex = -1;
-    private int runStateHash;
+    private int idleStateHash;
     private int sprintStateHash;
+    private int quickshiftStateHash;
+    private int quickshiftSpeedHash;
+    private int sprintSpeedHash;
+
+    /// <summary>
+    /// 이 시각까지는 <b>수렴 로코모션이 base 레이어의 주인</b>이다.
+    /// <see cref="Update"/>의 복귀 로직은 "액션이 없으면 base는 내 것"이라고 가정하고 매 프레임 되돌리므로,
+    /// 이 창이 없으면 수렴 모션이 다음 프레임에 지워진다.
+    /// </summary>
+    private float convergeUntil;
     private int currentBaseStateHash; // 현재 base 레이어가 향하는 스테이트(중복 CrossFade 방지)
     private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
-    private bool releaseCompleted; // 이번 사이클에 Release가 releaseEndTime까지 완주했는지(= 진짜 곡 공백). base=Run 유지 판별용.
+    private bool releaseCompleted; // 이번 사이클에 Release가 releaseEndTime까지 완주했는지(= 진짜 곡 공백). base=Idle 유지 판별용.
     private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
     private bool useSlotA = true; // 듀얼 슬롯 전환 플래그
@@ -148,6 +187,13 @@ public class CharacterActionPlayer : MonoBehaviour
     private float pendingImpactAlignTime; // 임팩트 프레임이 도달해야 할 절대시각(= 표적 절단 시각).
     private bool missedThisTarget; // 이번 판정 대상에서 이미 첫 미스 처리를 했는지
 
+    // 이번 판정 대상에서 누가 휘두르는가. 클립 선택과 "맞는지 여부"를 동시에 가른다.
+    private EnemySpace.Attacker currentAttacker = EnemySpace.Attacker.Player;
+
+    // 피격 예약 — 적 칼이 도착하는 시각(impactTime)에 재생한다.
+    private bool hasPendingHit;
+    private float pendingHitTime;
+
     void Awake()
     {
         if (animator == null)
@@ -168,10 +214,19 @@ public class CharacterActionPlayer : MonoBehaviour
 
         runningLayerIndex = animator.GetLayerIndex(runningLayerName);
         if (runningLayerIndex < 0)
-            Debug.LogError($"[CharacterActionPlayer] 레이어 '{runningLayerName}'를 찾을 수 없습니다 — Sprint/Run 전환이 동작하지 않습니다.", this);
-        runStateHash = Animator.StringToHash(runStateName);
+            Debug.LogError($"[CharacterActionPlayer] 레이어 '{runningLayerName}'를 찾을 수 없습니다 — Sprint/Idle 전환이 동작하지 않습니다.", this);
+        idleStateHash = Animator.StringToHash(idleStateName);
         sprintStateHash = Animator.StringToHash(sprintStateName);
-        currentBaseStateHash = runStateHash; // base 레이어의 default 스테이트는 Run이다.
+        quickshiftStateHash = Animator.StringToHash(quickshiftStateName);
+        quickshiftSpeedHash = Animator.StringToHash(quickshiftSpeedParam);
+        sprintSpeedHash = Animator.StringToHash(sprintSpeedParam);
+        currentBaseStateHash = idleStateHash; // base 레이어의 default 스테이트는 Idle이다.
+
+        // 없는 스테이트로 CrossFade하면 Unity가 조용히 무시한다 — base가 이전 포즈에 굳어 버린다.
+        // 스테이트 이름을 고치거나 애니메이터에서 지웠을 때 즉시 알아채야 한다.
+        WarnIfMissingBaseState(idleStateHash, idleStateName);
+        WarnIfMissingBaseState(sprintStateHash, sprintStateName);
+        WarnIfMissingBaseState(quickshiftStateHash, quickshiftStateName);
 
         // 원본 컨트롤러를 감싼 오버라이드 인스턴스를 씌운다. 이후 이 인스턴스의 클립만 런타임에 교체한다.
         overrideController = new AnimatorOverrideController(animator.runtimeAnimatorController);
@@ -194,6 +249,10 @@ public class CharacterActionPlayer : MonoBehaviour
             handler.OnJudgeTargetBegan += HandleJudgeTargetBegan;
             handler.OnJudgeTargetFirstMiss += HandleJudgeTargetFirstMiss;
         }
+
+        // base 레이어는 이 클래스가 유일하게 소유한다 — 수렴 로코모션도 여기서 정한다.
+        // PlayerCombatMover가 직접 애니메이터를 건드리면 두 주인이 매 프레임 싸운다.
+        if (enemyDirector != null) enemyDirector.OnDuelScheduled += HandleDuelScheduled;
     }
 
     void OnDisable()
@@ -203,6 +262,8 @@ public class CharacterActionPlayer : MonoBehaviour
             handler.OnJudgeTargetBegan -= HandleJudgeTargetBegan;
             handler.OnJudgeTargetFirstMiss -= HandleJudgeTargetFirstMiss;
         }
+
+        if (enemyDirector != null) enemyDirector.OnDuelScheduled -= HandleDuelScheduled;
 
         RaiseSwingEnded(); // 재생기가 꺼지는데 트레일만 켜진 채 남지 않도록.
     }
@@ -228,6 +289,7 @@ public class CharacterActionPlayer : MonoBehaviour
         if (attackLayerIndex < 0) return;
 
         TryStartPendingSuccess();
+        TryStartPendingHit();
 
         // 트림 구간이 끝나면 배속을 해제해 마무리 동작이 정상 속도로 재생되게 한다.
         // 이 래치는 트림 끝을 정확히 1회만 통과하므로 스윙 종료 발행 지점으로 그대로 재사용한다.
@@ -252,25 +314,28 @@ public class CharacterActionPlayer : MonoBehaviour
             return;
         }
 
-        // 연계 O — Release는 생략한다. 다만 다음 공격까지의 간격이 충분할 때만 웨이트를 내려 Run을 노출하고,
+        // 연계 O — Release는 생략한다. 다만 다음 공격까지의 간격이 충분할 때만 웨이트를 내려 Sprint를 노출하고,
         // 간격이 짧으면(minRunExposure 미만) 웨이트 1을 유지해 곧바로 다음 공격으로 잇는다(깜빡임 방지).
         if (IsLinkedToNextAction())
         {
             if (HasRoomForRunExposure())
             {
                 // 콤보 사이 잠깐 달리는 구간 — Sprint를 드러낸다.
-                // 단, 이번 사이클에 Release가 '완주'했다면(=진짜 곡 공백을 거쳤다면) Run을 유지한다.
+                // 단, 이번 사이클에 Release가 '완주'했다면(=진짜 곡 공백을 거쳤다면) Idle을 유지한다.
                 // gap 대부분은 시작 순간 Release가 트리거되지만(hasPending이 뒤늦게 섬), 다음 연계에
                 // 인터럽트되면 Release는 완주하지 못한다 → 그 경우는 콤보 gap이므로 Sprint.
-                // Release가 releaseEndTime까지 완주(RELEASE-RUN 도달)한 경우만 진짜 공백 → Run. 스펙: Release 출력 시 Run.
-                SwitchBaseState(releaseCompleted ? runStateHash : sprintStateHash);
+                // Release가 releaseEndTime까지 완주한 경우만 진짜 공백 → Idle.
+                SwitchBaseStateUnlessConverging(releaseCompleted ? idleStateHash : sprintStateHash);
                 ApplyBlendOut();
             }
+            // 수렴 중에는 웨이트를 올리지 않는다 — 올리면 Attack 레이어가 base를 덮어
+            // 애써 건 수렴 모션이 화면에서 사라진다(아직 공격 클립은 시작 전이다).
+            else if (Time.time < convergeUntil) ApplyBlendOut();
             else ApplyBlendIn();
             return;
         }
 
-        // 연계 X — Release를 완주시킨 뒤 Run으로 내린다.
+        // 연계 X — Release를 완주시킨 뒤 Idle로 내린다.
         if (!releaseTriggered) TriggerRelease();
 
         if (Time.time < releaseEndTime)
@@ -279,16 +344,106 @@ public class CharacterActionPlayer : MonoBehaviour
             return;
         }
 
-        // 곡 공백 복귀 — 평상시 Run으로 되돌린다.
-        releaseCompleted = true; // Release가 완주했다 → 이후 뒤늦게 hasPending이 서도 Run 유지(다음 PlaySlot까지).
-        SwitchBaseState(runStateHash);
+        // 곡 공백 복귀 — 평상시 Idle로 되돌린다.
+        releaseCompleted = true; // Release가 완주했다 → 이후 뒤늦게 hasPending이 서도 Idle 유지(다음 PlaySlot까지).
+        SwitchBaseStateUnlessConverging(idleStateHash);
         ApplyBlendOut();
     }
 
     /// <summary>
-    /// base 로코모션 레이어를 지정 스테이트로 CrossFade한다(경로 ②=Sprint / 경로 ③=Run).
+    /// base 로코모션 레이어를 지정 스테이트로 CrossFade한다(경로 ②=Sprint / 경로 ③=Idle).
     /// 목표가 현재와 같으면 즉시 반환해 매 프레임 재진입을 막는다. 전환은 Attack 웨이트에 가려진 동안 일어나므로 눈에 띄지 않는다.
     /// </summary>
+    /// <summary>
+    /// 결투 수렴 구간의 로코모션. <b>창으로 갈린다</b> — 거리가 아니다.
+    ///
+    /// <para>기준은 <b>"클립 하나가 창을 채우는가"</b>다. Quickshift(대시)는 <b>루프가 아니라 1초짜리 단발</b>이라
+    /// 창이 그보다 길면 클립이 먼저 끝나고 남은 시간은 그냥 미끄러진다 — 예전엔 거리로 갈라서
+    /// 평균 창(1.48초) 대부분이 이 구멍에 빠졌다. Sprint는 루프라 길이에 상관없이 채운다.</para>
+    ///
+    /// <list type="bullet">
+    /// <item>창 &gt; 클립 길이 → <b>Sprint</b>. 이동 속도에 맞춰 배속(다리와 몸이 따로 놀지 않게)</item>
+    /// <item>창 ≤ 클립 길이 → <b>Quickshift</b>. 창 안에 완주하도록 배속을 역산</item>
+    /// </list>
+    ///
+    /// <para><b>배속에 상한을 두지 않는다.</b> 자르면 클립이 창 안에 완주하지 못해 몸은 도착했는데
+    /// 다리는 대시 도중에 끊긴다. 상한이 필요 없는 이유는 <b>배속이 올라가는 만큼 화면에 남는 시간도 같이 줄기</b>
+    /// 때문이다: 8배속 Quickshift는 0.12초짜리라 "튀는 클립"이 아니라 순식간에 붙는 그림으로 읽힌다.</para>
+    ///
+    /// <para>거의 안 움직이는 경우(<see cref="convergeMinDistance"/> 미만)는 아무것도 하지 않는다 —
+    /// 제자리에서 발을 구르면 더 부자연스럽다.</para>
+    /// </summary>
+    private void HandleDuelScheduled(EnemySpace.EnemyDirector.DuelPlan plan)
+    {
+        float distance = Vector3.ProjectOnPlane(plan.PlayerPosition - transform.position, Vector3.up).magnitude;
+        float window = plan.ArriveTime - Time.time;
+
+        if (runningLayerIndex < 0) { LogConverge("레이어 없음", distance, window); return; }
+        if (distance < convergeMinDistance) { LogConverge("거리 부족", distance, window); return; }
+        if (window <= 0f) { LogConverge("시간 없음", distance, window); return; }
+
+        // 도착할 때까지 base의 주인은 수렴이다. 복귀 로직이 매 프레임 되찾아가지 못하게 막는다.
+        convergeUntil = plan.ArriveTime;
+
+        float dashLength = quickshiftClip != null ? quickshiftClip.length : 1f;
+
+        if (window > dashLength)
+        {
+            // 실제 이동 속도에 배속을 맞춘다 — 안 맞추면 발이 지면을 긁는다.
+            float runSpeed = Mathf.Max(0.1f, distance / window) / Mathf.Max(sprintReferenceSpeed, 0.01f);
+            animator.SetFloat(sprintSpeedHash, runSpeed);
+
+            // 배속이 바뀌었으므로 같은 스테이트라도 처음부터 다시 건다(SwitchBaseState는 같으면 조기 반환).
+            animator.CrossFadeInFixedTime(sprintStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
+            currentBaseStateHash = sprintStateHash;
+            LogConverge($"Sprint x{runSpeed:0.00}", distance, window);
+            return;
+        }
+
+        // 클립 길이 / 남은 시간 = 완주에 필요한 배속. 하한 1(느리게 늘이지 않는다), 상한은 없다.
+        float speed = Mathf.Max(1f, dashLength / window);
+        animator.SetFloat(quickshiftSpeedHash, speed);
+        animator.CrossFadeInFixedTime(quickshiftStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
+        currentBaseStateHash = quickshiftStateHash;
+        LogConverge($"Quickshift x{speed:0.00}", distance, window);
+    }
+
+    /// <summary>
+    /// 수렴 로코모션의 <b>판단 근거</b>를 남긴다. 모션이 안 나올 때 원인이 거리인지 시간인지 배선인지
+    /// 화면만 봐서는 구분할 수 없어서, 결정마다 한 줄씩 찍는다. 에디터 전용이라 빌드에는 없다.
+    /// </summary>
+    [System.Diagnostics.Conditional("UNITY_EDITOR")]
+    private void LogConverge(string decision, float distance, float window)
+    {
+        if (!logConvergeDecision) return;
+
+        Debug.Log($"[CharacterActionPlayer] 수렴 로코모션 → {decision}  " +
+                  $"(거리 {distance:0.00}m / 창 {window:0.00}s / " +
+                  $"대시클립 {(quickshiftClip != null ? quickshiftClip.length : 1f):0.00}s · 최소거리 {convergeMinDistance:0.00})", this);
+    }
+
+    private void WarnIfMissingBaseState(int stateHash, string stateName)
+    {
+        if (runningLayerIndex < 0 || animator.HasState(runningLayerIndex, stateHash)) return;
+
+        Debug.LogError(
+            $"[CharacterActionPlayer] base 레이어 '{runningLayerName}'에 스테이트 '{stateName}'가 없습니다 — " +
+            "전환이 조용히 무시되어 포즈가 굳습니다.", this);
+    }
+
+    /// <summary>
+    /// 복귀 경로에서 쓰는 base 전환. <b>수렴 구간에는 물러난다.</b>
+    ///
+    /// <para><see cref="Update"/>의 복귀 로직은 "액션이 없으면 base는 내 것"이라고 가정하고
+    /// 매 프레임 Idle/Sprint로 되돌린다. 그대로 두면 <see cref="HandleDuelScheduled"/>가 건 수렴 모션이
+    /// <b>다음 프레임에 즉시 덮인다</b> — 로그에는 Quickshift가 찍히는데 화면에는 안 나오는 이유다.</para>
+    /// </summary>
+    private void SwitchBaseStateUnlessConverging(int stateHash)
+    {
+        if (Time.time < convergeUntil) return;
+        SwitchBaseState(stateHash);
+    }
+
     private void SwitchBaseState(int stateHash)
     {
         if (runningLayerIndex < 0 || stateHash == currentBaseStateHash) return;
@@ -330,7 +485,7 @@ public class CharacterActionPlayer : MonoBehaviour
         return hasPending && (pendingScheduleStart - actionEndTime) <= comboLinkWindow;
     }
 
-    /// <summary>연계 중, Run 노출 창(recovery 끝 ~ 다음 공격 시작)이 minRunExposure 이상인가.
+    /// <summary>연계 중, Sprint 노출 창(recovery 끝 ~ 다음 공격 시작)이 minRunExposure 이상인가.
     /// <b>고정 간격으로 판정한다</b>(Time.time이 아니라 recoveryEndTime 기준). 매 프레임 줄어드는 잔여시간으로 재면
     /// 창 도중 문턱을 밑돌아 blend-out↔blend-in이 뒤집히고, 그 순간 stale한 blendInStartTime 탓에 웨이트가 1로 튄다.</summary>
     private bool HasRoomForRunExposure()
@@ -352,7 +507,7 @@ public class CharacterActionPlayer : MonoBehaviour
         animator.SetLayerWeight(attackLayerIndex, Mathf.Lerp(blendInFromWeight, 1f, Mathf.SmoothStep(0f, 1f, t)));
     }
 
-    /// <summary>레이어 웨이트를 0으로 내려 base Running Layer(Run)를 드러낸다. 시작 웨이트는 '내리기로 결정한 시점'의 값으로 래치한다.</summary>
+    /// <summary>레이어 웨이트를 0으로 내려 base Running Layer(Idle/Sprint)를 드러낸다. 시작 웨이트는 '내리기로 결정한 시점'의 값으로 래치한다.</summary>
     private void ApplyBlendOut()
     {
         if (!blendOutLatched)
@@ -379,35 +534,61 @@ public class CharacterActionPlayer : MonoBehaviour
 
     // ─────────────────────────── 성공 애니 예약/시작 ───────────────────────────
 
-    /// <summary>판정 대상이 선두가 되면 성공 애니 시작을 예약한다(임팩트 프레임을 표적 절단 시각에 맞추는 조기 시작).</summary>
+    /// <summary>
+    /// 판정 대상이 선두가 되면 대응 애니 시작을 예약한다(임팩트 프레임을 칼이 닿는 시각에 맞추는 조기 시작).
+    ///
+    /// <b>클립은 누가 휘두르는가로 갈린다</b> — 적이 공격자면 패링, 플레이어가 공격자면 공격.
+    /// 값은 <see cref="EnemySpace.EnemyDirector.CurrentAttacker"/>에서 <b>당겨 온다</b>(pull).
+    /// 밀어 넣으면 FIFO 큐가 둘이 되고 둘이 어긋나는 순간을 디버깅하게 된다.
+    ///
+    /// <para>순서는 보장된다: <c>SetPattern</c> 안에서 <c>OnPatternQueued</c>가 <c>OnJudgeTargetBegan</c>보다 먼저 발행되고,
+    /// 승계 경로에서도 <c>OnPatternComplete</c>(디렉터가 dequeue) → <c>RaiseJudgeTargetBegan</c> 순이다.</para>
+    /// </summary>
     private void HandleJudgeTargetBegan(JudgeTargetInfo info)
     {
         missedThisTarget = false;
         hasPending = false;
+        hasPendingHit = false;
 
-        AnimationClip clip = info.Template != null ? info.Template.SuccessAnimationClip : null;
-        if (clip == null) return; // 미지정 클립 — 무연출
+        if (info.Template == null) return;
 
-        float startOffset = info.Template.AnimationStartOffset;
-        float dur = info.Template.AnimationDuration > 0f ? info.Template.AnimationDuration : clip.length - startOffset;
-        if (dur <= 0f) return;
+        currentAttacker = enemyDirector != null ? enemyDirector.CurrentAttacker : EnemySpace.Attacker.Player;
 
-        float impactSpan = ResolveImpactSpan(info.Template, startOffset, dur);
-
-        // 표적이 갈라지는 시각과 같은 식 — SliceTargetDirector.HandlePatternQueued와 반드시 일치해야 한다.
-        float impactAlignTime = info.Deadline + info.Template.SliceTargetImpactOffset;
-
-        float baseSpeed = info.Template.AnimationSpeed;   // 배속 하한
-        float playTime = impactSpan / baseSpeed;          // 지정 배속으로 임팩트까지 가는 데 걸리는 시간
-        float scheduleStart = Mathf.Max(impactAlignTime - playTime, info.FirstNodeTime);
-
-        pendingClip = clip;
-        pendingStartOffset = startOffset;
-        pendingDur = dur;
-        pendingImpactSpan = impactSpan;
-        pendingBaseSpeed = baseSpeed;
-        pendingScheduleStart = scheduleStart;
+        // 칼이 닿는 시각 — 적 공격·표적 절단과 반드시 같은 식이어야 한다.
+        float impactAlignTime = info.Deadline + info.Template.ImpactOffset;
         pendingImpactAlignTime = impactAlignTime;
+
+        var alignment = currentAttacker == EnemySpace.Attacker.Enemy
+            ? info.Template.PlayerParry
+            : info.Template.PlayerAttack;
+
+        if (alignment != null && alignment.IsUsable)
+        {
+            pendingClip = alignment.Clip;
+            pendingStartOffset = alignment.StartOffset;
+            pendingDur = alignment.ResolvedDuration;
+            pendingImpactSpan = alignment.ResolvedImpactSpan;
+            pendingBaseSpeed = alignment.Speed;
+        }
+        else
+        {
+            // 폴백: 아직 ClipAlignment로 이관되지 않은 기존 패턴 에셋(구 SuccessAnimationClip + 트림 4필드).
+            AnimationClip clip = info.Template.SuccessAnimationClip;
+            if (clip == null) return; // 미지정 — 무연출
+
+            float startOffset = info.Template.AnimationStartOffset;
+            float dur = info.Template.AnimationDuration > 0f ? info.Template.AnimationDuration : clip.length - startOffset;
+            if (dur <= 0f) return;
+
+            pendingClip = clip;
+            pendingStartOffset = startOffset;
+            pendingDur = dur;
+            pendingImpactSpan = ResolveImpactSpan(info.Template, startOffset, dur);
+            pendingBaseSpeed = info.Template.AnimationSpeed;
+        }
+
+        float playTime = pendingImpactSpan / pendingBaseSpeed; // 지정 배속으로 임팩트까지 가는 데 걸리는 시간
+        pendingScheduleStart = Mathf.Max(impactAlignTime - playTime, info.FirstNodeTime);
         hasPending = true;
     }
 
@@ -439,24 +620,59 @@ public class CharacterActionPlayer : MonoBehaviour
         float cap = Mathf.Max(maxAttackSpeed, pendingBaseSpeed);
         float speed = Mathf.Clamp(needed, pendingBaseSpeed, cap);
 
+        // 클램프가 걸리면 임팩트 프레임이 제시각에 못 온다. 표적 절단은 티가 안 나지만
+        // 패링은 칼끼리 만나는 거라 즉시 보인다 — 조용히 어긋나는 게 최악이라 알린다.
+        if (needed > cap && currentAttacker == EnemySpace.Attacker.Enemy)
+        {
+            Debug.LogWarning(
+                $"[CharacterActionPlayer] 패링 클립이 배속 상한({cap:0.00})에 걸려 임팩트 정렬이 어긋납니다 " +
+                $"(필요 {needed:0.00}배). 클립의 ImpactTime을 앞으로 당기세요.", this);
+        }
+
         PlaySlot(pendingClip, pendingStartOffset, pendingDur, speed, isSwing: true);
         hasPending = false;
     }
 
     // ─────────────────────────── 첫 미스 → 힛 ───────────────────────────
 
-    /// <summary>판정 대상의 첫 미스 순간: 예약/진행 중이던 성공 애니를 취소하고 힛을 재생한다(재생 중이던 베기는 힛 크로스페이드로 끊긴다).</summary>
+    /// <summary>
+    /// 판정 대상의 첫 미스 순간: 예약/진행 중이던 대응 애니를 <b>즉시</b> 취소한다.
+    ///
+    /// <para><b>피격은 즉시가 아니라 <c>impactTime</c>에 예약한다.</b> 첫 미스 순간엔 적 칼이 아직 도착 전이라
+    /// 그때 맞으면 칼보다 먼저 맞는 그림이 된다.</para>
+    ///
+    /// <para>플레이어가 공격자였다면(<c>Attacker.Player</c>) <b>피격 자체가 없다</b> — 적은 애초에 휘두르지 않았고
+    /// 뒤로 물러나 회피할 뿐이다. 헛스윙으로 끝난다.</para>
+    /// </summary>
     private void HandleJudgeTargetFirstMiss()
     {
         if (missedThisTarget) return;
         missedThisTarget = true;
         hasPending = false; // 예약 취소 → 원래 나올 베기 안 나옴
 
+        if (currentAttacker != EnemySpace.Attacker.Enemy)
+        {
+            RaiseSwingEnded(); // 적 무방비 — 맞지 않는다. 진행 중이던 스윙만 끊는다.
+            return;
+        }
+
+        hasPendingHit = true;
+        pendingHitTime = pendingImpactAlignTime;
+    }
+
+    /// <summary>적 칼이 도착하는 시각에 피격을 재생한다. 예약 메커니즘은 성공 애니와 동일하다.</summary>
+    private void TryStartPendingHit()
+    {
+        if (!hasPendingHit || Time.time < pendingHitTime) return;
+        hasPendingHit = false;
+
         AnimationClip hit = NextHitClip();
         if (hit != null)
             PlaySlot(hit, 0f, hit.length, 1f, isSwing: false);
         else
             RaiseSwingEnded(); // 힛 클립이 없어도 진행 중이던 베기는 취소됐다.
+
+        OnPlayerHit?.Invoke();
     }
 
     /// <summary>피격 리액션 클립을 번갈아 반환한다. 배선이 없으면 null. (랜덤을 원하면 이 인덱스 선택만 교체.)</summary>
