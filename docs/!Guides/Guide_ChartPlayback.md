@@ -8,9 +8,9 @@ GameSession (DontDestroyOnLoad)
 
 SongSelectScene
   └─ SongSelectManager
-       └─ 버튼 클릭 → GameSession.SelectedChart 설정 → DefaultScene 로드
+       └─ 버튼 클릭 → GameSession.SelectedChart 설정 → BattleScene 로드
 
-DefaultScene
+BattleScene
   └─ ChartPlayer (AudioSource 포함)
        └─ ActiveChart = GameSession.SelectedChart ?? debugChart
        └─ countdownDuration 대기 후 오디오 재생
@@ -27,7 +27,7 @@ DefaultScene
 | `Assets/02. Scripts/ChartGen/ChartPlayer.cs` | 채보 재생 글루 (카운트다운 + 패턴 피드) |
 | `Assets/02. Scripts/SongSelectManager.cs` | 곡 선택 UI 로직 |
 | `Assets/01. Scenes/SongSelectScene.unity` | 곡 선택 씬 |
-| `Assets/01. Scenes/DefaultScene.unity` | 게임플레이 씬 |
+| `Assets/01. Scenes/BattleScene.unity` | 게임플레이 씬 |
 | `Assets/04. Datas/Song/` | SongChart 에셋 저장 위치 |
 
 ---
@@ -36,7 +36,7 @@ DefaultScene
 
 ### A. 에디터 디버그 (SongSelect 생략)
 
-1. Unity에서 **DefaultScene** 열기
+1. Unity에서 **BattleScene** 열기
 2. **Play Mode** 진입
 3. Hierarchy에서 `ChartPlayer` 선택
 4. Inspector 우상단 점 세 개(⋮) 또는 컴포넌트 우클릭 → **Play** 클릭
@@ -52,7 +52,7 @@ DefaultScene
 1. **SongSelectScene** 열기 (또는 Build Settings 기준 첫 씬으로 실행)
 2. Play Mode 진입
 3. 화면에 표시된 곡 버튼 클릭 (예: `Dreamer_Lv10`)
-4. DefaultScene이 자동 로드됨
+4. BattleScene이 자동 로드됨
 5. `ChartPlayer`의 `playOnStart = true` 설정 시 자동 재생, 아니면 Inspector에서 **Play** 클릭
 
 ---
@@ -83,4 +83,4 @@ DefaultScene
 | 순서 | 씬 | 용도 |
 |------|----|------|
 | 0 | `SongSelectScene` | 곡 선택 |
-| 1 | `DefaultScene` | 게임플레이 |
+| 1 | `BattleScene` | 게임플레이 |

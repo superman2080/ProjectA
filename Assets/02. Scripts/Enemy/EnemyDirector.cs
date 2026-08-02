@@ -776,6 +776,25 @@ namespace EnemySpace
             ReleaseCurrentOpponent();
         }
 
+        /// <summary>
+        /// 히트스톱을 <b>아직 안 터진 죽는 적 전부</b>에 전달한다. 보통 한 명이지만, 연속 처치 구간에서
+        /// 앞선 적이 아직 쓰러지는 중일 수 있다 — 화면에서 같이 멈춰야 이음매가 안 생긴다.
+        ///
+        /// <para><b>반환된 절단 시각을 반드시 되받아 쓴다.</b> 배속은 <see cref="EnemyView"/>가 알고
+        /// 시각은 <see cref="PendingKill.burstTime"/>이 드는 구조라, 갱신을 빠뜨리면 캐치업이 상한에 걸린
+        /// 경우에 <b>클립이 아직 도는데 먼저 갈라진다.</b></para>
+        /// </summary>
+        public void ApplyHitStop(float duration, float maxCatchupSpeed, float minHeadroom)
+        {
+            for (int i = 0; i < pendingKills.Count; i++)
+            {
+                var pending = pendingKills[i];
+                if (pending.opponent == null) continue;
+
+                pending.burstTime = pending.opponent.ApplyHitStop(duration, maxCatchupSpeed, minHeadroom, pending.burstTime);
+            }
+        }
+
         /// <summary>사망 클립이 끝난 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
         private void TickPendingKills()
         {

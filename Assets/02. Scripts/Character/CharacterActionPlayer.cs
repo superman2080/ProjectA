@@ -169,6 +169,16 @@ public class CharacterActionPlayer : MonoBehaviour
     private float recoveryEndTime; // 연계가 없을 때 마무리 동작 노출이 끝나는 시각
     private bool speedRestored;    // actionEndTime에서 AttackSpeed를 1로 되돌렸는지
 
+    // 현재 재생의 스냅샷. actionEndTime만으로는 "지금까지 소비한 클립 초"를 역산할 수 없어
+    // 히트스톱 캐치업(ApplyHitStop)이 남은 클립 길이를 구하지 못한다.
+    private float playStartTime;
+    private float playSpeed = 1f;
+    private float playDur;
+
+    // 히트스톱. 정지 중에는 Update의 복귀 로직을 통째로 막고, 해제 시각에 원래 배속으로 이어 붙인다.
+    private bool hitStopped;
+    private float hitStopReleaseTime;
+
     // 레이어 웨이트 블렌드 상태. blend-out은 '결정 시점'에 래치한다(절대 시각 계산은 취소 케이스에서 웨이트가 튄다).
     private float blendInStartTime;
     private float blendInFromWeight;
@@ -287,6 +297,16 @@ public class CharacterActionPlayer : MonoBehaviour
     void Update()
     {
         if (attackLayerIndex < 0) return;
+
+        // ⚠ 정지 중에는 아래를 하나도 통과시키지 않는다. actionEndTime 분기가 열리면
+        // AttackSpeed가 1로 복원되어 캐치업이 통째로 무산된다.
+        if (hitStopped)
+        {
+            if (Time.time < hitStopReleaseTime) return;
+
+            hitStopped = false;
+            animator.SetFloat(attackSpeedHash, playSpeed); // 멈춘 자리에서 원래 속도로 이어진다.
+        }
 
         TryStartPendingSuccess();
         TryStartPendingHit();
@@ -633,6 +653,48 @@ public class CharacterActionPlayer : MonoBehaviour
         hasPending = false;
     }
 
+    // ─────────────────────────── 히트스톱 ───────────────────────────
+
+    /// <summary>
+    /// 임팩트 프레임에서 <b>공격 클립만</b> 멈춘다. 판정·오디오·이동은 전혀 건드리지 않는다 —
+    /// 멈추는 것은 Animator의 Speed Multiplier(<c>AttackSpeed</c>) 하나뿐이다.
+    /// (<c>Time.timeScale</c>은 쓸 수 없다. 채보는 <c>audioSource.time</c>으로 도는데 판정은 <c>Time.time</c>이라
+    /// 시계를 내리면 둘이 영구히 갈라진다 — 히트스톱 한 번이 <c>perfectWindow</c>(0.05초)를 넘는다.)
+    ///
+    /// <para><b>⚠ 플레이어는 '밀기'다. 캐치업이 아니다</b> — 적(<c>EnemyView.ApplyHitStop</c>)과 모델이 다르다.
+    /// 공격 클립은 임팩트를 <b>트림 끝 근처</b>에 찍으므로 임팩트 시점에 남은 트림 내용이
+    /// 실측 0.036~0.109초뿐이다(전 패턴 10/10). 정지 0.08초가 그보다 길어서
+    /// <b>재개하는 순간 이미 원래 종료 시각이 지나 있다</b> — 압축할 시간이 음수라 캐치업이 원리적으로 불가능하다.
+    /// 반대로 적 사망 클립은 <c>ImpactTime</c>이 트림 <i>시작</i> 근처라(§11-3) 잔여가 클립 대부분이고,
+    /// 그래서 그쪽만 원래 <c>burstTime</c>을 지킬 수 있다.</para>
+    ///
+    /// <para>그래서 여기서는 <b>복귀 스케줄을 정지 시간만큼 통째로 뒤로 민다</b>
+    /// (<see cref="actionEndTime"/>·<see cref="recoveryEndTime"/>). 클립은 멈춘 자리에서 원래 배속으로 이어진다.
+    /// <b>임팩트는 이미 지나간 뒤라 §6의 정렬은 깨지지 않는다</b> — 미는 것은 마무리 동작과 복귀뿐이다.</para>
+    ///
+    /// <para>비용은 하나다: 임팩트 이후가 전부 <paramref name="duration"/>만큼 늦는다.
+    /// <b>다음 공격은 자기 Deadline에서 독립적으로 예약되므로 제시각에 그대로 시작한다</b> —
+    /// 실제로 줄어드는 것은 그 사이 Sprint가 보이는 시간뿐이고, <see cref="minRunExposure"/>(0.35초) 대비 여유가 있다.</para>
+    /// </summary>
+    /// <returns>실제로 멈췄으면 true.</returns>
+    public bool ApplyHitStop(float duration)
+    {
+        if (attackLayerIndex < 0 || duration <= 0f) return false;
+        if (hitStopped) return false;
+
+        // 트림 구간(스윙)을 재생 중일 때만 의미가 있다. speedRestored가 서 있으면 이미 마무리 동작이다.
+        if (speedRestored || !swingActive) return false;
+
+        hitStopReleaseTime = Time.time + duration;
+        hitStopped = true;
+
+        actionEndTime += duration;
+        recoveryEndTime += duration;
+
+        animator.SetFloat(attackSpeedHash, 0f);
+        return true;
+    }
+
     // ─────────────────────────── 첫 미스 → 힛 ───────────────────────────
 
     /// <summary>
@@ -708,6 +770,13 @@ public class CharacterActionPlayer : MonoBehaviour
 
         animator.SetFloat(attackSpeedHash, speed);
         speedRestored = false;
+
+        // 새 클립이 들어오면 진행 중이던 히트스톱은 의미를 잃는다(정지시킬 대상 자체가 바뀌었다).
+        hitStopped = false;
+
+        playStartTime = Time.time;
+        playSpeed = Mathf.Max(speed, 0.01f);
+        playDur = dur;
 
         actionEndTime = Time.time + dur / Mathf.Max(speed, 0.01f);
         recoveryEndTime = actionEndTime + recoveryHoldDuration;

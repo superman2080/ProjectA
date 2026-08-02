@@ -89,7 +89,9 @@
       "Bash(awk '/private void TryStartAttack/,/^        }$/' \"Assets/02. Scripts/Enemy/EnemyView.cs\")",
       "Bash(printf '\\\\n> **폐기됨\\(2026-08-02\\).** 리시\\(`maxOffset`/`ArenaOrigin`\\)와 대기석 전진 배치는 무대가 월드에 고정되면서 사라졌다.\\\\n> 수렴 자체는 남았고 비율만 `playerShare`\\(0.85\\)로 저작값이 됐다. → `docs/StageTraversal/`\\\\n')",
       "Bash(printf '\\\\n> **일부 폐기\\(2026-08-02\\).** `StageOnDeck`/`bindToImpactWindow`는 무대 고정으로 제거됐다.\\\\n> **상대 배정을 판정 대상 승계 시점에 한다는 규칙은 그대로 살아 있고**, 창으로 표적을 고르게 되면서 오히려 더 중요해졌다. → `docs/StageTraversal/`\\\\n')",
-      "Bash(sed -i 's|^| 무대 | \\\\*\\\\*원형 아레나.\\\\*\\\\* 플레이어 중앙 고정|&|' /dev/null)"
+      "Bash(sed -i 's|^| 무대 | \\\\*\\\\*원형 아레나.\\\\*\\\\* 플레이어 중앙 고정|&|' /dev/null)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)"
     ]
   }
 }

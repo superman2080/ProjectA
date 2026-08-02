@@ -28,12 +28,20 @@ using UnityEngine;
 /// <para>─────────────────────────────────────────────────────────</para>
 ///
 /// <para>이 클래스가 하는 일은 <b>셋</b>이고, 서로 다른 층에 산다 —
-/// <b>쉐이크</b>(노이즈 채널), <b>프레이밍</b>(무엇을 담을지), <b>인트로</b>(어느 vcam을 쓸지).
+/// <b>쉐이크</b>(노이즈 채널), <b>프레이밍</b>(무엇을 + 어느 방향에서 담을지), <b>인트로</b>(어느 vcam을 쓸지).
 /// 채널이 겹치지 않아 동시에 돌아도 간섭하지 않는다.</para>
 ///
-/// <para><b>Cinemachine 타입은 세 이음매에만 등장한다</b> — <see cref="ApplyShake"/>,
-/// <see cref="ApplyFraming"/>, <see cref="IntroRoutine"/>. 위층(트리거·카탈로그·타이밍·거리 계산)은
-/// Cinemachine을 모르므로, 나중에 쉐이크를 Impulse로 갈아끼우거나 프레이밍 방식을 바꿔도 그대로 남는다.</para>
+/// <para><b>프레이밍은 두 값을 낸다</b> — 상대의 <b>가중치</b>(거리의 함수)와 카메라 궤도의 <b>방향</b>(플레이어 yaw).
+/// 방향은 그룹 오브젝트의 회전으로 나가며, 그래서 카메라가 언제나 플레이어 등 뒤에 선다(<see cref="ApplyFraming"/>).</para>
+///
+/// <para><b>Cinemachine 타입은 네 이음매에만 등장한다</b> — <see cref="ApplyShake"/>,
+/// <see cref="ApplyPunch"/>, <see cref="ApplyFraming"/>, <see cref="IntroRoutine"/>.
+/// 위층(트리거·카탈로그·타이밍·거리 계산)은 Cinemachine을 모르므로, 나중에 쉐이크를 Impulse로 갈아끼우거나
+/// 프레이밍 방식을 바꿔도 그대로 남는다.</para>
+///
+/// <para><b>쉐이크와 펀치는 채널이 다르다</b> — 쉐이크는 Perlin 노이즈, 펀치는 렌즈 FOV다.
+/// 임팩트 순간 둘이 같이 나가도 간섭하지 않는다. <b>애니메이터를 멈추는 히트스톱은 여기 없다</b>
+/// (<c>HitStopDirector</c>가 자기 층에서 한다) — 이 클래스는 카메라만 만진다.</para>
 ///
 /// <para><b>세 기능은 각자 독립적으로 꺼진다.</b> 배선이 빠진 기능만 조용히 비활성되고 나머지는 동작한다 —
 /// 새 기능이 기존 씬을 깨지 않게 하는 규율이다.</para>
@@ -49,8 +57,26 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("적 처치 큐. 비우면 그 트리거만 무연출.")]
     [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
 
-    [Tooltip("흔들 대상. 씬의 CinemachineCamera에 붙어 있는 노이즈 컴포넌트.")]
-    [SerializeField] private CinemachineBasicMultiChannelPerlin perlin;
+    [Tooltip("쉐이크·펀치의 폴백 대상. 앵글 교체(CameraAngleSwitcher)로 여러 vcam을 쓸 때는 " +
+             "live vcam을 조회해 그쪽에 걸고, 조회가 실패할 때만 이 값을 쓴다.")]
+    [SerializeField] private CinemachineCamera gameplayCamera;
+
+    [Header("Toggles")]
+    [Tooltip("화면 흔들림. 끄면 Perlin은 씬의 휴지값 그대로 남는다.")]
+    [SerializeField] private bool shakeEnabled = true;
+
+    [Tooltip("임팩트 순간의 FOV 펀치. 끄면 렌즈는 씬 값 그대로 남는다.")]
+    [SerializeField] private bool punchEnabled = true;
+
+    [Tooltip("교전 상대를 함께 담고 카메라를 플레이어 등 뒤에 두는 프레이밍. 끄면 그룹을 건드리지 않는다.")]
+    [SerializeField] private bool framingEnabledOption = true;
+
+    [Tooltip("곡 시작 전 스플라인 인트로.")]
+    [SerializeField] private bool introEnabled = true;
+
+    [Header("Angle Switch")]
+    [Tooltip("앵글 vcam 랜덤 교체. 0번이 곡 시작 카메라이며, 2대 미만이면 조용히 비활성된다.")]
+    [SerializeField] private CameraAngleSwitcher angleSwitcher = new CameraAngleSwitcher();
 
     [Header("Cue Catalog")]
     [Tooltip("트리거별 쉐이크 설정. 연출 추가 = 여기에 한 줄.")]
@@ -71,6 +97,11 @@ public class CameraDirector : MonoBehaviour
 
     [Tooltip("가중치가 목표를 따라가는 시간상수(초). 거리 계산이 튀어도 구도는 부드럽게 따라온다.")]
     [SerializeField] private float weightDamping = 0.35f;
+
+    [Tooltip("카메라 궤도가 플레이어 방향을 따라가는 시간상수(초). " +
+             "PlayerCombatMover.turnDuration(0.15초)보다 충분히 길어야 한다 — " +
+             "같으면 상대 교체 때 화면이 0.15초에 반 바퀴 돈다. 0 이하면 즉시 스냅.")]
+    [SerializeField] private float cameraTurnDamping = 0.45f;
 
     [Header("Intro")]
     [Tooltip("카운트다운 시각원. 비우면 인트로 기능만 꺼진다.")]
@@ -95,24 +126,59 @@ public class CameraDirector : MonoBehaviour
     private readonly Dictionary<CameraTrigger, CameraCueEntry> catalogByTrigger =
         new Dictionary<CameraTrigger, CameraCueEntry>();
 
-    // Perlin의 휴지값(씬에 설정된 상시 흔들림). 쉐이크가 끝나면 0이 아니라 여기로 되돌아간다.
-    private float idleAmplitude;
-    private float idleFrequency;
+    /// <summary>
+    /// vcam 하나의 휴지값(씬에 적힌 값). <b>vcam마다 다를 수 있으므로 대상별로 캐시한다</b> —
+    /// 하나만 캐시해 두면 다른 앵글의 상시 흔들림·화각이 첫 큐에서 통째로 덮인다.
+    /// </summary>
+    private struct CameraIdle
+    {
+        public CinemachineBasicMultiChannelPerlin perlin;
+        public float amplitude;
+        public float frequency;
+        public float fov;
+    }
+
+    private readonly Dictionary<CinemachineCamera, CameraIdle> idleByCamera =
+        new Dictionary<CinemachineCamera, CameraIdle>();
+
+    // 지금 쉐이크·펀치가 걸려 있는 vcam. live가 바뀌면 이전 것을 반드시 휴지값으로 되돌린다.
+    private CinemachineCamera effectCamera;
 
     // 진행 중인 쉐이크.
     private float shakeAmplitude;
     private float shakeStartTime;
     private float shakeDuration;
 
+    // 진행 중인 FOV 펀치.
+    private float punchDelta;
+    private float punchStartTime;
+    private float punchDuration;
+
+    // 히트스톱 락. 이 시각까지 카메라는 완전히 얼어 있고, 큐는 해제 뒤로 미뤄진다.
+    private float holdUntil;
+    private bool hasDeferredCue;
+    private CameraTrigger deferredCue;
+    private bool brainDisabledByHold;
+
+    private bool IsHolding => Time.time < holdUntil;
+
     // 대기 중인 예약(최대 하나). duration이 0 이하면 예약 없음.
     private bool hasPending;
     private float pendingFireTime;
     private CameraTrigger pendingTrigger;
 
+    // 마지막으로 실제 재생한 큐. 잠금이 같은 프레임에 들어와도 그 큐를 버리지 않고 옮기기 위해 기억한다.
+    private CameraTrigger lastCueTrigger;
+
     // 프레이밍 상태. framingEnabled가 false면 targetGroup을 건드리지 않는다.
     private bool framingEnabled;
     private Transform opponentTransform;
     private float opponentWeight;
+
+    // 카메라 궤도의 방향. 플레이어 yaw를 목표로 뒤따르며, SmoothDampAngle이 속도를 들고 있어
+    // 목표가 감쇠 도중에 또 바뀌어도(상대 연속 교체) 이어진다.
+    private float cameraYaw;
+    private float cameraYawVelocity;
 
     // 인트로 상태.
     private Coroutine introRoutine;
@@ -123,19 +189,14 @@ public class CameraDirector : MonoBehaviour
         if (handler == null)
             Debug.LogError("[CameraDirector] handler가 배선되지 않았습니다 — 카메라 연출이 동작하지 않습니다.", this);
 
-        if (perlin == null)
-            Debug.LogError("[CameraDirector] perlin이 배선되지 않았습니다 — CinemachineCamera의 노이즈 컴포넌트를 넣으세요.", this);
-        else
-        {
-            idleAmplitude = perlin.AmplitudeGain;
-            idleFrequency = perlin.FrequencyGain;
-        }
-
         foreach (var entry in catalog)
             catalogByTrigger[entry.trigger] = entry;
 
         SetupFraming();
         SetupIntro();
+
+        // 시작 구도를 확정한다. 씬에 저장된 우선순위가 무엇이든 0번이 이긴다.
+        angleSwitcher.Setup();
     }
 
     /// <summary>
@@ -147,6 +208,7 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void SetupFraming()
     {
+        if (!framingEnabledOption) return;
         if (targetGroup == null) return; // 프레이밍만 비활성 — 쉐이크·인트로는 그대로 동작한다.
 
         if (actionPlayer == null)
@@ -167,11 +229,17 @@ public class CameraDirector : MonoBehaviour
         targetGroup.AddMember(null, 0f, 1f); // 1번 칸은 자리만 잡아 둔다. 대상은 승격될 때 채운다.
 
         opponentWeight = 0f;
+
+        // 첫 프레임에 0°에서 감쇠가 시작되면 카메라가 한 바퀴 돌며 들어온다. 지금 방향에서 출발시킨다.
+        cameraYaw = actionPlayer.transform.eulerAngles.y;
+        cameraYawVelocity = 0f;
+
         framingEnabled = true;
     }
 
     private void SetupIntro()
     {
+        if (!introEnabled) return;
         if (chartPlayer == null || introCamera == null || introDolly == null || brain == null) return;
 
         // 씬에 적힌 값을 그대로 휴지값으로 삼는다. 게임플레이 vcam(우선순위 0)보다 낮게 두어야
@@ -205,6 +273,7 @@ public class CameraDirector : MonoBehaviour
         if (handler == null) return;
         handler.OnPatternComplete += HandlePatternComplete;
         handler.OnAllPatternsCleared += HandleAllCleared;
+        handler.OnJudgeTargetBegan += HandleJudgeTargetBegan;
     }
 
     void OnDisable()
@@ -223,10 +292,20 @@ public class CameraDirector : MonoBehaviour
         {
             handler.OnPatternComplete -= HandlePatternComplete;
             handler.OnAllPatternsCleared -= HandleAllCleared;
+            handler.OnJudgeTargetBegan -= HandleJudgeTargetBegan;
         }
 
         StopShake(); // 꺼진 채 흔들림이 남지 않도록.
         StopIntro(); // 인트로 도중 꺼져도 vcam이 높은 우선순위로 남지 않도록.
+
+        // ⚠ 잠금 도중 꺼지면 Brain이 꺼진 채 남아 카메라가 영구히 굳는다.
+        holdUntil = 0f;
+        hasDeferredCue = false;
+        if (brainDisabledByHold)
+        {
+            brainDisabledByHold = false;
+            if (brain != null) brain.enabled = true;
+        }
     }
 
     // ── 이벤트 처리 ──────────────────────────────────────────────────────────
@@ -270,10 +349,17 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void HandleEnemyKilled(EnemySpace.EnemyView view) => PlayCue(CameraTrigger.EnemyKilled);
 
+    /// <summary>
+    /// 패턴이 넘어가는 순간 — 앵글 교체를 <b>예약</b>한다(발사는 카메라 큐가 끝난 뒤, <see cref="Update"/>에서).
+    /// 이 이벤트는 임팩트보다 먼저 오므로 여기서 바로 교체하면 블렌드가 임팩트·쉐이크를 덮는다.
+    /// </summary>
+    private void HandleJudgeTargetBegan(JudgeTargetInfo info) => angleSwitcher.OnPatternBoundary();
+
     private void HandleAllCleared()
     {
         hasPending = false;
         StopShake();
+        angleSwitcher.Reset();
     }
 
     private void HandleOpponentChanged(EnemySpace.EnemyView previous, EnemySpace.EnemyView current) => SetOpponent(current);
@@ -303,6 +389,7 @@ public class CameraDirector : MonoBehaviour
 
     private void HandleCountdownStarted(float duration)
     {
+        if (!introEnabled) return;
         if (chartPlayer == null || introCamera == null || introDolly == null || brain == null) return;
 
         StopIntro();
@@ -313,6 +400,14 @@ public class CameraDirector : MonoBehaviour
 
     void Update()
     {
+        // 히트스톱 동안 카메라는 <b>완전히 언다</b> — 쉐이크·펀치·프레이밍이 전부 서고,
+        // 예약된 큐도 여기서 통과하지 못해 자연히 해제 뒤로 밀린다(= "멈춘 다음에 연출").
+        if (holdUntil > 0f)
+        {
+            if (IsHolding) return;
+            ReleaseHold();
+        }
+
         if (hasPending && Time.time >= pendingFireTime)
         {
             hasPending = false;
@@ -320,7 +415,91 @@ public class CameraDirector : MonoBehaviour
         }
 
         UpdateShake();
+        UpdatePunch();
         UpdateFraming();
+
+        // 예약된 앵글 교체는 큐가 전부 끝난 뒤에야 발사된다 — 블렌드가 임팩트·쉐이크를 덮지 않게.
+        angleSwitcher.Tick(IsCuePlaying);
+    }
+
+    // ── 히트스톱 락 ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 히트스톱 동안 카메라를 <b>얼린다</b>. <c>HitStopDirector</c>가 임팩트 순간에 부르는 <b>유일한 진입점</b>이다.
+    ///
+    /// <para><b>순서가 요구 그 자체다</b> — ① 진행 중인 쉐이크를 즉시 끄고 ② 카메라를 잠가 못 움직이게 한 뒤
+    /// ③ 해제된 <b>다음에</b> 큐가 나간다. 임팩트에 쉐이크가 겹치면 "멈췄다"가 아니라 "끊겼다"로 읽힌다.</para>
+    ///
+    /// <para><b>잠금은 <c>CinemachineBrain</c>을 끄는 것이다.</b> 그래야 카메라 Transform이 마지막 값에 그대로 굳는다 —
+    /// 프레이밍 갱신만 멈추면 감쇠(<c>PositionDamping</c> 1.0)가 남은 오차를 계속 따라가 여전히 흐른다.
+    /// Brain이 배선돼 있지 않으면 프레이밍·쉐이크 정지만으로 <b>부분 잠금</b>이 되고 나머지는 그대로 동작한다.</para>
+    ///
+    /// <para><b>큐를 버리지 않고 미룬다.</b> 같은 프레임에 이 클래스의 <see cref="Update"/>가 먼저 돌아
+    /// 큐가 이미 시작됐을 수 있어서(실행 순서는 보장되지 않는다), 진행 중인 쉐이크가 있으면 그 트리거를
+    /// 지연 큐로 옮긴다 — 그래서 <b>어느 순서로 돌든 결과가 같다.</b></para>
+    /// </summary>
+    public void HoldForHitStop(float duration)
+    {
+        if (duration <= 0f) return;
+
+        // 이 프레임에 이미 시작된 큐가 있으면 버리지 말고 해제 뒤로 옮긴다.
+        if (shakeDuration > 0f || punchDuration > 0f)
+        {
+            hasDeferredCue = true;
+            deferredCue = lastCueTrigger;
+        }
+
+        StopShake();
+        punchDuration = 0f;
+        punchDelta = 0f;
+        ApplyPunch(0f);
+
+        holdUntil = Time.time + duration;
+
+        if (brain != null && brain.enabled)
+        {
+            brain.enabled = false;
+            brainDisabledByHold = true;
+        }
+    }
+
+    private void ReleaseHold()
+    {
+        holdUntil = 0f;
+
+        if (brainDisabledByHold)
+        {
+            brainDisabledByHold = false;
+            if (brain != null) brain.enabled = true;
+        }
+
+        if (!hasDeferredCue) return;
+
+        hasDeferredCue = false;
+        PlayCue(deferredCue);
+    }
+
+    /// <summary>
+    /// FOV 펀치. 쉐이크와 <b>같은 감쇠 공식</b>을 쓰지만 <b>채널이 달라</b>(노이즈 vs 렌즈) 동시에 돌아도 간섭하지 않는다.
+    ///
+    /// <para>⚠ <b>돌리(<c>FollowOffset</c>)가 아니라 FOV에 건다.</b> <c>CinemachineGroupFraming</c>이 매 프레임
+    /// 돌리를 계산하므로 거기에 펀치를 걸면 둘이 싸운다. <c>SizeAdjustment = DollyOnly</c>의 "Zoom 금지"는
+    /// <b>상시 프레이밍</b>에 대한 경고지, 0.1초짜리 전환에 대한 것이 아니다 — 그 왜곡 자체가 타격감의 재료다.</para>
+    /// </summary>
+    private void UpdatePunch()
+    {
+        if (punchDuration <= 0f) return;
+
+        float t = (Time.time - punchStartTime) / punchDuration;
+        if (t >= 1f)
+        {
+            punchDuration = 0f;
+            punchDelta = 0f;
+            ApplyPunch(0f);
+            return;
+        }
+
+        ApplyPunch(punchDelta * Decay(t));
     }
 
     // ── 프레이밍 ─────────────────────────────────────────────────────────────
@@ -333,6 +512,15 @@ public class CameraDirector : MonoBehaviour
     /// 거리의 함수로 두면 멀리서 오는 적이 화면에 서서히 자리를 만들고, 링에 흩어진 배경 적들은
     /// 애초에 구도에 개입하지 않는다. 요구("있으면 함께, 없으면 플레이어만")를 만족하면서
     /// 승격 구간 문제를 같은 식 하나로 흡수한다.</para>
+    ///
+    /// <para><b>⚠ 카메라 방향은 플레이어의 회전 속도를 복사하지 않는다.</b>
+    /// <c>PlayerCombatMover.turnDuration</c>은 0.15초다 — 상대를 먼저 보고 달리기 위한 의도된 날카로움이라
+    /// 캐릭터에는 옳지만, 카메라가 그 각속도를 그대로 따르면 상대가 무대 반대편으로 바뀔 때
+    /// <b>화면 전체가 0.15초에 반 바퀴 돈다.</b> 그래서 <see cref="cameraTurnDamping"/>이라는
+    /// 자기 시간상수로 뒤따르고, 그 지연 자체가 "플레이어가 먼저 돌고 카메라가 따라붙는" 연출이 된다.</para>
+    ///
+    /// <para><c>SmoothDampAngle</c>을 쓰는 이유는 둘이다 — 각도 랩어라운드(359°→1°)를 알아서 처리하고,
+    /// 속도를 들고 있어 감쇠 도중 목표가 또 바뀌어도(연속 처치) 이어진다.</para>
     /// </summary>
     private void UpdateFraming()
     {
@@ -352,20 +540,38 @@ public class CameraDirector : MonoBehaviour
             ? Mathf.Lerp(opponentWeight, target, 1f - Mathf.Exp(-Time.deltaTime / weightDamping))
             : target;
 
-        ApplyFraming(opponentTransform, opponentWeight);
+        // yaw만 가져온다. 플레이어는 지금 평면 회전만 하지만, 훗날 피격 리액션 등으로 기울면
+        // 회전을 통째로 복사한 궤도가 지면을 뚫거나 하늘로 솟는다.
+        float targetYaw = actionPlayer.transform.eulerAngles.y;
+
+        cameraYaw = cameraTurnDamping > 0f
+            ? Mathf.SmoothDampAngle(cameraYaw, targetYaw, ref cameraYawVelocity, cameraTurnDamping)
+            : targetYaw;
+
+        ApplyFraming(opponentTransform, opponentWeight, cameraYaw);
     }
 
     /// <summary>
-    /// 그룹 멤버를 실제로 갱신하는 <b>유일한 지점</b>. <see cref="ApplyShake"/>와 같은 규율이라
-    /// 프레이밍 방식을 바꿔도 위층(거리 계산·감쇠)은 그대로 남는다.
+    /// 그룹을 실제로 갱신하는 <b>유일한 지점</b> — 멤버(무엇을 담을지)와 회전(어느 방향에서 담을지) 둘 다.
+    /// <see cref="ApplyShake"/>와 같은 규율이라 프레이밍 방식을 바꿔도 위층(거리·각도 계산)은 그대로 남는다.
+    ///
+    /// <para><b>회전이 카메라를 플레이어 등 뒤로 돌리는 장치다.</b> 그룹은 <c>RotationMode = Manual</c>이라
+    /// 그룹 회전 = 이 GameObject의 <c>transform.rotation</c>이고, vcam의 <c>BindingMode = LockToTarget</c>이라
+    /// <c>FollowOffset</c>이 그 로컬 축으로 해석된다 → 여기를 돌리면 카메라 궤도가 통째로 따라 돈다.
+    /// <c>GroupFraming</c>(바운드→돌리)과 <c>RotationComposer</c>(그룹을 바라보기)는 이 축과 무관해 그대로 산다.</para>
+    ///
+    /// <para>⚠ <b>그룹을 <c>GroupAverage</c>로 바꾸면 안 된다</b> — 회전이 멤버 배치에서 파생돼
+    /// 구도가 적을 따라 돌고, 상대 가중치가 0인 구간에서는 정의되지 않아 튄다.</para>
     /// </summary>
-    private void ApplyFraming(Transform opponent, float weight)
+    private void ApplyFraming(Transform opponent, float weight, float yaw)
     {
         if (targetGroup == null || targetGroup.Targets.Count < 2) return;
 
         var slot = targetGroup.Targets[1];
         slot.Object = opponent;
         slot.Weight = weight;
+
+        targetGroup.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
     }
 
     private void UpdateShake()
@@ -394,6 +600,19 @@ public class CameraDirector : MonoBehaviour
     private void PlayCue(CameraTrigger trigger)
     {
         if (!catalogByTrigger.TryGetValue(trigger, out var cue)) return; // 카탈로그에 없으면 무연출
+
+        // 잠금 중에는 내지 않고 미룬다 — 요구가 "멈춘 다음에 연출"이다.
+        if (IsHolding)
+        {
+            hasDeferredCue = true;
+            deferredCue = trigger;
+            return;
+        }
+
+        lastCueTrigger = trigger;
+        PlayPunch(cue);
+
+        if (!shakeEnabled) return;
         if (cue.shakeDuration <= 0f) return;
 
         // 겹침: 진행 중인 쉐이크의 남은 진폭과 비교해 큰 쪽을 취한다(세기 낙차 방지).
@@ -409,12 +628,121 @@ public class CameraDirector : MonoBehaviour
         shakeStartTime = Time.time;
     }
 
+    /// <summary>
+    /// 펀치를 시작한다. 겹침 규칙은 쉐이크와 같다 — 타이머는 재시작하되 <b>세기는 큰 쪽을 취한다</b>
+    /// (덮어쓰면 강한 펀치 도중 약한 펀치가 들어와 낙차가 생긴다). 부호가 섞이면 절댓값으로 비교한다.
+    /// </summary>
+    private void PlayPunch(CameraCueEntry cue)
+    {
+        if (!punchEnabled) return;
+        if (cue.punchDuration <= 0f || cue.punchFovDelta == 0f) return;
+
+        float remaining = 0f;
+        if (punchDuration > 0f)
+        {
+            float t = Mathf.Clamp01((Time.time - punchStartTime) / punchDuration);
+            remaining = punchDelta * Decay(t);
+        }
+
+        punchDelta = Mathf.Abs(remaining) > Mathf.Abs(cue.punchFovDelta) ? remaining : cue.punchFovDelta;
+        punchDuration = cue.punchDuration;
+        punchStartTime = Time.time;
+    }
+
     private void StopShake()
     {
         shakeDuration = 0f;
         shakeAmplitude = 0f;
         ApplyShake(0f, 0f);
     }
+
+    /// <summary>
+    /// 펀치를 실제로 렌즈에 적용하는 <b>유일한 지점</b>. <see cref="ApplyShake"/>·<see cref="ApplyFraming"/>·
+    /// <see cref="IntroRoutine"/>과 함께 Cinemachine 타입이 등장하는 네 곳 중 하나다.
+    /// </summary>
+    private void ApplyPunch(float delta)
+    {
+        var cam = ResolveEffectCamera();
+        if (cam == null) return;
+
+        var idle = GetIdle(cam);
+        var lens = cam.Lens;
+        lens.FieldOfView = idle.fov + delta;
+        cam.Lens = lens;
+    }
+
+    // ── 연출 대상 vcam 조회 ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// 쉐이크·펀치를 걸 <b>지금 화면에 나오는 vcam</b>을 찾는다.
+    ///
+    /// <para>앵글 교체(<c>CameraAngleSwitcher</c>)를 쓰면 live vcam이 곡 도중 바뀐다. 예전처럼 특정 vcam을
+    /// 하드와이어로 잡고 있으면 <b>다른 앵글이 올라온 순간 타격감 연출이 통째로 사라진다</b> —
+    /// 화면에 안 나오는 카메라를 흔들고 있기 때문이다.</para>
+    ///
+    /// <para><b>대상이 바뀌면 이전 vcam을 반드시 휴지값으로 되돌린다.</b> 안 그러면 흔들리던 상태로 굳은 채
+    /// 대기열에 남았다가 다음에 올라올 때 그 값으로 등장한다.</para>
+    ///
+    /// <para>Brain이 없거나 live를 못 찾으면 <see cref="gameplayCamera"/>로 폴백한다 — 앵글 교체를 안 쓰는
+    /// 씬에서는 예전과 완전히 같은 동작이다.</para>
+    /// </summary>
+    private CinemachineCamera ResolveEffectCamera()
+    {
+        CinemachineCamera cam = null;
+
+        if (brain != null)
+            cam = brain.ActiveVirtualCamera as CinemachineCamera;
+
+        if (cam == null) cam = gameplayCamera;
+
+        if (cam != effectCamera)
+        {
+            RestoreIdle(effectCamera);
+            effectCamera = cam;
+        }
+
+        return cam;
+    }
+
+    /// <summary>vcam의 휴지값을 처음 볼 때 캐시한다. 씬에 적힌 값이 진실의 원천이다(쉐이크·펀치 공통 규율).</summary>
+    private CameraIdle GetIdle(CinemachineCamera cam)
+    {
+        if (idleByCamera.TryGetValue(cam, out var idle)) return idle;
+
+        idle = new CameraIdle
+        {
+            perlin = cam.GetComponent<CinemachineBasicMultiChannelPerlin>(),
+            fov = cam.Lens.FieldOfView,
+        };
+
+        if (idle.perlin != null)
+        {
+            idle.amplitude = idle.perlin.AmplitudeGain;
+            idle.frequency = idle.perlin.FrequencyGain;
+        }
+
+        idleByCamera[cam] = idle;
+        return idle;
+    }
+
+    /// <summary>연출이 걸려 있던 vcam을 씬 값으로 되돌린다. 대상 교체와 종료 양쪽에서 쓰인다.</summary>
+    private void RestoreIdle(CinemachineCamera cam)
+    {
+        if (cam == null || !idleByCamera.TryGetValue(cam, out var idle)) return;
+
+        if (idle.perlin != null)
+        {
+            idle.perlin.AmplitudeGain = idle.amplitude;
+            idle.perlin.FrequencyGain = idle.frequency;
+        }
+
+        var lens = cam.Lens;
+        lens.FieldOfView = idle.fov;
+        cam.Lens = lens;
+    }
+
+    /// <summary>진행 중인 카메라 큐가 있는가. 앵글 교체가 <b>쉐이크가 끝난 뒤에</b> 발사되도록 판단 근거를 준다.</summary>
+    public bool IsCuePlaying => shakeDuration > 0f || punchDuration > 0f;
 
     // ── 인트로 ──────────────────────────────────────────────────────────────
 
@@ -480,9 +808,13 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void ApplyShake(float amplitude, float frequency)
     {
-        if (perlin == null) return;
+        var cam = ResolveEffectCamera();
+        if (cam == null) return;
 
-        perlin.AmplitudeGain = idleAmplitude + amplitude;
-        perlin.FrequencyGain = idleFrequency + frequency;
+        var idle = GetIdle(cam);
+        if (idle.perlin == null) return; // 이 앵글엔 노이즈가 없다 — 쉐이크만 조용히 빠진다.
+
+        idle.perlin.AmplitudeGain = idle.amplitude + amplitude;
+        idle.perlin.FrequencyGain = idle.frequency + frequency;
     }
 }

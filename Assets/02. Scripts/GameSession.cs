@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>씬 간 선택된 SongChart를 전달하는 DontDestroyOnLoad 싱글톤.</summary>
 public class GameSession : Singleton<GameSession>
 {
-    /// <summary>SongSelectScene에서 선택한 채보. DefaultScene의 ChartPlayer가 읽어 사용한다.</summary>
+    /// <summary>SongSelectScene에서 선택한 채보. BattleScene의 ChartPlayer가 읽어 사용한다.</summary>
     public SongChart SelectedChart { get; set; }
 
     protected override void Awake()

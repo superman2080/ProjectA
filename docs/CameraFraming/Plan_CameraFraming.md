@@ -50,11 +50,15 @@ FOV 25는 좁은 망원 구도라 `Zoom`으로 흔들면 원근이 눈에 띄게
 
 **확정.**
 
-### D-4. `BindingMode`를 `LockToTarget` → `WorldSpace`로
+### D-4. `BindingMode`를 `LockToTarget` → `WorldSpace`로 — ~~확정~~ **폐기**
 
-Research 4-2. 그룹 회전은 멤버 배치에서 파생되므로, 지금 값(`LockToTarget`)을 유지하면 적이 링을 돌 때마다 **구도가 통째로 회전한다**. 카메라 각도는 씬이 정한 고정값이어야 한다.
+> **⚠ 폐기됨 (`docs/CameraOverShoulder/`).** 근거가 틀렸고, 이제는 정반대 요구가 됐다.
+>
+> "그룹 회전은 멤버 배치에서 파생된다"는 `RotationMode = GroupAverage`일 때만 참인데 실제 그룹은 **`Manual`**이다 — 그룹 회전은 그 GameObject의 `transform.rotation`이고 당시엔 아무도 쓰지 않아 identity였다. 그래서 **처방이 씬에 적용되지 않았는데도(`BindingMode`는 계속 `LockToTarget`) 아무 증상이 없었다.**
+>
+> 지금은 `CameraDirector`가 그 그룹 회전을 **플레이어 yaw로 몰아** 카메라를 등 뒤에 세운다. `LockToTarget`이 그 전제이므로 **유지**한다. 대신 `RotationMode`를 `GroupAverage`로 바꾸는 것이 새 금기다.
 
-**확정.**
+~~Research 4-2. 그룹 회전은 멤버 배치에서 파생되므로, 지금 값(`LockToTarget`)을 유지하면 적이 링을 돌 때마다 **구도가 통째로 회전한다**. 카메라 각도는 씬이 정한 고정값이어야 한다.~~
 
 ### D-5. 소유자는 `CameraDirector`
 

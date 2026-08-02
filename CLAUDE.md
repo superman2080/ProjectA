@@ -20,7 +20,8 @@ SongSelectManager ─(GameSession.SelectedChart)→ ChartPlayer ─(SetPattern)�
 ```
 Assets/
 ├── 01. Scenes/
-│   └── DefaultScene.unity          # 메인 게임플레이 씬 (곡 선택 씬은 별도)
+│   ├── BattleScene.unity           # 메인 게임플레이 씬 (구 DefaultScene — 오래된 문서는 옛 이름으로 부른다)
+│   └── SongSelectScene.unity       # 곡 선택 씬
 ├── 02. Scripts/
 │   ├── Input/
 │   │   ├── InputHandler.cs          # 키보드 1~9 입력 → 인덱스(0~8) 이벤트 발행
@@ -206,10 +207,13 @@ Assets/
 ### 7-2. 카메라 프레이밍 · 인트로 (CameraDirector)
 `CameraDirector`가 하는 일은 **셋**이고 서로 다른 층에 산다 — **쉐이크**(노이즈 채널) / **프레이밍**(무엇을 담을지) / **인트로**(어느 vcam을 쓸지). 채널이 겹치지 않아 동시에 돌아도 간섭하지 않는다. **Cinemachine 타입은 `ApplyShake`·`ApplyFraming`·`IntroRoutine` 세 이음매에만 등장한다.** **세 기능은 각자 독립적으로 꺼진다** — 배선이 빠진 기능만 조용히 비활성된다.
 
-**프레이밍** — 교전 상대가 있으면 플레이어와 함께, 없으면 플레이어만.
-- 씬 구성: `CameraTargetGroup`(`CinemachineTargetGroup`)이 게임플레이 vcam의 `TrackingTarget`, vcam에 `CinemachineGroupFraming`(`SizeAdjustment = DollyOnly` — FOV 25 망원 구도라 Zoom이면 원근이 왜곡된다).
-- **`CinemachineFollow.BindingMode`는 반드시 `WorldSpace`.** 그룹 회전은 멤버 배치에서 파생되므로 `LockToTarget`이면 **적이 링을 돌 때마다 구도가 통째로 회전한다.**
+**프레이밍** — 교전 상대가 있으면 플레이어와 함께, 없으면 플레이어만. **그리고 카메라는 언제나 플레이어 등 뒤에 선다.**
+- 씬 구성: `CameraTargetGroup`(`CinemachineTargetGroup`)이 게임플레이 vcam의 `TrackingTarget`, vcam에 `CinemachineGroupFraming`(`SizeAdjustment = DollyOnly` — Zoom이면 원근이 왜곡된다).
+- **그룹은 `RotationMode = Manual`, vcam은 `BindingMode = LockToTarget`.** 이 조합이라 `FollowOffset`이 **그룹 오브젝트의 로컬 축**으로 해석되고, `CameraDirector`가 그룹 회전을 **플레이어 yaw로 몰아** 카메라 궤도가 등 뒤로 따라 돈다. ⚠ `GroupAverage`로 바꾸면 회전이 **멤버 배치에서 파생**돼 구도가 적을 따라 돌고, 상대 가중치 0 구간에서는 정의되지 않아 튄다. (예전 문서의 "반드시 `WorldSpace`" 규칙은 `GroupAverage`를 전제한 오진이라 폐기됐다 — 씬은 처음부터 `Manual`이었고 그래서 증상이 없었다.)
+- **⚠ 카메라는 플레이어의 회전 속도를 복사하지 않는다.** `PlayerCombatMover.turnDuration`은 0.15초 — 캐릭터에는 옳지만 카메라가 따라 하면 상대가 무대 반대편으로 바뀔 때 **화면이 0.15초에 반 바퀴 돈다.** `CameraDirector.cameraTurnDamping`(0.45초)으로 `SmoothDampAngle`(각도 랩어라운드 + 속도 승계) 뒤따르고, **그 지연 자체가 "플레이어가 먼저 돌고 카메라가 따라붙는" 연출**이다.
 - 멤버는 **고정 2칸**(0=플레이어 w=1, 1=상대 w=0~1). 넣었다 뺐다 하면 바운드가 계단식으로 튄다.
+- 그룹 위치는 `GroupCenter`(가중 중심)라 카메라는 엄밀히는 "플레이어 뒤"가 아니라 **"교전 중심의 뒤"**다. 결투 간격이 1m 남짓이라 차이는 0.5m 미만이고, 오히려 상대가 화면 중앙에 잘 남는다.
+- **⚠ 높이 노브가 둘이고 값이 같아야 한다.** 캐릭터 root가 **발바닥**(y=0, 머리끝 1.69)이라 그룹 바운드 중심도 발이다. `RotationComposer.TargetOffset.y`(어디를 **조준**하나)만 올리면 `GroupFraming`이 여전히 **바운드**(=발)를 화면 중앙에 놓아 둘이 싸우고 화면이 발쪽으로 끌려간다 — `GroupFraming`은 조준점을 모른다. **`GroupFraming.CenterOffset.y`를 같은 값으로 맞춘다**(현재 둘 다 1.5 = 머리 높이). 발이 화면 아래로 잘리면 둘을 같이 낮춘다.
 - **"적이 있다/없다"는 이진값이 아니라 거리의 함수다** — `fullFrameDistance`(3m) 이하면 w=1, `dropoffDistance`(6m) 이상이면 w=0. 처치 즉시 승격된 적은 아직 링(6m)에 있어서, 이진값이면 카메라가 확 물러났다 다시 붙는다.
 - **⚠ 대상을 갈아끼울 때 가중치를 0으로 리셋한다.** 가중치는 연속이지만 **대상 위치는 순간이동**한다(1m의 A → 6m의 B). 이월하면 그 감쇠 시간 동안 그룹이 6m 밖 한 점을 무겁게 껴안아 **카메라가 바깥으로 튄다.**
 
@@ -218,8 +222,38 @@ Assets/
 - **경로는 코드가 모른다.** 좌표·높이·곡률 전부 씬의 `SplineContainer`에 있고 코드는 `CameraPosition` 0→1만 민다. **`PositionUnits = Normalized`가 그 전제**라 어긋나면 경고를 찍는다(경로가 조용히 일부만 재생됨). 코드가 주는 건 속도 배분(`introEase`)뿐.
 - **블렌드 시간은 `Brain.DefaultBlend.BlendTime`에서 읽는다**(`Time`이 아니라 — `Cut`이면 0을 돌려주는 실효값). 인스펙터에 두 번 적으면 *곡은 시작됐는데 카메라가 아직 움직이는* 상태가 된다.
 - **끝점을 게임플레이 구도에 정확히 맞출 의무가 없다** — 차이는 블렌드가 흡수한다.
-- 인트로 vcam은 TargetGroup을 안 쓰고 플레이어를 `LookAt`으로 직접 본다(주인공이 플레이어고, 그룹을 공유하면 두 기능이 한 값으로 얽힌다). 노이즈도 안 붙인다. **휴지 우선순위는 −10** — 0이면 게임플레이 vcam과 동점이라 끝난 뒤 승자가 활성화 순서에 달린다.
-- 상세: `docs/CameraFraming/`
+- 인트로 vcam은 TargetGroup을 안 쓰고(그래서 등 뒤 추적과도 무관하다) 플레이어를 `LookAt`으로 직접 본다(주인공이 플레이어고, 그룹을 공유하면 두 기능이 한 값으로 얽힌다). 노이즈도 안 붙인다. **휴지 우선순위는 −10** — 0이면 게임플레이 vcam과 동점이라 끝난 뒤 승자가 활성화 순서에 달린다.
+- 상세: `docs/CameraFraming/` · 등 뒤 추적: `docs/CameraOverShoulder/`
+
+### 7-3. 히트스톱 (HitStop)
+- **`HitStopDirector`**: 히트스톱의 유일 관리 지점. `OnPatternComplete`만 구독하는 순수 연출. **성공(`AllCorrect`)에서만** `Deadline + ImpactOffset`(§6·§11과 같은 식)에 예약하고, 그 순간 두 배우에게 "멈춰라"를 지시한다. 예약은 최대 하나(`CameraDirector`와 같은 근거).
+- **⚠ `Time.timeScale`은 이 게임에서 절대 못 쓴다.** 판정·클립 정렬·표적 운동은 전부 `Time.time`인데 채보는 `audioSource.time`으로 돈다 — **오디오는 timeScale의 지배를 받지 않는다.** 시계를 내리면 게임 시계만 느려져 차이가 **영구 누적**되고, `perfectWindow`가 0.05초인데 통상 히트스톱이 0.05~0.10초라 **한 번으로 판정이 무너진다.** 그래서 멈추는 것은 **Animator의 Speed Multiplier**(`AttackSpeed`/`DeathSpeed`) 둘뿐이다. 판정·오디오·포커스 링·이동은 계속 흐른다.
+- **⚠ 두 배우의 공백 처리 모델이 정반대다. 임팩트 프레임이 클립 어디에 찍히느냐가 반대이기 때문이다.**
+  - **플레이어 = 밀기**(`actionEndTime`·`recoveryEndTime += D`). 공격 클립은 임팩트가 트림 **끝** 근처라 임팩트 시점 잔여가 실측 **0.036~0.109초(10/10 패턴)**. 정지가 그보다 길어 **재개하는 순간 이미 원래 종료 시각이 지나 있다** — 압축할 시간이 음수라 캐치업이 원리적으로 불가능하다. 클립은 멈춘 자리에서 원래 배속으로 이어진다. **임팩트는 이미 지나갔으므로 §6 정렬은 안 깨진다** — 미는 것은 마무리 동작과 복귀뿐이고, 다음 공격은 자기 Deadline에서 독립 예약이라 제시각에 시작한다(줄어드는 건 Sprint 노출 시간뿐).
+  - **적 = 캐치업**(`캐치업 = 남은 클립 초 ÷ 남은 실시간`, `ClipAlignment.ResolvePlaySpeed`와 같은 꼴). 사망 클립은 `ImpactTime`이 트림 **시작** 근처라(§11-3) 잔여가 **0.245~0.953초**로 넉넉해 원래 `burstTime`을 그대로 지킨다. `minCatchupHeadroom`(3배) 미달이면 **그 적만 건너뛰고**, `maxCatchupSpeed`(3.0) 상한에 걸리면 절단 시각을 부족분만큼 민다.
+  - **한쪽만 멈춰도 타격감은 성립한다.** 사망 클립이 없는 패턴은 적이 빠지고 플레이어만 멈춘다.
+- **연출 토글**: `HitStopDirector.hitStopEnabled`, `CameraDirector`의 `shakeEnabled`/`punchEnabled`/`framingEnabledOption`/`introEnabled`. 전부 인스펙터 bool이며 끄면 해당 층만 죽고 나머지는 그대로 돈다(배선 누락 시 조용히 비활성되는 기존 규율과 같은 결).
+- **`EnemyView.ApplyHitStop`은 새 `burstTime`을 반환하고 `EnemyDirector`가 그걸로 `PendingKill.burstTime`을 갱신한다.** 배속은 뷰가, 시각은 디렉터가 드는 구조라 **갱신을 빠뜨리면 클립이 도는 중에 먼저 갈라진다.**
+- **⚠ 카메라는 정지 창 동안 완전히 언다**(`CameraDirector.HoldForHitStop`). 순서가 요구 그 자체다 — ① 진행 중인 쉐이크를 즉시 끄고 ② 잠그고 ③ **해제된 다음에** 큐가 나간다. 멈추는 순간 화면이 흔들리면 "멈췄다"가 아니라 "끊겼다"로 읽힌다.
+  - **잠금 = `CinemachineBrain.enabled = false`.** 그래야 카메라 Transform이 마지막 값에 굳는다 — 프레이밍 갱신만 멈추면 감쇠(`PositionDamping` 1.0)가 남은 오차를 계속 따라가 여전히 흐른다. Brain이 없으면 프레이밍·쉐이크 정지만으로 **부분 잠금**이 된다.
+  - **큐는 버리지 않고 미룬다.** `CameraDirector`와 `HitStopDirector`의 `Update` 실행 순서는 보장되지 않아 큐가 먼저 시작됐을 수 있다 — 잠금 진입 시 진행 중인 큐가 있으면 그 트리거를 지연 큐로 옮기므로 **어느 순서로 돌든 결과가 같다**.
+  - ⚠ `OnDisable`에서 반드시 Brain을 되살린다. 잠금 도중 꺼지면 **카메라가 영구히 굳는다**.
+  - `HitStopDirector`는 창을 **알려 줄** 뿐 카메라를 직접 안 만진다 — Cinemachine 호출은 전부 `CameraDirector` 안에 남는다.
+- **카메라 펀치는 `CameraDirector`가 낸다**(`CameraCueEntry.punchFovDelta`/`punchDuration`, "연출 추가 = 카탈로그 한 줄"). `HitStopDirector`는 카메라를 안 만지고, `CameraDirector`는 애니메이터를 안 만진다 — 각자 자기 층. 펀치는 **`Lens.FieldOfView`에만** 건다(돌리에 걸면 매 프레임 도는 `GroupFraming`과 싸운다). `DollyOnly`의 "Zoom 금지"는 상시 프레이밍 경고지 0.1초 전환 얘기가 아니다.
+- **⚠ 남은 이음매**: `SlicePiece`(표적 조각)는 닫힌 식이라 안 멈춘다. 표적 절단이 임팩트 바로 그 순간이라 캐릭터가 멈춘 동안 조각만 날아간다. 0.08초라 안 보인다고 보고 뺐다 — 보이면 그때 붙인다. 적 사망 폭발(`burstTime`)은 트림 끝이라 훨씬 뒤여서 무관하다.
+- 상세: `docs/HitStop/`
+
+### 7-5. 앵글 교체 (CameraAngleSwitcher)
+- **`CameraAngleSwitcher`**(`CameraDirector`가 소유하는 `[Serializable]` 헬퍼): 앵글 vcam 여러 대를 랜덤 교체한다. 우선순위만 갈아끼우고 실제 이동은 Cinemachine 블렌드가 한다.
+- **이 게임이 카메라를 마음껏 바꿔도 되는 구조적 이유**: 루트 Canvas가 **`ScreenSpaceOverlay`**라 패턴인풋·포커스 링·가이드라인이 카메라와 완전히 독립이다. **앵글이 바뀌어도 플레이어가 봐야 할 것은 1픽셀도 안 움직인다.**
+- **⚠ 교체는 세 단계다 — 쿨다운(자격) → 패턴 경계(**예약**) → 카메라 큐 종료(**발사**).** 경계에서 바로 교체하면 안 된다: **패턴 승계(`OnJudgeTargetBegan`)는 임팩트보다 먼저 온다**(완료 = 마지막 노드 입력, 임팩트 = 거기서 `goodWindow` 0.1초 뒤). 그래서 경계에서 쏘면 0.4초 블렌드가 임팩트·히트스톱·쉐이크를 **매번** 덮는다 — 확률 문제가 아니라 구조적으로 고정된 거리다. 큐가 끝난 뒤(마지막 노드 +0.38초쯤) 발사하면 블렌드가 조용한 구간에서 돌고, 예약이 그 패턴에 묶여 있어 음악적 착지점은 유지된다.
+- **앵글 = `FollowOffset` 벡터 하나.** vcam이 `LockToTarget`이고 그룹이 `RotationMode = Manual`이라 오프셋이 그룹 로컬 축으로 해석되고, `CameraDirector`가 그 그룹을 플레이어 yaw로 몬다(§7-2) → **오프셋만 바꾸면 자동으로 플레이어 기준 앵글**이다. 기존 vcam을 복제하고 벡터만 바꾸면 `TargetGroup`·`RotationComposer`·`GroupFraming`을 물려받아 "적과 플레이어를 따라다닌다"가 공짜로 성립한다. **스위처는 앵글이 무엇인지 모른다.**
+- **시작 카메라는 `cameras[0]` 고정**(랜덤 아님). 곡 시작 구도가 매번 같아야 인트로 스플라인 끝점이 어느 구도로 흡수될지 정해지고(§7-2), 리스트 순서가 곧 저작 의도가 된다. `Setup()`이 씬 저장값을 덮고 쿨다운도 여기서 시작한다(시작 직후 즉시 교체 방지).
+- **블렌드는 `BlendHint = SphericalPosition`** — 위치가 LookAt(= `CameraTargetGroup`) 중심의 **구면 위**를 지나 **교전을 축으로 돌아간다**. 기본 직선 보간이면 반대편 앵글로 갈 때 카메라가 무대를 가로질러 대상을 뚫고 지나간다. ⚠ **LookAt이 없으면 조용히 직선으로 떨어진다.** 높이 차가 큰 쌍은 `CylindricalPosition`이 나을 수 있다(씬 값).
+- **⚠ 쉐이크·펀치는 `brain.ActiveVirtualCamera`(live vcam)에 건다.** 특정 vcam을 하드와이어로 잡으면 **다른 앵글이 올라온 순간 타격감 연출이 통째로 사라진다**(화면에 없는 카메라를 흔들게 된다). 휴지값(Perlin 진폭·주파수, 렌즈 FOV)은 **vcam마다 다를 수 있어 대상별로 캐시**하고, 대상이 바뀌면 **이전 vcam을 반드시 휴지값으로 되돌린다**(안 그러면 흔들린 상태로 굳어 다음 등장 때 그 값으로 나온다). Brain/live 조회 실패 시 `gameplayCamera`로 폴백 — 교체를 안 쓰는 씬은 예전과 동일.
+- **활성 우선순위(10)는 인트로(20)보다 낮아야 한다.** 아니면 인트로를 이겨 곡 시작 연출이 안 나온다.
+- `Brain.DefaultBlend`는 **EaseOut 0.4초**. 패턴 주기가 1.38초라 1.0초면 73%를 이동에 쓴다. 인트로가 이 값을 읽지만(§7-2) 줄이면 주행 시간이 늘어 무해하다.
+- 상세: `docs/CameraSwitch/`
 
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**
@@ -233,7 +267,7 @@ Assets/
 - 인스펙터: On/Off 마스터 토글, 키 매핑, 마지막 사용 모드 색상 하이라이트, Force 버튼. 마스터가 꺼지면 전부 무반응. 상세: `docs/DebugInput/`
 
 ### 9. 씬 전환 / 곡 선택
-- **`SongSelectManager`**: 곡 선택 씬에서 버튼으로 `SelectChart(chart)` → `GameSession.SelectedChart`에 등록 후 `DefaultScene` 로드.
+- **`SongSelectManager`**: 곡 선택 씬에서 버튼으로 `SelectChart(chart)` → `GameSession.SelectedChart`에 등록 후 `BattleScene` 로드. 씬 이름은 `gameplaySceneName` 인스펙터 값이 진실의 원천이다(코드 기본값은 새 인스턴스용 폴백).
 - **`GameSession`**(Singleton, DontDestroyOnLoad): 씬을 넘어 `SelectedChart`를 전달. `ChartPlayer`가 읽어 사용.
 
 ### 10. 인프라

@@ -125,6 +125,16 @@ namespace EnemySpace
         private bool hasPendingAttack;
         private bool attackStarted;
 
+        // 사망 재생 스냅샷 — 히트스톱 캐치업이 "지금까지 소비한 클립 초"를 역산하는 데 쓴다.
+        private float deathStartTime;
+        private float deathSpeed;
+        private float deathDur;
+
+        // 히트스톱. 정지 중에는 DeathSpeed가 0이고, 해제 시각에 캐치업 배속으로 이어 붙인다.
+        private bool hitStopped;
+        private float hitStopReleaseTime;
+        private float hitStopCatchupSpeed = 1f;
+
         // 소멸.
         private float dissolveStart;
         private float dissolveDuration;
@@ -489,6 +499,12 @@ namespace EnemySpace
 
         void Update()
         {
+            if (hitStopped && Time.time >= hitStopReleaseTime)
+            {
+                hitStopped = false;
+                animator.SetFloat(deathSpeedHash, hitStopCatchupSpeed);
+            }
+
             if (dissolving)
             {
                 float p = Mathf.Clamp01((Time.time - dissolveStart) / dissolveDuration);
@@ -576,6 +592,8 @@ namespace EnemySpace
             Current = Phase.Dying;
             reactionUntil = 0f;
             retreatUntil = 0f;
+            hitStopped = false;
+            deathDur = 0f; // 클립 없는 경로에서 이전 대여의 스냅샷이 남지 않도록.
 
             // 클립이 없으면 예전 그대로 임팩트에 터진다. placeholder가 물려 있으면 그게 재생된다.
             if (death == null || !death.IsUsable)
@@ -594,9 +612,56 @@ namespace EnemySpace
 
             PlayDeath(death, speed);
 
-            float burstTime = Time.time + death.ResolvedDuration / Mathf.Max(speed, 0.01f);
+            deathStartTime = Time.time;
+            deathSpeed = Mathf.Max(speed, 0.01f);
+            deathDur = death.ResolvedDuration;
+
+            float burstTime = Time.time + deathDur / deathSpeed;
             ClearDuelSpot(burstTime);
             return burstTime;
+        }
+
+        /// <summary>
+        /// 임팩트 프레임에서 <b>사망 클립만</b> 멈춘다(<c>DeathSpeed = 0</c>). 정지한 만큼 남은 클립을
+        /// 캐치업 배속으로 빨리 돌려 <b>절단 시각을 원래대로 지킨다</b> — 그래야 <c>OnEnemyBurst</c>·
+        /// 카메라 쉐이크·시체 교체가 하나도 안 밀린다.
+        ///
+        /// <para><b>새 절단 시각을 돌려준다.</b> 배속은 이 뷰가 알고 시각은 <c>EnemyDirector</c>가 드는 구조라,
+        /// 반환값으로 <c>PendingKill.burstTime</c>을 갱신하지 않으면 <b>둘이 갈라진다</b>.
+        /// 상한에 안 걸리면 받은 값이 그대로 돌아온다.</para>
+        ///
+        /// <para>⚠ 사망 클립은 <c>ImpactTime</c>을 트림 시작 근처에 찍으므로(§11-3) 임팩트 이후 잔여가
+        /// 클립 대부분이다 — <b>두 배우 중 캐치업 여유가 가장 넉넉하다.</b></para>
+        /// </summary>
+        public float ApplyHitStop(float duration, float maxCatchupSpeed, float minHeadroom, float burstTime)
+        {
+            if (animator == null || duration <= 0f) return burstTime;
+            if (hitStopped || Current != Phase.Dying || deathDur <= 0f) return burstTime;
+
+            if (burstTime - Time.time < duration * Mathf.Max(minHeadroom, 1f)) return burstTime;
+
+            float remainingClip = deathDur - (Time.time - deathStartTime) * deathSpeed;
+            if (remainingClip <= 0f) return burstTime;
+
+            float timeLeft = burstTime - (Time.time + duration);
+            if (timeLeft <= 0f) return burstTime;
+
+            float catchup = remainingClip / timeLeft;
+            float cap = Mathf.Max(maxCatchupSpeed, deathSpeed);
+            float newBurst = burstTime;
+
+            if (catchup > cap)
+            {
+                catchup = cap;
+                newBurst = Time.time + duration + remainingClip / catchup;
+            }
+
+            hitStopCatchupSpeed = catchup;
+            hitStopReleaseTime = Time.time + duration;
+            hitStopped = true;
+
+            animator.SetFloat(deathSpeedHash, 0f);
+            return newBurst;
         }
 
         /// <summary>
