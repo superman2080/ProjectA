@@ -12,7 +12,7 @@ public class EnemyRingTests
     // ── 스폰 각도: 시야 반대편 ──────────────────────────────────────────────
 
     [Test]
-    public void PickSpawnAngle_비어있으면_시야_반대편을_고른다()
+    public void PickSpawnAnglePicksBehindViewWhenRingIsEmpty()
     {
         float angle = EnemyRing.PickSpawnAngle(new List<float>(), viewYaw: 0f, minAngleGap: 30f);
 
@@ -21,7 +21,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_시야가_돌면_등뒤도_따라_돈다()
+    public void PickSpawnAngleFollowsViewYaw()
     {
         float angle = EnemyRing.PickSpawnAngle(new List<float>(), viewYaw: 90f, minAngleGap: 30f);
 
@@ -29,7 +29,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_점유된_각도와_최소간격을_지킨다()
+    public void PickSpawnAngleKeepsMinimumGapFromOccupiedAngles()
     {
         var occupied = new List<float> { 180f, 200f, 160f };
 
@@ -40,7 +40,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_자리가_꽉_차도_실패하지_않는다()
+    public void PickSpawnAngleStillReturnsAngleWhenRingIsFull()
     {
         // 원주 전체를 촘촘히 점유 — 간격을 지키는 후보가 하나도 없다.
         var occupied = new List<float>();
@@ -55,7 +55,7 @@ public class EnemyRingTests
     // ── 다음 상대: 링 각도 순 ───────────────────────────────────────────────
 
     [Test]
-    public void PickNextOpponent_한_방향으로만_진행한다()
+    public void PickNextOpponentAdvancesInOneDirection()
     {
         var angles = new List<float> { 10f, 100f, 200f, 300f };
 
@@ -65,7 +65,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_한_바퀴_돌면_처음으로_돌아온다()
+    public void PickNextOpponentWrapsAroundAfterFullCircle()
     {
         var angles = new List<float> { 10f, 100f, 200f };
 
@@ -75,7 +75,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_자기_자신은_마지막_순번이_된다()
+    public void PickNextOpponentPutsItselfLast()
     {
         var angles = new List<float> { 50f, 120f };
 
@@ -85,7 +85,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_후보가_없으면_음수()
+    public void PickNextOpponentReturnsNegativeWhenNoCandidates()
     {
         Assert.AreEqual(-1, EnemyRing.PickNextOpponent(new List<float>(), 0f));
         Assert.AreEqual(-1, EnemyRing.PickNextOpponent(null, 0f));
@@ -94,7 +94,7 @@ public class EnemyRingTests
     // ── 각도 ↔ 위치 왕복 ───────────────────────────────────────────────────
 
     [Test]
-    public void 각도와_방향은_서로_역함수다()
+    public void AngleAndDirectionAreInverse()
     {
         var center = new Vector3(3f, 0f, -2f);
 
@@ -108,7 +108,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 영도는_플러스Z다()
+    public void ZeroDegreesPointsTowardPositiveZ()
     {
         Vector3 position = EnemyRing.AngleToPosition(Vector3.zero, 0f, 4f);
 
@@ -125,7 +125,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_화면_안_후보를_피한다()
+    public void PickStagePositionAvoidsVisibleCandidates()
     {
         // +Z 절반을 화면 안으로 본다.
         System.Func<Vector3, bool> visible = p => p.z > 0f;
@@ -144,7 +144,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_기존_적과_간격을_지킨다()
+    public void PickStagePositionKeepsSpacingFromOtherEnemies()
     {
         var occupied = new List<Vector3> { new Vector3(3f, 0f, -3f), new Vector3(-4f, 0f, -1f) };
 
@@ -163,7 +163,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_전부_보여도_실패하지_않는다()
+    public void PickStagePositionStillReturnsPositionWhenAllAreVisible()
     {
         Random.InitState(1);
         Vector3 pos = EnemyRing.PickStagePosition(
@@ -177,7 +177,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_무대_밖으로_나가지_않는다()
+    public void PickStagePositionStaysInsideStage()
     {
         for (int seed = 0; seed < 20; seed++)
         {
@@ -195,7 +195,7 @@ public class EnemyRingTests
     // ── 표적 선택: 목표 거리 ────────────────────────────────────────────────
 
     [Test]
-    public void 목표거리에_가장_가까운_적을_고른다()
+    public void PickTargetByDistancePicksClosestToDesiredDistance()
     {
         var candidates = new List<Vector3>
         {
@@ -210,7 +210,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 목표거리_선택은_높이를_무시한다()
+    public void PickTargetByDistanceIgnoresHeight()
     {
         var candidates = new List<Vector3>
         {
@@ -222,9 +222,43 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 표적_후보가_없으면_음수다()
+    public void PickTargetByDistanceReturnsNegativeWhenNoCandidates()
     {
         Assert.That(EnemyRing.PickTargetByDistance(new List<Vector3>(), Vector3.zero, 5f), Is.EqualTo(-1));
         Assert.That(EnemyRing.PickTargetByDistance(null, Vector3.zero, 5f), Is.EqualTo(-1));
+    }
+
+    // ── Retreat: stays inside the stage ─────────────────────────────────────
+
+    [Test]
+    public void PickRetreatTargetGoesStraightBackWhenWellInsideStage()
+    {
+        Vector3 target = EnemyRing.PickRetreatTarget(
+            position: Vector3.zero, back: Vector3.back, stageCenter: Vector3.zero, stageRadius: 8f, distance: 1.5f);
+
+        Assert.That(Vector3.Distance(target, new Vector3(0f, 0f, -1.5f)), Is.LessThan(0.01f));
+    }
+
+    [Test]
+    public void PickRetreatTargetVeersSidewaysButStaysInsideStage()
+    {
+        // Standing near the rim (radius 8) and trying to back out through it (+Z).
+        Vector3 position = new Vector3(0f, 0f, 7.5f);
+        Vector3 target = EnemyRing.PickRetreatTarget(
+            position, back: Vector3.forward, stageCenter: Vector3.zero, stageRadius: 8f, distance: 1.5f);
+
+        Assert.That(target.magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
+        Assert.That(Vector3.Distance(target, position), Is.GreaterThan(0.1f), "did not move at all");
+
+        // Candidates are limited to the rear half-circle; going forward would not read as a retreat.
+        Assert.That(Vector3.Dot((target - position).normalized, Vector3.forward), Is.GreaterThan(-0.01f));
+    }
+
+    [Test]
+    public void PickRetreatTargetStaysPutWhenDistanceIsZero()
+    {
+        Vector3 position = new Vector3(1f, 0f, 2f);
+
+        Assert.That(EnemyRing.PickRetreatTarget(position, Vector3.back, Vector3.zero, 8f, 0f), Is.EqualTo(position));
     }
 }

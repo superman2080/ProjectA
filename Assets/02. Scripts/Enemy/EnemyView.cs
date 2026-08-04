@@ -57,8 +57,15 @@ namespace EnemySpace
         [SerializeField] private float gazeTurnSpeed = 360f;
         [Tooltip("패링당해 뒤로 밀려나는 리액션.")]
         [SerializeField] private string knockBackStateName = "KnockBack";
-        [Tooltip("플레이어 헛스윙을 피해 물러나는 리액션.")]
+        [Tooltip("적이 공격자인 패턴을 플레이어가 실패했을 때(= 플레이어가 맞았다) 물러나는 리액션.")]
         [SerializeField] private string evadeStateName = "Evade";
+        [Tooltip("플레이어가 공격자인 패턴을 실패했을 때 적이 막아내는 리액션. ⚠ 이 경로는 후퇴하지 않는다.")]
+        [SerializeField] private string parryStateName = "Parry";
+        [Tooltip("패링 스테이트의 Speed Multiplier 파라미터 이름. 애니메이터에 없으면 배속은 무시된다.")]
+        [SerializeField] private string parrySpeedParam = "ParrySpeed";
+        [Tooltip("패링 클립 배속. 1보다 작으면 느려진다.\n" +
+                 "⚠ reactionHoldDuration이 '클립 길이 ÷ 이 값'보다 짧으면 끝나기 전에 로코모션이 덮는다.")]
+        [SerializeField] private float parrySpeed = 1f;
         // Death 스테이트는 두지 않는다 — 처치 순간 렌더러를 끄거나 시체 프리팹으로 통째로 교체하므로
         // 클립이 재생될 프레임이 존재하지 않는다(예전엔 CrossFade 직후 렌더러를 꺼서 죽은 배선이었다).
         [SerializeField] private float crossFadeDuration = 0.12f;
@@ -122,18 +129,17 @@ namespace EnemySpace
         private float pendingImpactTime;
         private float pendingScheduleStart;
         private float pendingMaxSpeed = 2.5f;
+        private bool pendingIsFeint;   // 견제는 닿지 않는 동작이라 배속 클램프가 경고 대상이 아니다
         private bool hasPendingAttack;
         private bool attackStarted;
 
         // 사망 재생 스냅샷 — 히트스톱 캐치업이 "지금까지 소비한 클립 초"를 역산하는 데 쓴다.
-        private float deathStartTime;
         private float deathSpeed;
         private float deathDur;
 
         // 히트스톱. 정지 중에는 DeathSpeed가 0이고, 해제 시각에 캐치업 배속으로 이어 붙인다.
         private bool hitStopped;
         private float hitStopReleaseTime;
-        private float hitStopCatchupSpeed = 1f;
 
         // 소멸.
         private float dissolveStart;
@@ -145,6 +151,7 @@ namespace EnemySpace
         private int attackSpeedHash;
         private int deathStateHash;
         private int deathSpeedHash;
+        private int parrySpeedHash;
         private MaterialPropertyBlock propertyBlock;
         private Renderer[] renderers;
         private int dissolveId;
@@ -157,6 +164,7 @@ namespace EnemySpace
             attackSpeedHash = Animator.StringToHash(attackSpeedParam);
             deathStateHash = Animator.StringToHash(deathStateName);
             deathSpeedHash = Animator.StringToHash(deathSpeedParam);
+            parrySpeedHash = Animator.StringToHash(parrySpeedParam);
             dissolveId = Shader.PropertyToID(dissolveProperty);
             renderers = GetComponentsInChildren<Renderer>(true);
             propertyBlock = new MaterialPropertyBlock();
@@ -326,10 +334,50 @@ namespace EnemySpace
             pendingImpactTime = impactTime;
             pendingScheduleStart = attack.ResolveScheduleStart(impactTime, Time.time);
             pendingMaxSpeed = maxSpeed; // 실제 배속은 시작 시점에 남은 시간으로 재계산한다(TryStartAttack)
+            pendingIsFeint = false;
             hasPendingAttack = true;
             attackStarted = false;
 
             // 클립이 시작되기 전에 결투 위치에 도착해 있어야 한다.
+            ApproachDuel(duelPosition, faceTarget, pendingScheduleStart);
+        }
+
+        /// <summary>
+        /// 표적이 된 순간부터 임팩트까지 <b>제자리에서</b> 하는 동작(견제)을 예약한다.
+        /// <c>Attacker.Player</c> 패턴 — 적이 휘두르지 않아 <see cref="AssignAttack"/>이 무연출로 지나가던 구간이다.
+        ///
+        /// <para><b><see cref="AssignAttack"/>과 다른 점은 하나뿐이다 — 도착을 기다리지 않는다.</b>
+        /// 공격은 "클립 시작 전에 도착해 있어야 한다"는 제약 때문에 이동이 시작 시각을 앞당기지만,
+        /// 견제는 <c>playerShare = 1</c>에서 이동량이 0이라 기다릴 도착이 없다. 그래서 <c>earliest</c>가 <c>Time.time</c>이고,
+        /// 그 차이가 곧 창 전체(<c>W</c>)를 쓰느냐 <c>0.735 × W</c>만 쓰느냐를 가른다(docs/EnemyFeint).</para>
+        ///
+        /// <para><b>클립이 없으면 기본 Idle이다.</b> 예약을 걸지 않고 자리만 잡으면
+        /// <see cref="ApplyLocomotion"/>이 이동 없는 상태에서 <c>idleStateName</c>을 유지한다 — 예전 동작 그대로다.</para>
+        ///
+        /// <para><b>예약 필드는 공격과 공유한다.</b> 이 경로가 도는 패턴에는 진짜 공격 예약이 없어 충돌할 수 없고,
+        /// <see cref="Resolve"/>·<see cref="MarkDying"/>이 이미 <c>hasPendingAttack</c>을 내리므로 정리 경로가 따라온다.</para>
+        /// </summary>
+        public void AssignFeint(ClipAlignment feint, float impactTime, Vector3 duelPosition, Vector3 faceTarget, float maxSpeed)
+        {
+            Current = Phase.Engage;
+
+            if (feint == null || !feint.IsUsable)
+            {
+                // 무연출 — 자리만 잡고 기본 Idle로 선다.
+                hasPendingAttack = false;
+                ApproachDuel(duelPosition, faceTarget, impactTime);
+                return;
+            }
+
+            pendingAttack = feint;
+            pendingImpactTime = impactTime;
+            pendingScheduleStart = feint.ResolveScheduleStart(impactTime, Time.time);
+            pendingMaxSpeed = maxSpeed;
+            pendingIsFeint = true;
+            hasPendingAttack = true;
+            attackStarted = false;
+
+            // 이동량이 0이어도 호출은 유지한다 — 바라보기와 후퇴 인수인계가 여기 얹혀 있다.
             ApproachDuel(duelPosition, faceTarget, pendingScheduleStart);
         }
 
@@ -369,31 +417,53 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 성패 확정 — 리액션을 재생하고 <b>짧게 물러난다</b>.
+        /// 성패 확정 — 리액션을 재생하고, 경우에 따라 <b>짧게 물러난다</b>.
         ///
-        /// <para><b>제자리로 돌아가지 않는다.</b> 무대에 자기 자리가 따로 있는 게 아니라
-        /// <b>물러난 그 자리가 새 자리</b>다 — 플레이어가 다시 찾아온다.</para>
+        /// <para><b>⚠ 실패는 하나가 아니다.</b> 두 실패는 화면에 남는 사실이 다르다 —
+        /// 플레이어가 공격자였으면 <b>"적이 막았다"</b>(패링), 적이 공격자였으면 <b>"플레이어가 맞았다"</b>(회피·후퇴).
+        /// 예전에는 둘을 회피로 통일했고, 그래서 막힌 상황에도 적이 <c>failRetreatDistance</c>만큼 물러났다.</para>
         ///
-        /// <para>이 후퇴는 <b>덮이지 않는다</b> — 곧바로 이어지는 <see cref="AssignAttack"/>이
+        /// <para><b>둘을 가르는 것은 <paramref name="retreatDistance"/>다</b> — 0이면 패링, 양수면 회피.
+        /// 판단은 <c>EnemyDirector.ResolveRetreatDistance</c>가 <b>다음 패턴의 창</b>을 보고 한다(뷰는 창을 모른다).
+        /// 물러나면 플레이어가 다시 다가와야 하는데 그 재접근은 <c>TakeTargetForWindow</c>를 안 거쳐
+        /// 거리가 후퇴 거리로만 정해진다 — 창이 짧으면 그대로 늘어져 <b>0.9 m/s로 기어가고</b>,
+        /// 그 사이 Attack 레이어 웨이트가 1이라 로코모션조차 안 보인다(docs/FailConverge/).</para>
+        ///
+        /// <para>후퇴가 남는 경로에서 그 이동은 <b>덮이지 않는다</b> — 곧바로 이어지는 <see cref="AssignAttack"/>이
         /// <see cref="ScheduleMoveAfter"/>로 뒤에 붙기 때문. 그래서 "물러났다가 다시 붙는" 그림이 실제로 렌더된다.</para>
         /// </summary>
-        public void Resolve(bool playerSucceeded, Attacker attacker, float retreatDistance, float retreatDuration)
+        /// <param name="retreatTarget">
+        /// 물러날 자리(월드). <b>무대를 아는 디렉터가 정한다</b> — 뷰는 무대 중심도 반경도 모르므로
+        /// 여기서 <c>-forward × 거리</c>로 계산하면 가장자리에서 무대 밖으로 빠져나간다.
+        /// 무대 안에 온전한 자리가 없으면 디렉터가 <b>거리를 잘라</b> 주므로 이 값은 언제나 유효하다.
+        /// </param>
+        public void Resolve(bool playerSucceeded, Attacker attacker, float retreatDistance, float retreatDuration, Vector3 retreatTarget)
         {
             hasPendingAttack = false;
 
             if (Current == Phase.Dying) return;
 
-            // 실패는 공격자와 무관하게 회피로 통일한다 — 미스가 마지막 노드든 그 전이든
-            // 화면에 남는 사실은 "베지 못했다" 하나뿐이라 반응을 나눌 이유가 없다.
-            if (!playerSucceeded) CrossFadeReaction(evadeStateName);
+            // 거리가 0이면 물러날 자리가 없다는 뜻이고, 그건 곧 "막아 세웠다"다 → 패링.
+            // 물러날 수 있으면 회피. 어느 쪽인지는 디렉터가 창을 보고 정해 거리로 전달한다.
+            float distance = Mathf.Max(retreatDistance, 0f);
+            bool parried = !playerSucceeded && attacker != Attacker.Enemy && distance <= 0f;
+
+            // 배속은 CrossFade '전에' 걸어야 한다 — 전이가 시작된 뒤 바꾸면 첫 프레임이 1배속으로 지나간다.
+            if (parried && animator != null) animator.SetFloat(parrySpeedHash, Mathf.Max(parrySpeed, 0.01f));
+
+            if (!playerSucceeded) CrossFadeReaction(parried ? parryStateName : evadeStateName);
             else if (attacker == Attacker.Enemy) CrossFadeReaction(knockBackStateName); // 적 공격을 막아냈다 → 밀려난다
             else CrossFadeReaction(idleStateName);
 
             Current = Phase.Recover;
 
-            // 바라보던 방향의 반대쪽으로 물러난다. 계속 상대를 보고 있어야 하므로 회전은 그대로 둔다.
-            Vector3 back = -transform.forward;
-            Vector3 target = transform.position + Vector3.ProjectOnPlane(back, Vector3.up).normalized * Mathf.Max(retreatDistance, 0f);
+            // 거리가 0이어도 ScheduleMove는 그대로 부른다 — retreatUntil이 곧바로 이어지는
+            // AssignAttack의 ScheduleMoveAfter 인수인계 시각이라, 호출을 빼면 그 구조가 흔들린다.
+            // 거리가 minMoveDistance 이하면 ScheduleMove가 wantsLocomotion을 false로 잡아 제자리 Run도 안 난다.
+
+            // 물러날 자리는 디렉터가 무대 안으로 잘라서 준다. 계속 상대를 보고 있어야 하므로 회전은 그대로 둔다.
+            Vector3 target = distance > 0f ? retreatTarget : transform.position;
+            target.y = transform.position.y; // 무대 계산은 평면이라 높이가 실려 오지 않게.
 
             float duration = Mathf.Max(retreatDuration, 0.01f);
             retreatUntil = Time.time + duration;
@@ -502,7 +572,7 @@ namespace EnemySpace
             if (hitStopped && Time.time >= hitStopReleaseTime)
             {
                 hitStopped = false;
-                animator.SetFloat(deathSpeedHash, hitStopCatchupSpeed);
+                animator.SetFloat(deathSpeedHash, deathSpeed);
             }
 
             if (dissolving)
@@ -557,7 +627,10 @@ namespace EnemySpace
             if (!hasPendingAttack || attackStarted || Time.time < pendingScheduleStart) return;
 
             float speed = pendingAttack.ResolvePlaySpeed(Time.time, pendingImpactTime, pendingMaxSpeed, out bool clamped);
-            if (clamped)
+
+            // 견제는 클램프돼도 경고하지 않는다 — 닿지 않는 동작이라 정렬이 어긋날 것이 없고,
+            // 넘친 구간은 성패 확정의 리액션 크로스페이드가 끊는다(의도된 동작).
+            if (clamped && !pendingIsFeint)
             {
                 Debug.LogWarning(
                     $"[EnemyView] '{name}' 공격 클립이 배속 상한({pendingMaxSpeed:0.0})에 걸려 임팩트 정렬이 어긋납니다. " +
@@ -570,7 +643,8 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 사망 클립을 재생하고 <b>절단이 일어날 시각</b>(트림 끝)을 돌려준다.
+        /// 사망 클립을 재생하고 <b>절단이 일어날 시각</b>(= 임팩트 프레임)을 돌려준다.
+        /// 클립이 있든 없든 같은 값이다 — 칼이 지나가는 순간 갈라진다.
         ///
         /// <para><b>공유하는 것은 임팩트 순간 하나뿐이다.</b> 플레이어 공격과 이 클립은 길이도 저작 배속도
         /// 압축을 유발하는 제약도 달라 배속이 같아질 이유가 없다 — 시작이나 끝을 맞추는 정렬은 성립하지 않는다.
@@ -612,56 +686,35 @@ namespace EnemySpace
 
             PlayDeath(death, speed);
 
-            deathStartTime = Time.time;
             deathSpeed = Mathf.Max(speed, 0.01f);
             deathDur = death.ResolvedDuration;
 
-            float burstTime = Time.time + deathDur / deathSpeed;
-            ClearDuelSpot(burstTime);
-            return burstTime;
+            // 절단은 임팩트 프레임이다 — 칼이 지나가는 그 순간 갈라진다.
+            // (클립 트림 끝에 걸면 쓰러지는 걸 다 본 뒤에야 갈라져 타격 순간과 어긋난다.)
+            ClearDuelSpot(impactTime);
+            return impactTime;
         }
 
         /// <summary>
-        /// 임팩트 프레임에서 <b>사망 클립만</b> 멈춘다(<c>DeathSpeed = 0</c>). 정지한 만큼 남은 클립을
-        /// 캐치업 배속으로 빨리 돌려 <b>절단 시각을 원래대로 지킨다</b> — 그래야 <c>OnEnemyBurst</c>·
-        /// 카메라 쉐이크·시체 교체가 하나도 안 밀린다.
+        /// 임팩트 프레임에서 <b>사망 클립만</b> 멈춘다(<c>DeathSpeed = 0</c>). 해제되면 원래 배속으로 이어진다.
+        ///
+        /// <para><b>플레이어와 같은 '밀기' 모델이다.</b> 절단이 임팩트 바로 그 순간이라(§11-3)
+        /// 정지 창 안에 흡수할 잔여가 <b>0</b>이다 — 캐치업이 원리적으로 불가능하므로
+        /// <b>절단 시각을 정지 시간만큼 뒤로 민다</b>. 안 밀면 멈춘 그 프레임에 몸이 갈라져 정지가 안 보인다.</para>
         ///
         /// <para><b>새 절단 시각을 돌려준다.</b> 배속은 이 뷰가 알고 시각은 <c>EnemyDirector</c>가 드는 구조라,
-        /// 반환값으로 <c>PendingKill.burstTime</c>을 갱신하지 않으면 <b>둘이 갈라진다</b>.
-        /// 상한에 안 걸리면 받은 값이 그대로 돌아온다.</para>
-        ///
-        /// <para>⚠ 사망 클립은 <c>ImpactTime</c>을 트림 시작 근처에 찍으므로(§11-3) 임팩트 이후 잔여가
-        /// 클립 대부분이다 — <b>두 배우 중 캐치업 여유가 가장 넉넉하다.</b></para>
+        /// 반환값으로 <c>PendingKill.burstTime</c>을 갱신하지 않으면 <b>둘이 갈라진다</b>.</para>
         /// </summary>
-        public float ApplyHitStop(float duration, float maxCatchupSpeed, float minHeadroom, float burstTime)
+        public float ApplyHitStop(float duration, float burstTime)
         {
             if (animator == null || duration <= 0f) return burstTime;
             if (hitStopped || Current != Phase.Dying || deathDur <= 0f) return burstTime;
 
-            if (burstTime - Time.time < duration * Mathf.Max(minHeadroom, 1f)) return burstTime;
-
-            float remainingClip = deathDur - (Time.time - deathStartTime) * deathSpeed;
-            if (remainingClip <= 0f) return burstTime;
-
-            float timeLeft = burstTime - (Time.time + duration);
-            if (timeLeft <= 0f) return burstTime;
-
-            float catchup = remainingClip / timeLeft;
-            float cap = Mathf.Max(maxCatchupSpeed, deathSpeed);
-            float newBurst = burstTime;
-
-            if (catchup > cap)
-            {
-                catchup = cap;
-                newBurst = Time.time + duration + remainingClip / catchup;
-            }
-
-            hitStopCatchupSpeed = catchup;
             hitStopReleaseTime = Time.time + duration;
             hitStopped = true;
 
             animator.SetFloat(deathSpeedHash, 0f);
-            return newBurst;
+            return burstTime + duration;
         }
 
         /// <summary>

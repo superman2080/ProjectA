@@ -189,6 +189,75 @@ namespace EnemySpace
             return best;
         }
 
+        /// <summary>
+        /// 회피할 자리. <b>등 뒤 반원 안에서 무대를 벗어나지 않는 방향</b>을 고른다.
+        ///
+        /// <para><b>정직하게 뒤로 가는 것이 1순위다.</b> 후보를 0°, ±step, ±2step… 순으로(= 등 뒤에서 벌어지는 순서로)
+        /// 훑으며 <b>온전한 거리를 갈 수 있는 첫 방향</b>을 그대로 쓴다. 그래서 무대 한복판에서는 언제나 정확히
+        /// 뒤로 물러나고, 가장자리에 몰렸을 때만 옆으로 비껴 빠진다.</para>
+        ///
+        /// <para><see cref="PickSpawnAngle"/>·<see cref="PickStagePosition"/>과 같은 규율 —
+        /// <b>"될 때까지 재시도"가 아니라 "가장 나은 후보를 고른다"</b>. 어느 방향으로도 온전히 못 가면
+        /// 가장 멀리 갈 수 있는 방향으로 <b>거리를 잘라</b> 돌려준다. 실패하지 않으므로 호출자에 예외 경로가 없다.</para>
+        ///
+        /// <para><paramref name="maxSpreadDegrees"/>가 90도면 후보는 <b>등 뒤 반원</b>이다 —
+        /// 그보다 벌리면 옆이나 앞으로 나가 회피로 안 읽힌다.</para>
+        /// </summary>
+        /// <param name="position">지금 서 있는 자리.</param>
+        /// <param name="back">물러나고 싶은 방향(정규화 전이어도 된다. 보통 -forward).</param>
+        public static Vector3 PickRetreatTarget(
+            Vector3 position, Vector3 back, Vector3 stageCenter, float stageRadius, float distance,
+            float maxSpreadDegrees = 90f, int candidateCount = 7)
+        {
+            if (distance <= 0f) return position;
+
+            Vector3 baseDir = Flat(back);
+            if (baseDir.sqrMagnitude < 1e-6f) return position;
+            baseDir.Normalize();
+
+            candidateCount = Mathf.Max(candidateCount, 1);
+            float step = maxSpreadDegrees / candidateCount;
+
+            Vector3 bestDir = baseDir;
+            float bestTravel = -1f;
+
+            // 0, +step, -step, +2step, -2step … — 등 뒤에서 벌어지는 순서.
+            for (int i = 0; i <= candidateCount; i++)
+            {
+                for (int sign = 1; sign >= -1; sign -= 2)
+                {
+                    Vector3 dir = Quaternion.Euler(0f, sign * step * i, 0f) * baseDir;
+                    float travel = TravelInsideCircle(position, dir, stageCenter, stageRadius, distance);
+
+                    // 온전히 갈 수 있으면 더 벌릴 이유가 없다 — 가장 뒤쪽 후보가 이긴다.
+                    if (travel >= distance) return position + dir * distance;
+
+                    if (travel > bestTravel) { bestTravel = travel; bestDir = dir; }
+
+                    if (i == 0) break; // 0도는 부호가 없다
+                }
+            }
+
+            return position + bestDir * Mathf.Max(bestTravel, 0f);
+        }
+
+        /// <summary>
+        /// <paramref name="from"/>에서 <paramref name="dir"/>로 갈 때 원 안에 머무를 수 있는 거리
+        /// (<paramref name="maxDistance"/>로 클램프). 원 밖으로 나가는 지점까지의 거리를 직선-원 교차로 구한다.
+        ///
+        /// <para>ponytail: 이미 원 <b>밖</b>에 서 있는데 안쪽으로 향하면 '반대편으로 나가는 지점'을 돌려준다
+        /// (관통 거리). 스폰이 언제나 원 안이라 실제로는 안 나오는 상태이고, 필요해지면 근접 교차점을 빼면 된다.</para>
+        /// </summary>
+        private static float TravelInsideCircle(Vector3 from, Vector3 dir, Vector3 center, float radius, float maxDistance)
+        {
+            Vector3 f = Flat(from - center);
+            float b = Vector3.Dot(f, Flat(dir));
+            float disc = b * b - (f.sqrMagnitude - radius * radius);
+            if (disc < 0f) return 0f; // 원과 아예 만나지 않는다(밖에서 비껴가는 방향)
+
+            return Mathf.Clamp(-b + Mathf.Sqrt(disc), 0f, maxDistance);
+        }
+
         private static float MinDistance(IReadOnlyList<Vector3> points, Vector3 to)
         {
             if (points == null || points.Count == 0) return float.MaxValue;

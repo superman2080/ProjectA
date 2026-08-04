@@ -18,7 +18,7 @@ public class ClipAlignmentTests
     // ── 임팩트 구간 폴백 ────────────────────────────────────────────────────
 
     [Test]
-    public void 임팩트_미지정이면_트림_끝으로_폴백한다()
+    public void FallsBackToTrimEndWhenImpactIsNotAuthored()
     {
         var alignment = Make(startOffset: 0.5f, duration: 2f, impactTime: 0f, speed: 1f);
 
@@ -27,7 +27,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 임팩트가_트림_범위_밖이면_트림_끝으로_폴백한다()
+    public void FallsBackToTrimEndWhenImpactIsOutsideTrim()
     {
         var tooLate = Make(startOffset: 0.5f, duration: 2f, impactTime: 5f, speed: 1f);
         var tooEarly = Make(startOffset: 0.5f, duration: 2f, impactTime: 0.2f, speed: 1f);
@@ -37,7 +37,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 임팩트_구간은_트림_시작부터_잰다()
+    public void ImpactSpanIsMeasuredFromTrimStart()
     {
         var alignment = Make(startOffset: 0.5f, duration: 2f, impactTime: 1.5f, speed: 1f);
 
@@ -47,7 +47,7 @@ public class ClipAlignmentTests
     // ── 시작 시각 역산 ──────────────────────────────────────────────────────
 
     [Test]
-    public void 시작시각은_임팩트에서_역산된다()
+    public void ScheduleStartIsDerivedFromImpactTime()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 1f);
 
@@ -56,7 +56,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 시작시각은_earliest보다_이를_수_없다()
+    public void ScheduleStartIsNeverEarlierThanEarliest()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 1f);
 
@@ -65,7 +65,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 배속이_높으면_더_늦게_시작한다()
+    public void HigherPlaySpeedStartsLater()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 2f);
 
@@ -75,7 +75,7 @@ public class ClipAlignmentTests
     // ── 배속 클램프 ─────────────────────────────────────────────────────────
 
     [Test]
-    public void 여유가_충분하면_클램프되지_않는다()
+    public void PlaySpeedIsNotClampedWhenThereIsEnoughTime()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 1f);
 
@@ -86,7 +86,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 시간이_모자라면_클램프되고_알린다()
+    public void PlaySpeedIsClampedAndReportedWhenTimeIsShort()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 1f);
 
@@ -99,7 +99,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 배속은_지정_하한_밑으로_내려가지_않는다()
+    public void PlaySpeedNeverGoesBelowTheGivenMinimum()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 1.5f);
 
@@ -111,7 +111,7 @@ public class ClipAlignmentTests
     }
 
     [Test]
-    public void 상한이_하한보다_낮아도_하한을_지킨다()
+    public void MinimumWinsWhenMaximumIsLowerThanMinimum()
     {
         var alignment = Make(startOffset: 0f, duration: 2f, impactTime: 1f, speed: 3f);
 
@@ -123,7 +123,7 @@ public class ClipAlignmentTests
     // ── 사용 가능 여부 ──────────────────────────────────────────────────────
 
     [Test]
-    public void 클립이_없으면_사용_불가다()
+    public void IsUsableIsFalseWhenClipIsMissing()
     {
         Assert.IsFalse(Make(0f, 2f, 1f, 1f).IsUsable); // EditorAssign이 clip을 null로 넣었다
     }

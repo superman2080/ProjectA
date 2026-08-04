@@ -53,6 +53,15 @@ namespace PatternSpace
 
         public float GetInputTime(int position) => inputTimes[position];
 
+        /// <summary>노드별 입력 절대시각의 사본. 이벤트 페이로드로 나가므로 내부 배열을 그대로 넘기지 않는다.</summary>
+        public float[] BuildNodeTimes()
+        {
+            var times = new float[inputTimes.Length];
+            for (int i = 0; i < inputTimes.Length; i++)
+                times[i] = StartTime + inputTimes[i];
+            return times;
+        }
+
         public NodeType GetNodeType(int position) => Template.GetNodeType(position);
 
         public int GetPointIndex(int position) => Template.AllData[position].index;

@@ -186,7 +186,8 @@ Assets/
   - 일괄 도구: `killOnSuccess` 전부 켜기/끄기 / 매 N번째만. `killOnSuccess` 기본값은 **켜짐**.
 
 ### 6. 캐릭터 액션 (CharacterActionPlayer)
-- `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.SuccessAnimationClip`), 실패면 공용 피격(Hit) 클립**을 번갈아 재생.
+- `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.SuccessAnimationClip`)** 재생.
+- **⚠ 실패는 역할로 갈린다.** 피격(Hit) 클립은 **`Attacker.Enemy`일 때만**, 그것도 첫 미스 순간이 아니라 **`impactTime`에 예약해서** 재생한다(그때 적 칼이 닿는다). **`Attacker.Player`면 피격 자체가 없다** — 적이 애초에 휘두르지 않았으므로 헛스윙으로 끝나고, `OnPlayerHit`이 안 나므로 **카메라 피격 큐(`PatternMiss`)도 체력 감소도 없다**. 그 실패의 화면상 사실은 "적이 막았다" 하나뿐이다(§11-2의 패링).
 - **⚠ 두 배우를 맞추는 규칙 — 공유하는 것은 임팩트 순간 하나뿐이다.** 플레이어 공격과 적 클립(공격/패링/사망)은 길이도, 저작 배속도, 압축을 유발하는 제약도 다르다(플레이어는 다음 패턴까지의 여유, 적은 처치 확정~임팩트 간격). **배속이 같아질 이유가 없으므로 시작이나 끝을 맞추는 정렬은 원리적으로 성립하지 않는다.** 각 배우는 `Deadline + Pattern.ImpactOffset`이라는 **같은 절대 시각**에 **자기 임팩트 프레임**이 오도록 **자기 시작 시점과 자기 배속을 역산**한다(`ClipAlignment.ResolveScheduleStart` / `ResolvePlaySpeed`가 전부 `impactAlignTime`을 받는 이유). 시작·끝·배속이 서로 달라도 칼이 닿는 순간은 구조적으로 일치한다.
 - **⚠ 배속은 클립 전체에 걸린다**(Animator Speed Multiplier). `ResolvePlaySpeed`는 **임팩트 이전** 구간만 보고 배속을 정하지만 그 값이 이후에도 적용된다 → **`ImpactTime`을 뒤에 찍을수록 마무리 동작까지 빨라진다.** 사망 클립에서 특히 직접적이다(§11-3).
 - **정렬 앵커는 '임팩트 프레임'이다.** 칼날이 표적을 지나가는 프레임(`Pattern.AnimationImpactTime`, 클립 절대 초)이 **표적이 갈라지는 시각과 같은 식**(`Deadline + Pattern.ImpactOffset`)에 오도록 시작 시점과 배속을 역산한다 — 트림 끝을 `LastNodeTime`에 맞추던 예전 방식은 "칼은 지나갔는데 뒤늦게 갈라지는" 어긋남을 낳았다. 임팩트 **이후** 잔여 트림 구간은 같은 배속으로 이어 재생되어 마무리 동작이 뒤에 남는다. 미오서링(0 이하/범위 밖)이면 트림 끝으로 폴백. 오서링은 `Tools/Animation Clip Trimmer`(Start/**Impact**/End 세 마크). 상세: `docs/SliceImpactFrame/`
@@ -199,7 +200,7 @@ Assets/
 ### 7-1. 카메라 연출 (Camera)
 - **`CameraDirector`**: 카메라 연출의 유일 관리 지점. `PatternHandler`의 기존 이벤트만 구독하는 **순수 연출**(판정에 개입하지 않음). `EffectManager`와 같은 위치·같은 카탈로그 관례 — **연출 추가 = 카탈로그에 한 줄**.
 - **`CameraCueCatalog`**: `CameraTrigger` enum(PatternSuccess/PatternMiss/PatternFailure) + `CameraCueEntry`(진폭·지속). 감쇠 곡선은 공식 `(1-t)²`, 주파수는 director 공용 값 하나 — 큐마다 나눌 만한 차이가 안 난다.
-- **큐 시각은 화면에서 사건이 일어나는 순간에 맞춘다**: 성공/실패(표적 파괴)는 **`Deadline`**(= `LastNodeTime + PatternHandler.GoodWindow` + `Pattern.ImpactOffset`, §6·§11과 동일한 식), 피격은 `OnJudgeTargetFirstMiss` 순간 **즉시**(Hit 클립이 그때 재생되므로). **실패는 사건이 둘이라 큐도 둘이다.**
+- **큐 시각은 화면에서 사건이 일어나는 순간에 맞춘다**: 성공/실패(표적 파괴)는 **`Deadline`**(= `LastNodeTime + PatternHandler.GoodWindow` + `Pattern.ImpactOffset`, §6·§11과 동일한 식), 피격은 `CharacterActionPlayer.OnPlayerHit`(= **적 칼이 닿는 `impactTime`**). **실패는 사건이 둘이라 큐도 둘이다.** ⚠ 단 `Attacker.Player` 실패는 안 맞으므로 `PatternFailure` 하나만 난다.
 - **예약은 최대 하나**다 — 패턴 완료가 순차적이고 A의 Deadline(A 마지막노드 +0.1초)보다 B의 완료가 최소 0.4초 뒤라, 리스트가 필요 없다.
 - **Perlin은 채널이 하나라 겹침이 합성되지 않는다.** 마지막 노드 미스면 두 큐가 0.1초 간격으로 확실히 붙으므로, 새 쉐이크는 타이머를 재시작하되 **진폭은 큰 쪽을 취한다**(덮어쓰면 세기가 뚝 떨어짐). **휴지값은 0이 아니라 씬의 현재 값**(`AmplitudeGain` 0.1)이라 `Awake`에서 캐시해 그리로 복귀한다.
 - 상세: `docs/CameraDirection/`
@@ -228,9 +229,10 @@ Assets/
 ### 7-3. 히트스톱 (HitStop)
 - **`HitStopDirector`**: 히트스톱의 유일 관리 지점. `OnPatternComplete`만 구독하는 순수 연출. **성공(`AllCorrect`)에서만** `Deadline + ImpactOffset`(§6·§11과 같은 식)에 예약하고, 그 순간 두 배우에게 "멈춰라"를 지시한다. 예약은 최대 하나(`CameraDirector`와 같은 근거).
 - **⚠ `Time.timeScale`은 이 게임에서 절대 못 쓴다.** 판정·클립 정렬·표적 운동은 전부 `Time.time`인데 채보는 `audioSource.time`으로 돈다 — **오디오는 timeScale의 지배를 받지 않는다.** 시계를 내리면 게임 시계만 느려져 차이가 **영구 누적**되고, `perfectWindow`가 0.05초인데 통상 히트스톱이 0.05~0.10초라 **한 번으로 판정이 무너진다.** 그래서 멈추는 것은 **Animator의 Speed Multiplier**(`AttackSpeed`/`DeathSpeed`) 둘뿐이다. 판정·오디오·포커스 링·이동은 계속 흐른다.
-- **⚠ 두 배우의 공백 처리 모델이 정반대다. 임팩트 프레임이 클립 어디에 찍히느냐가 반대이기 때문이다.**
-  - **플레이어 = 밀기**(`actionEndTime`·`recoveryEndTime += D`). 공격 클립은 임팩트가 트림 **끝** 근처라 임팩트 시점 잔여가 실측 **0.036~0.109초(10/10 패턴)**. 정지가 그보다 길어 **재개하는 순간 이미 원래 종료 시각이 지나 있다** — 압축할 시간이 음수라 캐치업이 원리적으로 불가능하다. 클립은 멈춘 자리에서 원래 배속으로 이어진다. **임팩트는 이미 지나갔으므로 §6 정렬은 안 깨진다** — 미는 것은 마무리 동작과 복귀뿐이고, 다음 공격은 자기 Deadline에서 독립 예약이라 제시각에 시작한다(줄어드는 건 Sprint 노출 시간뿐).
-  - **적 = 캐치업**(`캐치업 = 남은 클립 초 ÷ 남은 실시간`, `ClipAlignment.ResolvePlaySpeed`와 같은 꼴). 사망 클립은 `ImpactTime`이 트림 **시작** 근처라(§11-3) 잔여가 **0.245~0.953초**로 넉넉해 원래 `burstTime`을 그대로 지킨다. `minCatchupHeadroom`(3배) 미달이면 **그 적만 건너뛰고**, `maxCatchupSpeed`(3.0) 상한에 걸리면 절단 시각을 부족분만큼 민다.
+- **두 배우 모두 '밀기'다**(캐치업 아님). 임팩트 시점에 정지 창 안으로 흡수할 잔여가 양쪽 다 없기 때문.
+  - **플레이어**(`actionEndTime`·`recoveryEndTime += D`): 공격 클립은 임팩트가 트림 **끝** 근처라 임팩트 시점 잔여가 실측 **0.036~0.109초(10/10 패턴)** — 정지가 그보다 길어 압축할 시간이 음수다. 클립은 멈춘 자리에서 원래 배속으로 이어진다. **임팩트는 이미 지나갔으므로 §6 정렬은 안 깨진다** — 미는 것은 마무리 동작과 복귀뿐이고, 다음 공격은 자기 Deadline에서 독립 예약이라 제시각에 시작한다(줄어드는 건 Sprint 노출 시간뿐).
+  - **적**(`burstTime += D`): 절단이 **임팩트 바로 그 순간**이라(§11-3) 잔여가 **0**이다 — 안 밀면 멈춘 프레임에 몸이 갈라져 정지가 안 보인다. 사망 클립은 `DeathSpeed = 0`으로 얼렸다가 해제 시 원래 배속으로 이어진다.
+  - **⚠ `EnemyDirector.TickPendingKills`는 `LateUpdate`에 있다.** 절단 시각과 히트스톱 발사 시각이 **같은 임팩트 프레임**이라, 둘 다 `Update`에 있으면 스크립트 실행 순서에 따라 정지가 걸리기 전에 몸이 갈라진다. `HitStopDirector.Fire`(Update)가 `burstTime`을 민 뒤에 보게 만드는 순서 보장.
   - **한쪽만 멈춰도 타격감은 성립한다.** 사망 클립이 없는 패턴은 적이 빠지고 플레이어만 멈춘다.
 - **연출 토글**: `HitStopDirector.hitStopEnabled`, `CameraDirector`의 `shakeEnabled`/`punchEnabled`/`framingEnabledOption`/`introEnabled`. 전부 인스펙터 bool이며 끄면 해당 층만 죽고 나머지는 그대로 돈다(배선 누락 시 조용히 비활성되는 기존 규율과 같은 결).
 - **`EnemyView.ApplyHitStop`은 새 `burstTime`을 반환하고 `EnemyDirector`가 그걸로 `PendingKill.burstTime`을 갱신한다.** 배속은 뷰가, 시각은 디렉터가 드는 구조라 **갱신을 빠뜨리면 클립이 도는 중에 먼저 갈라진다.**
@@ -240,8 +242,24 @@ Assets/
   - ⚠ `OnDisable`에서 반드시 Brain을 되살린다. 잠금 도중 꺼지면 **카메라가 영구히 굳는다**.
   - `HitStopDirector`는 창을 **알려 줄** 뿐 카메라를 직접 안 만진다 — Cinemachine 호출은 전부 `CameraDirector` 안에 남는다.
 - **카메라 펀치는 `CameraDirector`가 낸다**(`CameraCueEntry.punchFovDelta`/`punchDuration`, "연출 추가 = 카탈로그 한 줄"). `HitStopDirector`는 카메라를 안 만지고, `CameraDirector`는 애니메이터를 안 만진다 — 각자 자기 층. 펀치는 **`Lens.FieldOfView`에만** 건다(돌리에 걸면 매 프레임 도는 `GroupFraming`과 싸운다). `DollyOnly`의 "Zoom 금지"는 상시 프레이밍 경고지 0.1초 전환 얘기가 아니다.
-- **⚠ 남은 이음매**: `SlicePiece`(표적 조각)는 닫힌 식이라 안 멈춘다. 표적 절단이 임팩트 바로 그 순간이라 캐릭터가 멈춘 동안 조각만 날아간다. 0.08초라 안 보인다고 보고 뺐다 — 보이면 그때 붙인다. 적 사망 폭발(`burstTime`)은 트림 끝이라 훨씬 뒤여서 무관하다.
+- **월드 이펙트도 같은 창만큼 언다**(§7-4). `PatternEffectDirector.ApplyHitStop`이 활성 뷰의 `simulationSpeed`를 0으로 내렸다가 각 큐의 `speed`로 되돌린다 — **복귀값을 뷰가 드는 이유**는 큐마다 배속이 다르기 때문. 캐릭터가 멈췄는데 스파크만 흐르면 "멈췄다"가 아니라 "캐릭터만 렉 걸렸다"로 읽힌다. 여기서도 `HitStopDirector`는 파티클을 직접 안 만진다.
+- **⚠ 남은 이음매**: `SlicePiece`(표적 조각)는 닫힌 식이라 안 멈춘다. 표적 절단이 임팩트 바로 그 순간이라 캐릭터가 멈춘 동안 조각만 날아간다. 0.08초라 안 보인다고 보고 뺐다 — 보이면 그때 붙인다. 적 사망 폭발(`burstTime`)은 정지 창 **끝**으로 밀리므로 조각이 정지 중에 날아갈 일은 없다.
 - 상세: `docs/HitStop/`
+
+### 7-4. 패턴별 월드 이펙트 (PatternEffect)
+- **`Pattern.effectCues`(리스트)가 소유한다.** 큐 하나가 "**언제 · 어디에 · 어떤 조건에서** 무엇을 재생할지"를 스스로 든다(`PatternEffectCue`, `Pattern/Core`). **슬롯이 아니라 리스트인 이유**: 개수와 시점이 코드가 아니라 저장 단계에서 정해진다 — `ClipAlignment` 슬롯들과 성질이 다르다(클립은 배우당 하나씩 재생되지만 이펙트는 동시에 여럿 뜬다).
+- **조건은 판정 결과가 아니라 적의 반응 클립을 따라간다**(`Always`/`Success`/`Parry`/`Evade`). 막는 모션이면 스파크가 튀고 뒷구르기면 아무것도 안 튄다 — **칼이 만났느냐**가 화면에 남는 사실이기 때문. **네 값이 다섯 경우를 덮는다**: `attacker`가 패턴의 성질이라 같은 값이 역할에 따라 다른 의미를 가져도 한 에셋 안에서 섞이지 않는다(`Attacker.Player`의 `Success`는 베는 이펙트, `Attacker.Enemy`의 그것은 받아친 스파크, `Evade`는 피격).
+- **"뒷구르기는 무연출"은 큐를 안 만드는 것**이지 코드 분기가 아니다.
+- **⚠ 패링/회피는 기존 이벤트로 알 수 없다** — `EnemyDirector.OnEnemyReacted(Pattern, EnemyReaction, impactTime)`가 그것만을 위해 있다. 반응 판정은 `EnemyView.Resolve`의 `parried` 식과 **같은 `retreat` 값**을 보고, 확정이 아니라 **임팩트 시각**을 실어 보낸다(`OnEnemyKilled`/`OnEnemyBurst`가 갈린 것과 같은 이유). 실패를 한 덩어리로 보면 **적이 구르는 동안 허공에서 스파크가 튄다**.
+- **시각 기준점 다섯**(`PatternStart`/`FirstNode`/`Node[i]`/`LastNode`/`Impact`) ± `timeOffset`. 전부 `PatternQueuedInfo`에서 나오며(`NodeTimes` 포함) **새 시계를 만들지 않는다**. 그래서 `PatternEffectDirector`는 **`OnPatternQueued` 하나만 구독해 예약을 다 만들고**, 조건만 나중에 채운다(성패는 마지막 노드에서, 반응은 그 직후에 정해지므로 **예약 시점과 조건 확정 시점이 구조적으로 다르다**).
+- **⚠ `HitStopDirector`의 "예약 최대 하나"를 쓸 수 없다** — 그 근거는 시각이 임팩트 고정이라는 것인데, 큐는 `PatternStart`까지 앞당겨져 **앞 패턴의 임팩트 큐와 다음 패턴의 시작 큐가 겹친다**(리드타임 0.5 > 간격 0.4).
+- **⚠ 결과 조건 큐는 `LastNode`보다 이른 시각에 걸 수 없다**(미래를 앞당겨 보여 주는 셈). 런타임은 조용히 폐기하고 `OnValidate`·툴 타임라인이 잡는다.
+- **앵커 넷**(`ImpactAnchor`/`Player`/`PlayerWeapon`/`Opponent`) + `follow`(자식으로 붙어 따라감). `Opponent`는 **발사 순간에** 조회한다(§11-1 — 큐 시점엔 미배정). **`PlayerWeapon`은 안쪽 칼날 노드**를 배선한다(동명 2단, `WeaponTrailController`와 같은 함정).
+- **칼날은 점이 아니라 선분이다** — `bladeT`(0=손잡이, 1=칼끝)로 비율로 집는다. **축은 추측하지 않고 유도한다**: `BladePath`가 칼 렌더러 `localBounds`의 **최장 축 = 날 길이** 규칙을 쓰며(`MeshSliceBakerWindow.SampleWeapon`과 동일), 런타임과 저장 툴이 **같은 클래스**를 공유한다. 계산은 스폰 때 한 번이고 이후 추종은 부모 관계가 공짜로 한다.
+- **⚠ 패턴인풋 노드(Point) 자리는 앵커가 아니다** — 루트 Canvas가 `ScreenSpaceOverlay`라 그 좌표는 월드가 아니다(§7-5). 노드 자리 이펙트는 기존 `EffectManager` 관할이며 이 시스템은 침범하지 않는다.
+- **⚠ `NodeTimes`는 '예정'이지 '실제'가 아니다.** 늦게 눌러도 안 밀린다. 입력 순간에 정확히 붙는 연출은 판정 이벤트를 쓴다.
+- 뷰는 `CanvasEffectView`를 **그대로 재사용**한다(월드 경로 `SetWorldPose`/`SetSpeed` 추가). 이름이 Canvas인 채 남은 것은 **프리팹 스크립트 참조가 클래스명에 묶여** rename이 기존 이펙트를 통째로 깨기 때문. ⚠ `MainModule`은 구조체 사본이라 **되대입해야** 배속이 반영되고, 풀 재사용이라 **반납 시 부모·크기·배속을 원복**해야 한다(안 하면 따라가기 이펙트가 앵커와 함께 파괴되고 다음 큐가 이전 배속을 물려받는다).
+- **저장**: `Tools/Pattern Effect Tool` — 패턴 진행 전체 타임라인 + 애니메이션·파티클 동시 프리뷰(`ParticleSystem.Simulate`라 **되감기가 된다**) + 칼날 경로 폴리라인(우클릭으로 그 프레임 시각을 `timeOffset`에 집기). 가이드: `docs/!Guides/Guide_PatternEffectTool.md` / 상세: `docs/PatternEffect/`
 
 ### 7-5. 앵글 교체 (CameraAngleSwitcher)
 - **`CameraAngleSwitcher`**(`CameraDirector`가 소유하는 `[Serializable]` 헬퍼): 앵글 vcam 여러 대를 랜덤 교체한다. 우선순위만 갈아끼우고 실제 이동은 Cinemachine 블렌드가 한다.
@@ -298,21 +316,33 @@ Assets/
 - **적은 무대 원 '안'에 흩어져 선다**(`stageRadius` 8, `minSpacing` 2.5m). 링 궤도가 아니다. 배치는 `EnemyRing.PickStagePosition` — 원 안 2D 후보 샘플링이고, **시야 판정은 각도 근사가 아니라 실제 절두체**(`GeometryUtility`)다. 무대가 고정되면 적도 플레이어도 원 안 어디에나 있어 각도로는 화면 안인지 알 수 없다.
 - **스폰은 화면 밖에서 즉시 일어난다.** 아무도 못 보므로 걸어 들어올 이유가 없다 — 등장 이동(`entryDuration`)을 통째로 없앴다. ⚠ 플레이어가 홱 돌면 방금 나타난 적이 보일 수 있다(감수).
 - **다음 표적은 창이 고른다** — 여기가 속도감의 심장이다(`TakeTargetForWindow`). 창은 음악이 정해 0.5~2.1초로 4배 흔들리므로, 거리를 고정하면 속도가 그만큼 흔들린다. 거꾸로 `목표거리 = cruiseSpeed × 창 / playerShare + duelDistance`로 잡으면 **체감 속도가 일정**해지고 짧은 구간은 근거리 난타, 긴 구간은 무대 횡단 대시로 갈린다. **`playerShare`로 나누는 항을 빼면 비율을 올릴수록 오히려 느려진다.**
-- **만나는 지점의 비율은 `playerShare`(0.85)** — 8:2 남짓. 예전엔 0.5 고정 + 리시 1.5m라 플레이어가 **초속 1m, 걷는 것보다 느렸다.** 1로 두지 않는 이유: 적이 정지 표적으로 읽힌다. 적 몫(1m 남짓)이 창 전체로 늘어져 기어가는 문제는 `EnemyView.EarliestArrival`이 막는다(빨리 가서 서고 플레이어를 바라본다).
+- **만나는 지점의 비율은 `playerShare`(현재 1.0 — 적은 제자리에 선다)**. 예전엔 0.5 고정 + 리시 1.5m라 플레이어가 **초속 1m, 걷는 것보다 느렸고**, 그 뒤 0.85로 올렸다. 지금 1인 이유: **적이 정지 표적으로 보이는 것을 막는 일을 '마중 한 걸음'이 아니라 견제 클립(`Pattern.EnemyFeint`, §11-4)이 한다.** 1보다 낮추면 적 이동이 창에 **비례**해 커져(`목표거리 = cruiseSpeed × 창 / playerShare`) 견제 구간이 `0.735 × 창`으로 잘린다 — 실측상 2초짜리 클립이 들어갈 확률이 0%가 된다. **플레이어 속도는 share와 무관하다**(거리를 `cruiseSpeed × 창`으로 잡으므로 share가 오르면 목표 거리가 오히려 줄어든다). `EnemyView.EarliestArrival`은 그대로 남아 있다 — 이동이 남는 경로(후퇴 후 복귀·링 등장)에서 여전히 필요하다.
 - **상대 선택은 `BindReservation`이 한다** — 창을 알 수 있는 유일한 시점이기 때문(§11-1). `KillOpponent`는 죽은 상대를 놓아주기만 한다. 둘은 `ResolveReservation` 한 호출 안이라 같은 프레임이다.
-- **실패한 적은 짧게 물러난 그 자리에 선다**(`failRetreatDistance`). 돌아갈 제자리가 없다 — 플레이어가 다시 찾아온다.
+- **⚠ 실패한 적의 반응은 창이 고른다**(`EnemyDirector.ResolveRetreatDistance` → `EnemyView.Resolve`). **다음 패턴의 창이 후퇴+재접근을 감당하면 회피**(`evadeStateName`, `failRetreatDistance`), **못 감당하면 제자리 패링**(`parryStateName`, 거리 0). 조건: `창 >= retreatDuration + failRetreatDistance×playerShare/cruiseSpeed + retreatWindowMargin`. 다음 예약이 없으면(곡 공백) 물러나지 않는다 — 돌아올 사람이 없다. **`Attacker.Enemy` 실패는 언제나 물러난다**(벤 뒤의 여파이지 회피가 아니다).
+- **왜 조건부인가**: 재접근은 `TakeTargetForWindow`를 안 거친다(같은 적이 유지되므로) → **거리를 창에 맞추는 §11-2 규율이 빠져 있어** `failRetreatDistance`가 거리를 통째로 정한다. 창이 짧으면 그대로 늘어져 **0.9 m/s로 기어가고**, 그 사이 Attack 레이어 웨이트가 1이라(`recoveryHold` + `Release` ≈1.15초) **로코모션조차 안 보인다**. 제자리 패링이면 이동 거리가 `convergeMinDistance`(0.15m) 아래라 수렴 로코모션을 **아예 안 건다**. ⚠ 판정에 쓰는 `arriveTime`은 **낙관적**이다 — 진짜 마감은 플레이어 자기 스윙 시작인데 그 값은 `OnJudgeTargetBegan` 뒤에야 알 수 있어 못 본다. `retreatWindowMargin`이 그 간격을 흡수한다. 상세: `docs/FailConverge/`
 - **⚠ 적은 도착 시각까지 끌지 않고 `moveSpeed`(3 m/s)로 빨리 가서 선다**(`EnemyView.EarliestArrival`). 안 그러면 **도착하는 순간이 곧 베이는 순간**이라 서 있는 구간이 아예 없다 — `ScheduleMove`가 선형 보간이라 1m를 1.3초에 펴면 초속 0.77m로 기어가고, 화면에는 *"제자리에 선 것 같은데 Run이 계속 도는"* 그림이 된다(`moving`이 true인 동안 로코모션이 유지되므로). **앞당기는 건 언제나 안전하다** — "클립 시작 전에 도착"이라는 제약과 방향이 같다.
   - 다만 이건 **결투 접근(`ApproachDuel`)에만** 건다. 후퇴·등장은 "이만큼 걸리는 동작"이라 저작된 지속시간을 그대로 쓴다(후퇴를 속도로 자르면 회피의 날카로움이 죽는다).
 - **플레이어 로코모션은 창으로 갈린다**(거리가 아니다): `창 > 대시클립 길이 → Sprint`(루프, 이동속도에 맞춰 배속) / `이하 → Quickshift`(단발, 창 안에 완주하도록 배속, **상한 없음**). 거리로 가르면 평균 창(1.48초) > Quickshift 클립(1초)이라 **클립이 먼저 끝나고 나머지는 미끄러진다.**
 - **⚠ 플레이어 회전은 이동과 별개 스케줄이다**(`PlayerCombatMover.turnDuration` 0.15초). 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가 **무대를 가로지르는 내내 목을 천천히 돌린다.** 예전엔 `OnOpponentChanged`의 회전이 같은 프레임 `OnDuelScheduled`에 통째로 덮여 `turnDuration`이 한 번도 안 쓰였다. 지금은 **먼저 상대를 보고 그 다음에 달린다.**
 - 상세: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
+### 11-4. 견제 — 표적이 된 순간부터 임팩트까지 (EnemyFeint)
+- **`Attacker.Player` 패턴에서 적은 휘두르지 않는다** → 그 구간에 클립이 없어 **표적이 된 순간부터 베이는 순간까지 가만히 서 있었다.** `Pattern.EnemyFeint`(`ClipAlignment` 슬롯)가 그 구간을 채운다.
+- **임팩트가 없는 슬롯이다.** 닿지 않는 동작이라 `ImpactTime`을 찍지 않고, 그러면 `ClipAlignment`가 트림 끝을 임팩트로 폴백해 **클립 끝이 임팩트 시각에 붙는다**(§6과 같은 정렬 규칙, 새 수학 없음).
+- **새 애니메이터 스테이트를 만들지 않는다** — `Attacker.Player`에서는 `Attack` 슬롯이 비어 있으므로 그것을 쓴다. 예약 필드도 공격과 공유하며(`hasPendingAttack`), 그래서 `Resolve`·`MarkDying`의 정리 경로가 공짜로 따라온다.
+- **시작은 표적이 되는 순간이다**(`BindReservation`) — 도착을 기다리지 않는다. `playerShare = 1`이라 적 이동이 0이라서 기다릴 도착이 없고, 그 차이가 창 전체(`W`)를 쓰느냐 `0.735 × W`만 쓰느냐를 가른다.
+- **트림 0.8초 이하가 기준이다.** 실측(`Dreamer_Lv10`, 86엔트리): `W`는 min 0.50 / p50 1.30 / max 2.10초이고, 0.8초 클립이 배속 없이 들어가는 비율이 **97%**다(2초짜리는 23%). 원본이 긴 공격 모션이면 가장 읽히는 0.8초만 잘라 쓴다.
+- **창이 `minFeintWindow`(0.35초)보다 짧으면 아예 안 건다** — 너무 짧은 재생은 동작이 아니라 깜빡임으로 보인다. 배속 클램프는 견제에서 **경고하지 않는다**(정렬이 깨질 것이 없고, 넘친 구간은 성패 확정의 리액션 크로스페이드가 끊는다).
+- **클립이 없으면 기본 Idle** — 예약을 걸지 않고 자리만 잡으면 `ApplyLocomotion`이 이동 없는 상태에서 Idle을 유지한다(예전 동작 그대로).
+- 저작: `Tools/Pattern Chart Tool`이 엔트리마다 **클립 트림 길이와 그 엔트리의 실제 창을 나란히** 보여 주고(길면 경고), `Tools/Animation Clip Trimmer`의 적 슬롯 선택기에서 `enemyFeint`를 골라 정밀 저작한다.
+- 상세: `docs/EnemyFeint/`
+
 ### 11-3. 적 사망 클립과 절단 시점
 - **`Pattern.EnemyDeath`는 런타임에 재생된다.** 임팩트 프레임이 플레이어 공격과 **같은 절대 시각**(`Deadline + ImpactOffset`)에 오도록 배속을 역산한다(§6의 두 배우 규칙).
-- **절단(시체 교체·폭발)은 사망 클립의 트림 끝**이다. 임팩트가 아니다 — 쓰러지는 것을 다 보고 나서 갈라진다. 절단 시각은 배속을 아는 `EnemyView.AssignDeath`가 계산해 돌려주고, `PendingKill.burstTime`이 그 값이다. **클립이 없으면 `burstTime = impactTime`**이라 예전 동작 그대로다.
+- **절단(시체 교체·폭발)은 임팩트 프레임**이다 — 칼이 지나가는 그 순간 갈라진다. 사망 클립 유무와 무관하게 `burstTime = impactTime`이며(`EnemyView.AssignDeath`), 사망 클립은 처치 확정~임팩트 구간에만 보인다. (예전엔 트림 끝이라 쓰러지는 걸 다 본 뒤 갈라졌다.)
 - **재생은 처치 확정 즉시 시작한다.** 그보다 이른 시각은 알 수 없다(성패가 마지막 노드에서 정해진다). 그래서 임팩트까지 남는 실시간은 `goodWindow`(0.1초) + `impactOffset`뿐이고, **사망 클립의 `ImpactTime`은 트림 시작 근처에 찍어야 한다.** 죽는 모션은 원래 '맞는 순간'이 시작점이라 자연스럽게 맞는다. 뒤에 찍으면 정렬이 깨지기 전에 **쓰러지는 속도부터 빨라진다**(§6의 배속 경고).
 - **슬롯은 `Attack`과 나눈다**(`Death` 스테이트 + `DeathSlot_Placeholder` + `DeathSpeed`). 적이 공격 도중 죽을 때 같은 슬롯을 덮으면 진행 중인 클립이 튄다.
 - **죽는 적은 결투 위치를 비켜 준다**(`deathClearOffset` 0.6m). 승격은 확정 즉시 일어나 다음 상대가 같은 자리로 들어오기 때문 — 예전엔 임팩트에 사라져 문제가 없었다. 루트 모션이 있는 사망 클립이면 0으로 끈다.
-- **이벤트가 둘로 갈린다.** `OnEnemyKilled`는 **확정**(승격·링 보충과 같은 시점, 화면에는 아직 아무 일도 없다), `OnEnemyBurst`는 **절단**(화면에서 사건이 일어나는 순간). **카메라 쉐이크는 `OnEnemyBurst`를 듣는다** — 확정에 걸면 적이 쓰러지기도 전에 화면이 흔들린다.
+- **이벤트가 둘로 갈린다.** `OnEnemyKilled`는 **확정**(승격·링 보충과 같은 시점, 화면에는 아직 아무 일도 없다), `OnEnemyBurst`는 **절단 = 임팩트**(화면에서 사건이 일어나는 순간). **카메라 쉐이크는 `OnEnemyBurst`를 듣는다** — 확정에 걸면 칼이 닿기도 전에 화면이 흔들린다.
 - **굽기 포즈도 트림 끝**이다(`MeshSliceBakerWindow.BakePoseTime`). 터지는 순간의 포즈로 구울수록 관절 뒤틀림이 준다.
 - 상세: `docs/EnemyDeathClip/`
 

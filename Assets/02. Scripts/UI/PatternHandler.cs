@@ -352,7 +352,8 @@ public class PatternHandler : MonoBehaviour
 
         // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
         OnPatternQueued?.Invoke(new PatternQueuedInfo(
-            active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline));
+            active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline,
+            active.BuildNodeTimes()));
 
         if (becomesJudgeTarget)
         {

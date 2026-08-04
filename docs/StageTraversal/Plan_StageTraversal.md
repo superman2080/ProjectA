@@ -121,6 +121,9 @@ Vector3 mid = playerPos + toEnemy * playerShare;   // 0.5 → playerShare(0.85)
 - `EnemyView.MoveSpeed` / `EarliestArrival` — 적 몫이 1m 남짓이라 창 전체로 늘이면 기어간다. 빨리 가서 서야 한다
 - `ScheduleMoveAfter` — 실패 후퇴 뒤 다음 접근을 잇는 데 계속 쓴다
 - `Resolve`의 짧은 후퇴(`failRetreatDistance`) — 회피 연출. **후퇴한 그 자리에 선다**(제자리 복귀 없음, 플레이어가 다시 찾아간다)
+  - ⚠ **이후 변경됨**: 후퇴는 이제 `Attacker.Enemy` 실패(플레이어가 맞은 경우)에만 남는다.
+    `Attacker.Player` 실패는 적이 **제자리에서 패링**한다(후퇴 거리 0) — 재접근이 `TakeTargetForWindow`를
+    안 거쳐 0.9 m/s로 기어가는 문제가 있었다. 근거: `docs/FailConverge/`
 - `RingPosition` — 이름만 무대 배치 위치로 의미가 바뀐다. 복귀 목적지로는 더 안 쓴다
 - `BuildDuelPlan`의 중점 계산 — `0.5` → `playerShare`로 바뀔 뿐 구조는 유지
 - `AssignAttack`의 이동 인자 — 적이 여전히 자기 몫을 간다
@@ -212,6 +215,7 @@ Research 6 — Quickshift 클립이 1초인데 평균 창이 1.48초다. 배속 
   - 플레이어가 무대 밖으로 안 나간다(표적이 무대 안이므로 자동)
   - 로코모션 클립이 창을 **끝까지 채운다** — 미끄러지는 구간 없음(D-7)
   - 실패 시 적이 짧게 물러난 **그 자리**에 서 있고 플레이어가 다시 찾아간다
+    (⚠ 이후 변경: 플레이어 공격 실패는 후퇴 없이 제자리 패링 — `docs/FailConverge/`)
   - 곡 전체에서 적 인스턴스·시체가 쌓이지 않는다
 
 ## 범위 밖

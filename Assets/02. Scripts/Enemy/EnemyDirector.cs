@@ -54,10 +54,15 @@ namespace EnemySpace
         [Tooltip("적 공격 클립의 자동 배속 상한. 넘으면 정렬이 깨지므로 경고가 뜬다.")]
         [SerializeField] private float maxAttackSpeed = 2.5f;
 
-        [Tooltip("만나는 지점의 플레이어 몫. 0.85면 간격의 85%를 플레이어가, 15%를 적이 좁힌다.\n" +
-                 "1로 두면 적이 정지 표적으로 보인다 — 한 걸음이라도 나와야 교전으로 읽힌다.")]
+        [Tooltip("만나는 지점의 플레이어 몫. 1이면 적은 제자리에 서고 플레이어가 전부 좁힌다.\n" +
+                 "적이 정지 표적으로 보이지 않게 하는 것은 이제 '마중 한 걸음'이 아니라 견제 클립(Pattern.EnemyFeint)이다 —\n" +
+                 "1보다 낮추면 적 이동이 창에 비례해 커져 그 견제 구간이 0.735배로 잘린다.")]
         [Range(0.5f, 1f)]
-        [SerializeField] private float playerShare = 0.85f;
+        [SerializeField] private float playerShare = 1f;
+
+        [Tooltip("견제 클립을 걸 최소 창(초). 표적이 되는 순간부터 임팩트까지 이보다 짧으면 재생하지 않고 Idle로 둔다.\n" +
+                 "너무 짧은 재생은 동작이 아니라 깜빡임으로 보인다.")]
+        [SerializeField] private float minFeintWindow = 0.35f;
 
         [Tooltip("플레이어의 목표 이동 속도(m/s). 다음 표적까지의 거리를 이 속도로 역산해 고른다.\n" +
                  "창은 음악이 정해 못 바꾸므로 이 값이 곧 체감 속도다.")]
@@ -65,10 +70,21 @@ namespace EnemySpace
         [Tooltip("표적 선택의 최소 거리(m). 너무 가까운 적만 고르면 제자리 난타가 된다.")]
         [SerializeField] private float minTargetDistance = 2f;
 
-        [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 물러난 그 자리에 선다 — 플레이어가 다시 찾아간다.")]
+        [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 물러난 그 자리에 선다 — 플레이어가 다시 찾아간다.\n" +
+                 "⚠ 다음 패턴의 창이 감당할 때만 물러난다. 못 감당하면 제자리 패링이 된다.")]
         [SerializeField] private float failRetreatDistance = 1.5f;
         [Tooltip("후퇴에 걸리는 시간(초). 이 시간이 지나야 다시 접근을 시작한다.")]
         [SerializeField] private float retreatDuration = 0.25f;
+
+        [Tooltip("회피/패링을 가르는 여유(초). 후퇴 + 되돌아오기에 이만큼 더 남아야 물러난다.\n" +
+                 "키우면 패링이 잦아지고, 0에 가까우면 회피가 잦아지는 대신 재접근이 빠듯해진다.")]
+        [SerializeField] private float retreatWindowMargin = 0.35f;
+
+        [Tooltip("회피한 적에게 다시 다가갈 때, 남은 빈 시간(=1) 중 이동에 쓸 비율.\n" +
+                 "0.5면 절반 만에 도착하고 나머지 절반은 서서 기다린다 — 같은 거리를 절반 시간에 가므로 속도는 2배다.\n" +
+                 "1이면 예전과 같다(창 전체를 이동에 쓴다). 재접근에만 걸리고 새 표적으로 가는 주 경로는 건드리지 않는다.")]
+        [Range(0.2f, 1f)]
+        [SerializeField] private float playerApproachShare = 1f;
 
         [Header("Death")]
         [SerializeField] private float scatterSpeed = 2.5f;
@@ -131,16 +147,54 @@ namespace EnemySpace
             public readonly Vector3 EnemyPosition;
             public readonly float ArriveTime;   // 둘 다 이 시각까지 도착해야 한다(= 클립 시작)
 
-            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime)
+            /// <summary>
+            /// 플레이어가 자기 자리에 도착할 시각. 보통 <see cref="ArriveTime"/>과 같지만,
+            /// 같은 상대와 이어 싸우는 재접근(회피 뒤)에서는 <c>playerApproachShare</c>만큼 <b>앞당겨진다</b> —
+            /// 그 구간은 거리가 창에 맞춰지지 않아 그냥 두면 늘어져 기어간다.
+            ///
+            /// <para><b>앞당기기만 한다.</b> 늦추면 대시가 플레이어 자기 스윙 한복판으로 들어간다
+            /// (스윙 시작 시각은 이 시점에 알 수 없다 — <c>docs/FailConverge</c>의 폐기된 DepartTime 안).
+            /// 일찍 도착해 서 있는 것은 언제나 안전하다(적의 <c>EarliestArrival</c>과 같은 규율).</para>
+            /// </summary>
+            public readonly float PlayerArriveTime;
+
+            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime)
             {
                 PlayerPosition = player;
                 EnemyPosition = enemy;
                 ArriveTime = arriveTime;
+                PlayerArriveTime = playerArriveTime;
             }
         }
 
         /// <summary>결투 배치가 정해진 순간. 플레이어 이동이 이것만 구독한다.</summary>
         public event Action<DuelPlan> OnDuelScheduled;
+
+        /// <summary>
+        /// 실패한 적이 재생하는 반응 클립. <b>같은 실패라도 화면에 남는 사실이 다르다</b> —
+        /// 막으면 칼이 맞부딪히고, 물러나면 칼이 아예 닿지 않는다.
+        /// </summary>
+        public enum EnemyReaction
+        {
+            /// <summary>제자리에서 막아 세웠다(<c>parryStateName</c>). 칼이 만나는 유일한 실패다.</summary>
+            Parry,
+
+            /// <summary>물러났다(<c>evadeStateName</c>). <c>Attacker.Enemy</c>에서는 플레이어 피격의 여파다.</summary>
+            Evade
+        }
+
+        /// <summary>
+        /// 실패로 적이 반응 클립을 재생하는 순간(<b>확정</b>). 어떤 반응인지와 <b>칼이 만나는 시각</b>을 함께 준다.
+        ///
+        /// <para><b>왜 <c>OnPatternComplete</c>로는 안 되나</b>: 그 페이로드에는 막았는지 굴렀는지가 없다.
+        /// 그건 다음 패턴의 창을 보고 여기서 정하며(<see cref="ResolveRetreatDistance"/>),
+        /// 실패를 한 덩어리로 보면 <b>적이 뒤로 구르는 동안 허공에서 스파크가 튄다</b>.</para>
+        ///
+        /// <para><b>왜 임팩트 시각을 같이 주나</b>: 확정은 마지막 노드를 입력한 순간이고 칼이 만나는 것은
+        /// 그보다 <c>goodWindow + ImpactOffset</c> 뒤다(<see cref="OnEnemyKilled"/>와 <see cref="OnEnemyBurst"/>가
+        /// 갈려 있는 것과 같은 이유). 시각을 실어 보내면 구독자는 예약만 하면 된다.</para>
+        /// </summary>
+        public event Action<Pattern, EnemyReaction, float> OnEnemyReacted;
 
         /// <summary>기즈모용 — 지금 살아 있는 계획. 숫자로는 안 보이는 문제라 씬 뷰에 그린다.</summary>
         private DuelPlan? lastPlan;
@@ -208,7 +262,7 @@ namespace EnemySpace
             public EnemyView opponent;
             public SliceSet set;
 
-            /// <summary>실제로 갈라지는 시각 = <b>사망 클립의 트림 끝</b>. 클립이 없으면 임팩트 시각(예전 동작).</summary>
+            /// <summary>실제로 갈라지는 시각 = <b>임팩트 프레임</b>. 히트스톱이 걸리면 정지 시간만큼 뒤로 밀린다.</summary>
             public float burstTime;
         }
 
@@ -529,14 +583,14 @@ namespace EnemySpace
         /// 한 걸음이라도 마중 나와야 교전으로 보인다. 그 몫이 창 전체로 늘어져 기어가는 문제는
         /// <c>EnemyView.EarliestArrival</c>이 막는다(빨리 가서 서고 플레이어를 바라본다).</para>
         /// </summary>
-        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime)
+        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime)
         {
             Vector3 player = PlayerPosition;
             float distance = DuelDistanceOf(template);
 
             // 상대가 없으면(디버그 경로) 플레이어는 제자리, 적 자리만 앞에 잡아 준다.
             if (opponent == null)
-                return new DuelPlan(player, player + Vector3.forward * distance, arriveTime);
+                return new DuelPlan(player, player + Vector3.forward * distance, arriveTime, playerArriveTime);
 
             // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴 등)
             // transform.position은 곧 떠날 위치다. 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
@@ -547,7 +601,25 @@ namespace EnemySpace
             Vector3 playerTarget = meet - dir * (distance * playerShare);
             playerTarget.y = player.y;
 
-            return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime);
+            return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime, playerArriveTime);
+        }
+
+        /// <summary>
+        /// 플레이어가 도착할 시각. <b>재접근(같은 상대와 이어 싸움)에서만 앞당긴다.</b>
+        ///
+        /// <para>주 경로(새 표적)는 <see cref="TakeTargetForWindow"/>가 <c>cruiseSpeed × 창</c>으로 거리를 잡아
+        /// 이미 체감 속도가 일정하다 — 거기서 창을 더 줄이면 <c>cruiseSpeed</c>를 넘어 달린다.
+        /// 반면 재접근은 그 규율을 안 거쳐 거리를 <c>failRetreatDistance</c>가 통째로 정하고,
+        /// 창이 길면 그 거리가 창 전체로 늘어져 <b>0.9 m/s로 기어간다</b>. 이 경로에만 비율을 건다.</para>
+        /// </summary>
+        private float ResolvePlayerArriveTime(float arriveTime, bool reapproach)
+        {
+            if (!reapproach || playerApproachShare >= 1f) return arriveTime;
+
+            float window = arriveTime - Time.time;
+            if (window <= 0f) return arriveTime;
+
+            return Time.time + window * playerApproachShare;
         }
 
         // ── 이벤트 처리 ──────────────────────────────────────────────────────────
@@ -647,6 +719,10 @@ namespace EnemySpace
 
             float duelDistance = DuelDistanceOf(r.template);
 
+            // 상대가 남아 있다 = 직전 교전이 처치로 끝나지 않았다 = 같은 적에게 다시 다가간다.
+            // 이 경로만 거리가 창에 안 맞춰지므로 여기서만 이동 시간을 줄인다.
+            bool reapproach = currentOpponent != null;
+
             // 상대가 비어 있으면(직전 교전이 처치로 끝났다) 창에 맞는 거리의 적을 새로 고른다.
             // 살아 있으면 그대로 이어 싸운다 — "실패하면 같은 상대와 계속"이 여기서 지켜진다.
             if (currentOpponent == null)
@@ -659,18 +735,44 @@ namespace EnemySpace
             var opponent = currentOpponent;
             r.opponent = opponent;
 
-            var plan = BuildDuelPlan(opponent, r.template, arriveTime);
+            var plan = BuildDuelPlan(opponent, r.template, arriveTime, ResolvePlayerArriveTime(arriveTime, reapproach));
             lastPlan = plan;
             OnDuelScheduled?.Invoke(plan);
 
             if (opponent != null)
-                opponent.AssignAttack(r.attack, r.impactTime, plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+                AssignEngageClip(opponent, r, plan);
 
             if (r.cue.projectile != null && projectileDirector != null)
             {
                 Vector3 origin = opponent != null ? opponent.RingPosition : Center;
                 projectileDirector.Reserve(r.token, r.cue.projectile, r.startTime, r.impactTime, Vector2.zero, origin);
             }
+        }
+
+        /// <summary>
+        /// 이 교전에서 적이 재생할 클립을 고른다. <b>두 경로는 배타적이다</b> —
+        /// <c>Reservation.attack</c>은 <c>Attacker.Enemy</c>일 때만 채워지고, 견제는 <c>Attacker.Player</c> 전용이다.
+        ///
+        /// <para><b>견제는 이 구간이 원래 비어 있었기 때문에 존재한다.</b> 플레이어가 공격자인 패턴에서 적은
+        /// 휘두르지 않으므로 클립이 없었고, 그래서 표적이 된 순간부터 베이는 순간까지 <b>가만히 서 있었다</b>.</para>
+        ///
+        /// <para>클립이 없거나 창이 <see cref="minFeintWindow"/>보다 짧으면 <see cref="EnemyView.AssignFeint"/>가
+        /// 자리만 잡고 물러나 <b>기본 Idle</b>이 유지된다 — 예전 동작 그대로다.</para>
+        /// </summary>
+        private void AssignEngageClip(EnemyView opponent, Reservation r, DuelPlan plan)
+        {
+            var feint = AttackerOf(r.template) == Attacker.Player ? r.template?.EnemyFeint : null;
+
+            // 창이 너무 짧으면 아예 걸지 않는다 — 깜빡임으로만 보이는 재생은 없느니만 못하다.
+            bool roomy = (r.impactTime - Time.time) >= minFeintWindow;
+
+            if (feint != null && feint.IsUsable && roomy)
+            {
+                opponent.AssignFeint(feint, r.impactTime, plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+                return;
+            }
+
+            opponent.AssignAttack(r.attack, r.impactTime, plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
         }
 
         /// <summary>가장 오래된 미배정 예약 하나를 배정한다. 예약이 확정될 때마다 불린다.</summary>
@@ -727,12 +829,65 @@ namespace EnemySpace
                 if (r.cue.killOnSuccess && playerSucceeded)
                     KillOpponent(opponent, ResolveDeathSet(r), r.impactTime, r.template?.EnemyDeath); // 안에서 상대 해제
                 else
-                    opponent.Resolve(playerSucceeded, AttackerOf(r.template), failRetreatDistance, retreatDuration);
+                {
+                    // 물러날 자리는 무대를 아는 쪽이 정한다 — 뷰는 무대 중심도 반경도 모른다.
+                    float retreat = ResolveRetreatDistance(r, playerSucceeded);
+                    Vector3 retreatTarget = EnemyRing.PickRetreatTarget(
+                        opponent.transform.position, -opponent.transform.forward, Center, stageRadius, retreat);
+
+                    opponent.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, retreatTarget);
+
+                    // 반응 통지 — 판정은 EnemyView.Resolve의 parried 식과 '같은 retreat 값'을 본다.
+                    // 다른 값으로 다시 계산하면 애니메이션과 이펙트가 언젠가 어긋난다.
+                    if (!playerSucceeded)
+                    {
+                        bool parried = AttackerOf(r.template) != Attacker.Enemy && retreat <= 0f;
+                        OnEnemyReacted?.Invoke(r.template, parried ? EnemyReaction.Parry : EnemyReaction.Evade, r.impactTime);
+                    }
+                }
             }
 
             // 이 확정이 곧 '다음 패턴이 판정 대상이 되는 순간'이다(CLAUDE.md §3 — 같은 프레임에 즉시 승계).
             // 승격 여부가 위에서 이미 반영됐으므로 currentOpponent가 언제나 정답이다.
             BindNextReservation();
+        }
+
+        /// <summary>
+        /// 실패한 적이 물러날 거리. <b>다음 패턴의 창이 감당하면 회피, 아니면 0(= 제자리 패링)</b>이다.
+        ///
+        /// <para><b>왜 조건부인가</b>: 물러나면 플레이어가 다시 다가가야 하는데, 그 재접근은
+        /// <see cref="TakeTargetForWindow"/>를 안 거친다(같은 적이 유지되므로). 즉 거리를 창에 맞추는 규율이
+        /// 빠져 있어 <b>창이 짧으면 그대로 늘어져 기어간다</b> — 실측 0.9 m/s, <see cref="cruiseSpeed"/>의 1/5.
+        /// 창이 넉넉할 때만 물러나면 그 구간은 <c>cruiseSpeed</c>로 달려와 회피가 회피로 보이고,
+        /// 짧은 구간은 제자리 공방이 된다. <b>음악이 정한 창이 곧 연출을 고른다.</b></para>
+        ///
+        /// <para><b>적이 공격자인 실패는 언제나 물러난다</b> — 그건 회피가 아니라 벤 뒤의 여파이고,
+        /// 플레이어는 맞아서 어차피 피격 클립에 묶인다.</para>
+        ///
+        /// <para>다음 예약이 없으면(곡 공백) <b>물러나지 않는다.</b> 돌아올 사람이 없어 물러난 채로 남는다.</para>
+        /// </summary>
+        private float ResolveRetreatDistance(Reservation r, bool playerSucceeded)
+        {
+            if (playerSucceeded || AttackerOf(r.template) == Attacker.Enemy) return failRetreatDistance;
+
+            // r은 위에서 이미 제거됐으므로 선두가 곧 다음 패턴이다(FIFO).
+            if (reservations.Count == 0) return 0f;
+
+            var next = reservations[0];
+            float arriveTime = next.attack != null && next.attack.IsUsable
+                ? next.attack.ResolveScheduleStart(next.impactTime, Time.time)
+                : next.impactTime;
+
+            // 플레이어가 되돌아와야 하는 거리는 후퇴 거리의 playerShare 몫이다(BuildDuelPlan과 같은 비율).
+            //
+            // ponytail: arriveTime은 낙관적인 데드라인이다. 진짜 마감은 '플레이어 자기 스윙 시작'이라
+            // 그보다 이르다(Attacker.Player 패턴은 적 클립이 없어 arriveTime이 임팩트 그 자체가 된다).
+            // 스윙 시작은 CharacterActionPlayer만 알고 OnJudgeTargetBegan은 이 시점 뒤에 오므로 여기서는 못 본다.
+            // 그 간격을 retreatWindowMargin이 흡수한다 — 회피가 빠듯해 보이면 그 값을 키운다.
+            float travel = failRetreatDistance * playerShare / Mathf.Max(cruiseSpeed, 0.01f);
+            float needed = retreatDuration + travel + retreatWindowMargin;
+
+            return (arriveTime - Time.time) >= needed ? failRetreatDistance : 0f;
         }
 
         /// <summary>
@@ -755,8 +910,8 @@ namespace EnemySpace
         /// 무쌍 감각의 핵심이 이거다(베고 뒤도 안 돌아본다).
         ///
         /// <para>다만 <b>연출은 기다린다</b>(<see cref="PendingKill"/>). 상대 전환·링 보충은 여기서 즉시 하고,
-        /// 사망 클립을 임팩트에 정렬해 재생한 뒤 <b>그 클립의 트림 끝</b>에 갈라짐을 예약한다 —
-        /// 쓰러지는 것을 다 보고 나서 갈라진다. 클립이 없으면 예전대로 임팩트에 갈라진다.</para>
+        /// 사망 클립을 임팩트에 정렬해 재생한 뒤 <b>임팩트 프레임</b>에 갈라짐을 예약한다 —
+        /// 칼이 지나가는 그 순간 갈라진다. 클립 유무와 무관하게 같은 시각이다.</para>
         /// </summary>
         private void KillOpponent(EnemyView opponent, SliceSet set, float impactTime, ClipAlignment death)
         {
@@ -780,18 +935,17 @@ namespace EnemySpace
         /// 히트스톱을 <b>아직 안 터진 죽는 적 전부</b>에 전달한다. 보통 한 명이지만, 연속 처치 구간에서
         /// 앞선 적이 아직 쓰러지는 중일 수 있다 — 화면에서 같이 멈춰야 이음매가 안 생긴다.
         ///
-        /// <para><b>반환된 절단 시각을 반드시 되받아 쓴다.</b> 배속은 <see cref="EnemyView"/>가 알고
-        /// 시각은 <see cref="PendingKill.burstTime"/>이 드는 구조라, 갱신을 빠뜨리면 캐치업이 상한에 걸린
-        /// 경우에 <b>클립이 아직 도는데 먼저 갈라진다.</b></para>
+        /// <para><b>반환된 절단 시각을 반드시 되받아 쓴다.</b> 절단은 임팩트 그 순간이라 정지 시간만큼
+        /// 뒤로 밀리는데, 갱신을 빠뜨리면 <b>멈춘 프레임에 그대로 갈라져 정지가 안 보인다.</b></para>
         /// </summary>
-        public void ApplyHitStop(float duration, float maxCatchupSpeed, float minHeadroom)
+        public void ApplyHitStop(float duration)
         {
             for (int i = 0; i < pendingKills.Count; i++)
             {
                 var pending = pendingKills[i];
                 if (pending.opponent == null) continue;
 
-                pending.burstTime = pending.opponent.ApplyHitStop(duration, maxCatchupSpeed, minHeadroom, pending.burstTime);
+                pending.burstTime = pending.opponent.ApplyHitStop(duration, pending.burstTime);
             }
         }
 
@@ -931,11 +1085,20 @@ namespace EnemySpace
 
         void Update()
         {
-            TickPendingKills();
             RecycleDissolved();
             RecycleDebris();
             RecycleCorpses();
             EnforcePieceBudget();
+        }
+
+        /// <summary>
+        /// 절단은 <b>LateUpdate</b>에서 판정한다. 절단 시각과 히트스톱 발사 시각이 <b>같은 임팩트 프레임</b>이라
+        /// 둘 다 <c>Update</c>에 있으면 스크립트 실행 순서에 따라 <b>정지가 걸리기 전에 몸이 갈라진다</b>.
+        /// <c>HitStopDirector.Fire</c>가 <c>Update</c>에서 <c>burstTime</c>을 밀고 난 뒤 여기서 보게 만든다.
+        /// </summary>
+        void LateUpdate()
+        {
+            TickPendingKills();
         }
 
         /// <summary>수명이 다했거나 조각이 전부 잠든 시체를 회수한다.</summary>

@@ -65,6 +65,9 @@ namespace ChartGen
         /// <summary>일괄 처치 간격. 링 소모 속도를 정하는 값이라 눈에 보이게 둔다.</summary>
         private int killInterval = 4;
 
+        /// <summary>패턴 단위 일괄 처치의 대상 템플릿.</summary>
+        private Pattern killPattern;
+
         private void OnGUI()
         {
             DrawSourceFields();
@@ -389,6 +392,10 @@ namespace ChartGen
         ///
         /// <para>처치 간격이 곧 링 소모 속도다 — 매 엔트리 처치면 링(기본 6명)이 몇 초 만에 마르고
         /// 스폰이 계속 따라붙어야 한다. 간격을 눈에 보이게 두어 그 판단을 하게 한다.</para>
+        ///
+        /// <para><b>패턴 단위 일괄도 같이 둔다.</b> 처치가 어울리는지는 인덱스가 아니라 <b>동작</b>이
+        /// 정한다 — 마무리로 읽히는 획(<c>Pattern.SuccessAnimationClip</c>)만 죽이고 견제 획은 안 죽이는 식이다.
+        /// 같은 패턴이 채보 전체에 흩어져 있어 인덱스 규칙으로는 그 저작 의도를 표현할 수 없다.</para>
         /// </summary>
         private void DrawBulkCueTools()
         {
@@ -405,6 +412,33 @@ namespace ChartGen
             if (GUILayout.Button("번째만 처치", EditorStyles.miniButton)) ApplyKillInterval(killInterval);
 
             EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+
+            int matchCount = killPattern != null ? drafts.Count(d => d.template == killPattern) : 0;
+            EditorGUILayout.LabelField($"패턴 단위 ({matchCount}개)", EditorStyles.miniBoldLabel, GUILayout.Width(140));
+
+            killPattern = (Pattern)EditorGUILayout.ObjectField(killPattern, typeof(Pattern), false);
+
+            using (new EditorGUI.DisabledScope(killPattern == null))
+            {
+                if (GUILayout.Button("이 패턴 켜기", EditorStyles.miniButton)) SetKillForPattern(killPattern, true);
+                if (GUILayout.Button("이 패턴 끄기", EditorStyles.miniButton)) SetKillForPattern(killPattern, false);
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
+        /// <summary>지정 패턴을 쓰는 엔트리만 처치 지시를 설정한다. 다른 패턴 엔트리는 건드리지 않는다.</summary>
+        private void SetKillForPattern(Pattern template, bool value)
+        {
+            foreach (var d in drafts)
+            {
+                if (d.template != template) continue;
+
+                d.enemyCue ??= new EnemySpace.EnemyCue();
+                d.enemyCue.killOnSuccess = value;
+            }
         }
 
         private void SetAllKill(bool value)
@@ -524,6 +558,8 @@ namespace ChartGen
                 EditorGUILayout.LabelField(" ", "↑ 패턴 에셋에서 편집합니다", EditorStyles.miniLabel);
             }
 
+            DrawFeint(draft, index);
+
             draft.enemyCue.killOnSuccess = EditorGUILayout.Toggle(
                 new GUIContent("성공 시 처치", "이 공격을 성공하면 현재 상대를 처치하고 다음 적으로 넘어간다. 실패하면 교전이 이어진다."),
                 draft.enemyCue.killOnSuccess);
@@ -545,6 +581,82 @@ namespace ChartGen
         }
 
         private readonly Dictionary<int, bool> cueFoldouts = new Dictionary<int, bool>();
+
+        // ── 견제 클립 정보 ──────────────────────────────────────────────────
+
+        /// <summary>판정 종료가 마지막 노드에서 얼마나 뒤인지(PatternHandler.goodWindow). 창 표시는 근사면 충분하다.</summary>
+        private const float GoodWindowApprox = 0.1f;
+
+        /// <summary>
+        /// 견제 클립(<c>Pattern.EnemyFeint</c>)을 확인용으로 보여 준다. <b>여기서 편집하지 않는다</b> —
+        /// 패턴 소유 값이라 위의 회색 필드들과 같은 규율이다.
+        ///
+        /// <para><b>이 엔트리의 실제 창을 같이 적는다.</b> 클립이 창보다 길면 배속으로 압축되거나 잘리는데,
+        /// 그 판단은 클립 길이만 봐서는 할 수 없고 <b>직전 엔트리와의 간격</b>을 알아야 한다.
+        /// 저작자가 그 자리에서 판단할 수 있어야 트림 길이를 고칠 수 있다.</para>
+        ///
+        /// <para>⚠ <b>여기에 클립 프리뷰를 넣지 않는다.</b> 내장 <c>AnimationClipEditor</c>를
+        /// <c>Editor.CreateEditor</c>로 만들어 <c>OnInteractivePreviewGUI</c>를 부르면
+        /// 인스펙터 밖에서는 내부 아바타 프리뷰가 초기화되지 않아 매 프레임 NullReferenceException이 터진다
+        /// (견제 클립이 배정된 엔트리를 그리는 순간 콘솔이 막힌다). 그래서 트림 길이를 숫자로 병기하고,
+        /// 정밀 저작은 <c>Pattern Action Editor</c>로 넘긴다.</para>
+        /// </summary>
+        private void DrawFeint(ChartEntryDraft draft, int index)
+        {
+            var template = draft.template;
+            if (template == null) return;
+            if (template.Attacker == EnemySpace.Attacker.Enemy) return; // 그 구간은 EnemyAttack이 채운다
+
+            var feint = template.EnemyFeint;
+
+            if (feint?.Clip == null)
+            {
+                EditorGUILayout.LabelField("견제 동작", "없음 — 표적이 된 뒤 임팩트까지 기본 Idle로 선다", EditorStyles.miniLabel);
+                DrawOpenActionEditorButton(template);
+                return;
+            }
+
+            float trim = feint.ResolvedDuration / feint.Speed;
+            float window = ResolveFeintWindow(index, template);
+
+            EditorGUILayout.LabelField("견제 동작",
+                $"{feint.Clip.name} · 트림 {trim:0.00}s / 창 {window:0.00}s");
+
+            if (window > 0f && trim > window)
+            {
+                EditorGUILayout.HelpBox(
+                    $"클립({trim:0.00}s)이 이 엔트리의 창({window:0.00}s)보다 깁니다 — 배속으로 압축되거나 임팩트에서 잘립니다.\n" +
+                    "트림을 줄이세요(0.8초 이하 권장).",
+                    MessageType.Warning);
+            }
+
+            DrawOpenActionEditorButton(template);
+        }
+
+        private void DrawOpenActionEditorButton(Pattern template)
+        {
+            if (GUILayout.Button("Pattern Action Editor로 열기"))
+                AnimationClipTrimmerWindow.Open(template);
+        }
+
+        /// <summary>
+        /// 이 엔트리의 견제 창 — 직전 엔트리가 끝나는 순간(= 표적이 되는 순간)부터 임팩트까지.
+        /// 첫 엔트리는 직전이 없어 0을 돌려주고, 그때는 경고를 띄우지 않는다.
+        /// </summary>
+        private float ResolveFeintWindow(int index, Pattern template)
+        {
+            if (index <= 0 || index >= drafts.Count) return 0f;
+
+            var prev = drafts[index - 1];
+            var cur = drafts[index];
+            if (prev.onsetTimes == null || prev.onsetTimes.Length == 0) return 0f;
+            if (cur.onsetTimes == null || cur.onsetTimes.Length == 0) return 0f;
+
+            float prevLast = prev.onsetTimes[prev.onsetTimes.Length - 1];
+            float curLast = cur.onsetTimes[cur.onsetTimes.Length - 1];
+
+            return curLast + GoodWindowApprox + template.ImpactOffset - prevLast;
+        }
 
         private void Reassign(ChartEntryDraft draft)
         {

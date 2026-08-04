@@ -8,7 +8,10 @@ using UnityEngine;
 ///   `시작 = max(임팩트정렬시각 − 임팩트까지의 재생시간, 첫노드)` 지점에 예약해 조기 재생한다.
 ///   임팩트 프레임 이후의 잔여 구간은 <b>같은 배속으로 그대로 이어 재생</b>되어 마무리 동작이 뒤에 남는다.
 ///   재생시간은 트림(AnimationStartOffset/Duration/ImpactTime)과 패턴 배속(AnimationSpeed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
-/// - 미스(첫 미스 1회): 그 순간 힛(Hit) 클립을 재생하고 예약/진행 중이던 성공 애니를 취소한다 — 재생 중이던 베기는 힛 크로스페이드로 즉시 끊긴다.
+/// - 미스(첫 미스 1회): 예약/진행 중이던 성공 애니를 취소한다. 힛(Hit) 클립은 <b>적이 공격자(<c>Attacker.Enemy</c>)일 때만</b>,
+///   그것도 첫 미스 순간이 아니라 <b><c>impactTime</c>에 예약해서</b> 재생한다(그때 적 칼이 닿으므로 — 첫 미스 순간엔 아직 오는 중이다).
+///   플레이어가 공격자면 적은 애초에 휘두르지 않았으므로 <b>피격 자체가 없고 헛스윙으로 끝난다</b>(적은 제자리에서 패링한다).
+///   재생 중이던 베기는 힛 크로스페이드로 즉시 끊긴다.
 ///
 /// <b>정렬 앵커는 표적 절단 시각이다.</b> `임팩트정렬시각 = Deadline + Pattern.ImpactOffset`으로,
 /// <see cref="SliceSpace.SliceTargetDirector"/>가 표적 도착에 쓰는 식과 <b>동일하다</b>. 그래서 칼날이 지나가는 순간과
@@ -23,10 +26,10 @@ using UnityEngine;
 /// - <b>연계 X</b> — comboLinkWindow 밖(곡 공백). <b>트림 끝에서 곧바로 Release 스테이트로 CrossFade</b>하고(애니메이터에는 Attack→Release 전이가 없다 — 진입은 코드가 유일하게 통제한다),
 ///   releaseDuration에 맞춰 압축해 <b>끝까지 재생한 뒤</b> blendOutDuration 동안 base Idle로 페이드한다.
 ///
-/// <b>base 로코모션은 경로에 따라 클립이 갈린다.</b> base Running Layer는 평소 Idle이 기본이고, 연계 O·간격 여유(콤보 사이)를 탈 때 Sprint로,
-/// 연계 X(곡 공백 복귀)를 탈 때 다시 Idle로 CrossFade한다(SwitchBaseState). 전환은 Attack 웨이트에 가려진 동안 일어나 눈에 띄지 않는다.
-/// 콤보 gap 대부분은 시작 순간 Release가 트리거되므로(hasPending이 뒤늦게 섬), "Release를 냈는가"가 아니라 <b>"Release가 releaseEndTime까지 완주했는가"(releaseCompleted)</b>로
-/// 진짜 곡 공백과 콤보 gap을 가른다. 완주했으면 Idle, 인터럽트됐으면 Sprint. releaseCompleted는 다음 PlaySlot에서 리셋된다.
+/// <b>base 로코모션의 소유자는 둘이고 시간으로 갈린다.</b> 도착 전(<c>convergeUntil</c>까지)은 수렴이 주인이고
+/// <see cref="HandleDuelScheduled"/>가 이동 속도에 맞춰 Sprint/Quickshift를 건다. 도착 뒤는 복귀가 주인이고 언제나 <b>Idle</b>이다 —
+/// 움직이지 않는데 달리는 클립을 걸면 제자리에서 달린다(<c>SwitchBaseStateUnlessConverging</c>이 수렴 중에는 물러나므로,
+/// 복귀 경로가 실제로 실행되는 때는 이미 도착해 서 있는 순간뿐이다). 전환은 Attack 웨이트에 가려진 동안 일어나 눈에 띄지 않는다.
 /// 세 경로 모두 actionEndTime에 AttackSpeed를 1로 되돌려 마무리 동작이 배속으로 지나가지 않게 한다.
 ///
 /// AnimatorOverrideController로 듀얼 슬롯(Attack_A, Attack_B)을 교대로 교체하며 재생해 모션 끊김(Popping)을 방지한다. 재생할 클립이 없으면 무연출로 넘어간다.
@@ -85,15 +88,29 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private string sprintSpeedParam = "SprintSpeed";
     [Tooltip("Sprint 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
     [SerializeField] private AnimationClip sprintClip;
-    [Tooltip("Sprint 배속의 기준 이동 속도(m/s). 이 속도로 갈 때 클립이 1배속이 된다.")]
+    [Tooltip("Sprint 애니메이션이 1배속으로 보일 이동 속도(m/s). 배속 = 실제 이동속도 ÷ 이 값.\n" +
+             "다리 회전이 실제 이동보다 빠르면(발이 미끄러지면) 이 값을 올리고, 느리면 내린다.\n" +
+             "상한이 아니다 — 이 값을 넘는 속도로 이동하면 배속도 1을 넘는다.\n" +
+             "예: 이동 4.5m/s일 때 이 값이 4.5면 1배속, 2면 2.25배속(다리가 두 배 넘게 빨라짐).")]
     [SerializeField] private float sprintReferenceSpeed = 4.5f;
+    [Tooltip("Sprint 배속의 하한/상한(x = 배속). 계산된 배속을 이 범위로 자른다.\n" +
+             "⚠ 잘리면 다리 회전과 실제 이동이 어긋난다(발 미끄러짐) — 그림이 무너지는 극단값만 막는 안전장치다.\n" +
+             "끄려면 (0.01, 99) 같은 넓은 범위를 넣는다.")]
+    [SerializeField] private Vector2 sprintSpeedRange = new Vector2(0.6f, 2f);
+    [Tooltip("Sprint를 쓰려면 실제 이동 속도가 이 값(m/s) 이상이어야 한다. 미만이면 Quickshift로 간다 — " +
+             "느린 Sprint는 배속이 그만큼 떨어져 제자리에서 다리만 젓는 그림이 된다(실패 후 재접근이 0.9m/s).")]
+    [SerializeField] private float minSprintTravelSpeed = 2f;
+    [Tooltip("Quickshift 배속의 하한. 창이 클립보다 길어 늘여 쓸 때 무한정 느려지지 않게 막는다. " +
+             "1로 두면 늘이지 않는다(클립이 먼저 끝나고 남은 구간은 미끄러진다).")]
+    [SerializeField] private float minQuickshiftSpeed = 0.6f;
     [Tooltip("이 거리(m) 미만이면 로코모션을 켜지 않는다 — 제자리에서 발을 구르지 않게.")]
     [SerializeField] private float convergeMinDistance = 0.15f;
     [Tooltip("수렴 로코모션의 판단 근거를 콘솔에 찍는다(에디터 전용). 모션이 안 나올 때 원인을 가른다.")]
     [SerializeField] private bool logConvergeDecision = true;
 
     [Header("Clips")]
-    [Tooltip("패턴 실패 시 재생할 피격 리액션 클립들. 번갈아 재생된다.")]
+    [Tooltip("적이 공격자인 패턴을 실패했을 때 재생할 피격 리액션 클립들. 번갈아 재생된다.\n" +
+             "플레이어가 공격자인 패턴의 실패는 헛스윙이라 이 클립이 쓰이지 않는다.")]
     [SerializeField] private AnimationClip[] hitClips; // Hit1, Hit2
 
     [Header("Tuning")]
@@ -159,7 +176,6 @@ public class CharacterActionPlayer : MonoBehaviour
     private float convergeUntil;
     private int currentBaseStateHash; // 현재 base 레이어가 향하는 스테이트(중복 CrossFade 방지)
     private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
-    private bool releaseCompleted; // 이번 사이클에 Release가 releaseEndTime까지 완주했는지(= 진짜 곡 공백). base=Idle 유지 판별용.
     private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
     private bool useSlotA = true; // 듀얼 슬롯 전환 플래그
@@ -340,12 +356,11 @@ public class CharacterActionPlayer : MonoBehaviour
         {
             if (HasRoomForRunExposure())
             {
-                // 콤보 사이 잠깐 달리는 구간 — Sprint를 드러낸다.
-                // 단, 이번 사이클에 Release가 '완주'했다면(=진짜 곡 공백을 거쳤다면) Idle을 유지한다.
-                // gap 대부분은 시작 순간 Release가 트리거되지만(hasPending이 뒤늦게 섬), 다음 연계에
-                // 인터럽트되면 Release는 완주하지 못한다 → 그 경우는 콤보 gap이므로 Sprint.
-                // Release가 releaseEndTime까지 완주한 경우만 진짜 공백 → Idle.
-                SwitchBaseStateUnlessConverging(releaseCompleted ? idleStateHash : sprintStateHash);
+                // ⚠ 여기서 Sprint를 걸면 안 된다. SwitchBaseStateUnlessConverging은 수렴 중에는 물러나므로
+                // 이 호출이 실제로 실행되는 때는 <b>이미 도착해 서 있는 순간</b>뿐이다 — 그때 Sprint를 걸면
+                // 제자리에서 달린다. 콤보 사이의 달리기는 HandleDuelScheduled가 이동 속도에 맞춰 이미 걸어 두었고
+                // (Sprint/Quickshift), 그 소유권은 convergeUntil까지다. 도착 뒤 남는 구간은 서 있는 구간이다.
+                SwitchBaseStateUnlessConverging(idleStateHash);
                 ApplyBlendOut();
             }
             // 수렴 중에는 웨이트를 올리지 않는다 — 올리면 Attack 레이어가 base를 덮어
@@ -365,7 +380,6 @@ public class CharacterActionPlayer : MonoBehaviour
         }
 
         // 곡 공백 복귀 — 평상시 Idle로 되돌린다.
-        releaseCompleted = true; // Release가 완주했다 → 이후 뒤늦게 hasPending이 서도 Idle 유지(다음 PlaySlot까지).
         SwitchBaseStateUnlessConverging(idleStateHash);
         ApplyBlendOut();
     }
@@ -377,18 +391,26 @@ public class CharacterActionPlayer : MonoBehaviour
     /// <summary>
     /// 결투 수렴 구간의 로코모션. <b>창으로 갈린다</b> — 거리가 아니다.
     ///
-    /// <para>기준은 <b>"클립 하나가 창을 채우는가"</b>다. Quickshift(대시)는 <b>루프가 아니라 1초짜리 단발</b>이라
-    /// 창이 그보다 길면 클립이 먼저 끝나고 남은 시간은 그냥 미끄러진다 — 예전엔 거리로 갈라서
-    /// 평균 창(1.48초) 대부분이 이 구멍에 빠졌다. Sprint는 루프라 길이에 상관없이 채운다.</para>
+    /// <para>기준은 <b>둘</b>이다 — "클립 하나가 창을 채우는가"와 <b>"그 속도가 달리기로 읽히는가"</b>.
+    /// Quickshift(대시)는 <b>루프가 아니라 1초짜리 단발</b>이라 창이 그보다 길면 클립이 먼저 끝나고
+    /// 남은 시간은 그냥 미끄러진다 — 예전엔 거리로 갈라서 평균 창(1.48초) 대부분이 이 구멍에 빠졌다.
+    /// Sprint는 루프라 길이에 상관없이 채운다.</para>
     ///
     /// <list type="bullet">
-    /// <item>창 &gt; 클립 길이 → <b>Sprint</b>. 이동 속도에 맞춰 배속(다리와 몸이 따로 놀지 않게)</item>
-    /// <item>창 ≤ 클립 길이 → <b>Quickshift</b>. 창 안에 완주하도록 배속을 역산</item>
+    /// <item>창 &gt; 클립 길이 <b>그리고</b> 이동 속도 ≥ <see cref="minSprintTravelSpeed"/> → <b>Sprint</b>. 이동 속도에 맞춰 배속(다리와 몸이 따로 놀지 않게)</item>
+    /// <item>그 외 → <b>Quickshift</b>. 창을 정확히 채우도록 배속을 역산</item>
     /// </list>
+    ///
+    /// <para><b>⚠ 속도 조건이 없으면 느린 이동이 통째로 Sprint로 빠진다.</b> Sprint 배속은 이동 속도에 비례하므로
+    /// 느릴수록 클립도 같이 느려진다 — 실패 후 재접근(1.3m를 창 1.4초에)이 <b>0.9 m/s = 0.2배속</b>이라
+    /// 제자리에서 다리만 젓는 그림이 됐다. 그 구간은 <b>거리가 창에 맞춰지지 않는 유일한 경로</b>라
+    /// (재접근은 <c>TakeTargetForWindow</c>를 안 거친다) 구조적으로 느리고, 그래서 조건이 필요하다.
+    /// 같은 속도라도 <b>단발 대시는 성립한다</b> — 대시는 "짧게 확 붙는 동작"이라 늘여도 대시로 읽힌다.</para>
     ///
     /// <para><b>배속에 상한을 두지 않는다.</b> 자르면 클립이 창 안에 완주하지 못해 몸은 도착했는데
     /// 다리는 대시 도중에 끊긴다. 상한이 필요 없는 이유는 <b>배속이 올라가는 만큼 화면에 남는 시간도 같이 줄기</b>
-    /// 때문이다: 8배속 Quickshift는 0.12초짜리라 "튀는 클립"이 아니라 순식간에 붙는 그림으로 읽힌다.</para>
+    /// 때문이다: 8배속 Quickshift는 0.12초짜리라 "튀는 클립"이 아니라 순식간에 붙는 그림으로 읽힌다.
+    /// 반대쪽 하한만 <see cref="minQuickshiftSpeed"/>로 막는다(무한정 슬로모션이 되지 않게).</para>
     ///
     /// <para>거의 안 움직이는 경우(<see cref="convergeMinDistance"/> 미만)는 아무것도 하지 않는다 —
     /// 제자리에서 발을 구르면 더 부자연스럽다.</para>
@@ -396,21 +418,27 @@ public class CharacterActionPlayer : MonoBehaviour
     private void HandleDuelScheduled(EnemySpace.EnemyDirector.DuelPlan plan)
     {
         float distance = Vector3.ProjectOnPlane(plan.PlayerPosition - transform.position, Vector3.up).magnitude;
-        float window = plan.ArriveTime - Time.time;
+
+        // ⚠ ArriveTime이 아니라 PlayerArriveTime이다 — 재접근에서는 플레이어가 그보다 일찍 도착한다.
+        // 실제 이동이 끝나는 시각으로 봐야 배속이 맞는다(창을 길게 잡으면 다 온 뒤에도 다리가 돈다).
+        float window = plan.PlayerArriveTime - Time.time;
 
         if (runningLayerIndex < 0) { LogConverge("레이어 없음", distance, window); return; }
         if (distance < convergeMinDistance) { LogConverge("거리 부족", distance, window); return; }
         if (window <= 0f) { LogConverge("시간 없음", distance, window); return; }
 
         // 도착할 때까지 base의 주인은 수렴이다. 복귀 로직이 매 프레임 되찾아가지 못하게 막는다.
-        convergeUntil = plan.ArriveTime;
+        // 도착 뒤 남는 시간은 복귀 로직에 돌려준다(서 있는 구간이 로코모션에 묶이지 않게).
+        convergeUntil = plan.PlayerArriveTime;
 
         float dashLength = quickshiftClip != null ? quickshiftClip.length : 1f;
+        float travelSpeed = distance / window;
 
-        if (window > dashLength)
+        if (window > dashLength && travelSpeed >= minSprintTravelSpeed)
         {
             // 실제 이동 속도에 배속을 맞춘다 — 안 맞추면 발이 지면을 긁는다.
-            float runSpeed = Mathf.Max(0.1f, distance / window) / Mathf.Max(sprintReferenceSpeed, 0.01f);
+            float runSpeed = Mathf.Max(0.1f, travelSpeed) / Mathf.Max(sprintReferenceSpeed, 0.01f);
+            runSpeed = Mathf.Clamp(runSpeed, sprintSpeedRange.x, sprintSpeedRange.y);
             animator.SetFloat(sprintSpeedHash, runSpeed);
 
             // 배속이 바뀌었으므로 같은 스테이트라도 처음부터 다시 건다(SwitchBaseState는 같으면 조기 반환).
@@ -420,8 +448,10 @@ public class CharacterActionPlayer : MonoBehaviour
             return;
         }
 
-        // 클립 길이 / 남은 시간 = 완주에 필요한 배속. 하한 1(느리게 늘이지 않는다), 상한은 없다.
-        float speed = Mathf.Max(1f, dashLength / window);
+        // 클립 길이 / 남은 시간 = 창을 정확히 채우는 배속. 상한은 없고(문서 참조), 하한만 둔다.
+        // 창이 클립보다 길어도(느린 이동 경로) 늘여서 채운다 — 0.7배 대시는 여전히 대시로 읽히지만
+        // 0.2배 Sprint는 기어가는 그림이 된다. minQuickshiftSpeed 아래로는 늘이지 않는다.
+        float speed = Mathf.Max(minQuickshiftSpeed, dashLength / window);
         animator.SetFloat(quickshiftSpeedHash, speed);
         animator.CrossFadeInFixedTime(quickshiftStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
         currentBaseStateHash = quickshiftStateHash;
@@ -661,12 +691,10 @@ public class CharacterActionPlayer : MonoBehaviour
     /// (<c>Time.timeScale</c>은 쓸 수 없다. 채보는 <c>audioSource.time</c>으로 도는데 판정은 <c>Time.time</c>이라
     /// 시계를 내리면 둘이 영구히 갈라진다 — 히트스톱 한 번이 <c>perfectWindow</c>(0.05초)를 넘는다.)
     ///
-    /// <para><b>⚠ 플레이어는 '밀기'다. 캐치업이 아니다</b> — 적(<c>EnemyView.ApplyHitStop</c>)과 모델이 다르다.
+    /// <para><b>⚠ '밀기'다. 캐치업이 아니다</b> — 적(<c>EnemyView.ApplyHitStop</c>)과 같은 모델이다.
     /// 공격 클립은 임팩트를 <b>트림 끝 근처</b>에 찍으므로 임팩트 시점에 남은 트림 내용이
     /// 실측 0.036~0.109초뿐이다(전 패턴 10/10). 정지 0.08초가 그보다 길어서
-    /// <b>재개하는 순간 이미 원래 종료 시각이 지나 있다</b> — 압축할 시간이 음수라 캐치업이 원리적으로 불가능하다.
-    /// 반대로 적 사망 클립은 <c>ImpactTime</c>이 트림 <i>시작</i> 근처라(§11-3) 잔여가 클립 대부분이고,
-    /// 그래서 그쪽만 원래 <c>burstTime</c>을 지킬 수 있다.</para>
+    /// <b>재개하는 순간 이미 원래 종료 시각이 지나 있다</b> — 압축할 시간이 음수라 캐치업이 원리적으로 불가능하다.</para>
     ///
     /// <para>그래서 여기서는 <b>복귀 스케줄을 정지 시간만큼 통째로 뒤로 민다</b>
     /// (<see cref="actionEndTime"/>·<see cref="recoveryEndTime"/>). 클립은 멈춘 자리에서 원래 배속으로 이어진다.
@@ -786,7 +814,6 @@ public class CharacterActionPlayer : MonoBehaviour
         blendInFromWeight = animator.GetLayerWeight(attackLayerIndex);
         blendOutLatched = false;
         releaseTriggered = false;
-        releaseCompleted = false; // 새 공격이 시작됐다 → 다음 gap은 다시 Sprint 후보.
         releaseEndTime = 0f;
 
         // CrossFadeInFixedTime의 fixedTimeOffset은 '클립 초'가 아니라 스테이트 speed가 곱해지는 '스테이트 재생 초'로 해석된다.

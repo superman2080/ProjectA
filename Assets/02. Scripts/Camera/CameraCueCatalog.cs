@@ -5,7 +5,7 @@ using UnityEngine;
 public enum CameraTrigger
 {
     PatternSuccess, // 표적이 갈라지는 순간(Deadline)
-    PatternMiss,    // 첫 미스 순간 — 피격(Hit) 애니메이션과 동기
+    PatternMiss,    // 적 칼이 실제로 닿는 순간(OnPlayerHit). ⚠ 플레이어가 공격자인 패턴에서는 발행되지 않는다 — 안 맞기 때문.
     PatternFailure, // 표적이 충돌·소멸하는 순간(Deadline)
     EnemyKilled,    // 적 처치 — 무쌍 타격감의 주 큐
 }

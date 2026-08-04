@@ -25,13 +25,24 @@ namespace PatternSpace
         /// </summary>
         public readonly float Deadline;
 
-        public PatternQueuedInfo(Pattern template, float startTime, float firstNodeTime, float lastNodeTime, float deadline)
+        /// <summary>
+        /// 노드별 입력 예정 시각(절대), 패턴 순서 그대로. <b>이 한 필드 덕분에 패턴 진행 중 임의의 노드에
+        /// 연출을 걸 수 있고</b>, 그 대가로 소비자가 이벤트를 더 구독하지 않아도 된다 —
+        /// 모든 기준 시각이 큐 투입 순간에 확정된다.
+        ///
+        /// <para>⚠ <b>'예정'이지 '실제'가 아니다.</b> 플레이어가 늦게 눌러도 이 값은 밀리지 않는다.
+        /// 입력 순간에 정확히 붙어야 하는 연출은 판정 이벤트(<c>OnFocusRingResolved</c>)를 쓴다.</para>
+        /// </summary>
+        public readonly float[] NodeTimes;
+
+        public PatternQueuedInfo(Pattern template, float startTime, float firstNodeTime, float lastNodeTime, float deadline, float[] nodeTimes = null)
         {
             Template = template;
             StartTime = startTime;
             FirstNodeTime = firstNodeTime;
             LastNodeTime = lastNodeTime;
             Deadline = deadline;
+            NodeTimes = nodeTimes;
         }
     }
 }
