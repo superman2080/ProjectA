@@ -96,7 +96,14 @@
       "Bash(git remote *)",
       "WebFetch(domain:www.gamedeveloper.com)",
       "Bash(sort -u -t: -k2)",
-      "Bash(xargs -0 -I{} du -k \"{}\")"
+      "Bash(xargs -0 -I{} du -k \"{}\")",
+      "Bash(git rm *)",
+      "Bash(grep -n \"public static\\\\|///\" Enemy/Core/EnemyRing.cs)",
+      "Bash(:)",
+      "Bash(grep -n \"성공하면 죽고 다음 적\\\\|경로 ②는 Sprint\\\\|Sprint\\(\\\\`Sprint_HS\\\\`\\)를 노출\\\\|### 11-3\\\\|### 11-4\" CLAUDE.md)",
+      "Bash(awk '/^  m_PositionCurves:/{p=1} p&&/path: root\\\\/add_weapon_r/{print \"FOUND pos curve at line \"NR; exit}' Swipe_1To9.anim)",
+      "Bash(grep -c \"inSlope: {x: 0, y: 0, z: 0, w: 0}\")",
+      "Bash(awk '{print $1}')"
     ]
   }
 }

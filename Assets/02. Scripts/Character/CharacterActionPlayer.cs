@@ -7,7 +7,7 @@ using UnityEngine;
 /// - 성공(베기): 판정 대상이 시작되면, <b>클립의 임팩트 프레임(칼날이 표적을 지나가는 프레임)이 표적 절단 시각에 오도록</b>
 ///   `시작 = max(임팩트정렬시각 − 임팩트까지의 재생시간, 첫노드)` 지점에 예약해 조기 재생한다.
 ///   임팩트 프레임 이후의 잔여 구간은 <b>같은 배속으로 그대로 이어 재생</b>되어 마무리 동작이 뒤에 남는다.
-///   재생시간은 트림(AnimationStartOffset/Duration/ImpactTime)과 패턴 배속(AnimationSpeed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
+///   재생시간은 슬롯의 트림(<c>ClipAlignment</c>의 StartOffset/Duration/ImpactTime)과 배속(Speed, 배속 하한)을 반영하고, 입력 구간이 짧으면 자동으로 더 배속한다(상한 maxAttackSpeed).
 /// - 미스(첫 미스 1회): 예약/진행 중이던 성공 애니를 취소한다. 힛(Hit) 클립은 <b>적이 공격자(<c>Attacker.Enemy</c>)일 때만</b>,
 ///   그것도 첫 미스 순간이 아니라 <b><c>impactTime</c>에 예약해서</b> 재생한다(그때 적 칼이 닿으므로 — 첫 미스 순간엔 아직 오는 중이다).
 ///   플레이어가 공격자면 적은 애초에 휘두르지 않았으므로 <b>피격 자체가 없고 헛스윙으로 끝난다</b>(적은 제자리에서 패링한다).
@@ -612,49 +612,19 @@ public class CharacterActionPlayer : MonoBehaviour
             ? info.Template.PlayerParry
             : info.Template.PlayerAttack;
 
-        if (alignment != null && alignment.IsUsable)
-        {
-            pendingClip = alignment.Clip;
-            pendingStartOffset = alignment.StartOffset;
-            pendingDur = alignment.ResolvedDuration;
-            pendingImpactSpan = alignment.ResolvedImpactSpan;
-            pendingBaseSpeed = alignment.Speed;
-        }
-        else
-        {
-            // 폴백: 아직 ClipAlignment로 이관되지 않은 기존 패턴 에셋(구 SuccessAnimationClip + 트림 4필드).
-            AnimationClip clip = info.Template.SuccessAnimationClip;
-            if (clip == null) return; // 미지정 — 무연출
+        // 슬롯이 비어 있으면 무연출이다. 예전에는 구 SuccessAnimationClip + 트림 4필드로 떨어지는 폴백이 있었지만,
+        // 템플릿이 전부 ClipAlignment로 이관돼 발동할 수 없는 분기가 됐다(같은 클립이 두 군데 적혀 갈라지기만 했다).
+        if (alignment == null || !alignment.IsUsable) return;
 
-            float startOffset = info.Template.AnimationStartOffset;
-            float dur = info.Template.AnimationDuration > 0f ? info.Template.AnimationDuration : clip.length - startOffset;
-            if (dur <= 0f) return;
-
-            pendingClip = clip;
-            pendingStartOffset = startOffset;
-            pendingDur = dur;
-            pendingImpactSpan = ResolveImpactSpan(info.Template, startOffset, dur);
-            pendingBaseSpeed = info.Template.AnimationSpeed;
-        }
+        pendingClip = alignment.Clip;
+        pendingStartOffset = alignment.StartOffset;
+        pendingDur = alignment.ResolvedDuration;
+        pendingImpactSpan = alignment.ResolvedImpactSpan;
+        pendingBaseSpeed = alignment.Speed;
 
         float playTime = pendingImpactSpan / pendingBaseSpeed; // 지정 배속으로 임팩트까지 가는 데 걸리는 시간
         pendingScheduleStart = Mathf.Max(impactAlignTime - playTime, info.FirstNodeTime);
         hasPending = true;
-    }
-
-    /// <summary>
-    /// 트림 시작부터 임팩트 프레임까지의 길이(클립 초). 임팩트가 오서링되지 않았거나 트림 범위 밖이면
-    /// <b>트림 끝</b>으로 폴백한다 — 그래야 값이 없는 기존 패턴도 그대로 동작한다.
-    /// </summary>
-    private static float ResolveImpactSpan(Pattern template, float startOffset, float dur)
-    {
-        float impactTime = template.AnimationImpactTime;
-        if (impactTime <= 0f) return dur;
-
-        float span = impactTime - startOffset;
-        if (span <= 0f || span > dur) return dur;
-
-        return span;
     }
 
     /// <summary>

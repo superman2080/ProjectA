@@ -551,53 +551,6 @@ Transform:
   - {fileID: 854156978}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &195245532
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 195245534}
-  - component: {fileID: 195245533}
-  m_Layer: 0
-  m_Name: BeatSyncDirector
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &195245533
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 195245532}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e23d0b98fda818f4ba06a2f482c8bab1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BeatSyncDirector
-  chartPlayer: {fileID: 854156976}
-  minPulseInterval: 0.6
-  beatSyncEnabled: 1
---- !u!4 &195245534
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 195245532}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &250229437
 GameObject:
   m_ObjectHideFlags: 0
@@ -4510,6 +4463,12 @@ MonoBehaviour:
   minSpacing: 2.5
   minPlayerDistance: 5
   spawnCandidateCount: 24
+  clusterEnabled: 1
+  clusterSize: 4
+  clusterRadius: 2
+  clusterMoveSpeed: 3
+  spawnStagger: 0.15
+  spawnMaxOffset: 6
   rosterPool:
   - {fileID: 11400000, guid: 717046d96ae1fdd48a90a1a922ee9cac, type: 2}
   maxAttackSpeed: 2.5
@@ -4520,6 +4479,7 @@ MonoBehaviour:
   failRetreatDistance: 4
   retreatDuration: 0.25
   retreatWindowMargin: 0.35
+  chainKillRatio: 0.6
   playerApproachShare: 0.75
   scatterSpeed: 2.5
   scatterSpin: 180
@@ -5061,4 +5021,3 @@ SceneRoots:
   - {fileID: 194211820}
   - {fileID: 839471556}
   - {fileID: 618781549}
-  - {fileID: 195245534}

@@ -81,6 +81,33 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// </summary>
     private readonly Actor feint = new Actor { label = "적 — enemyFeint (견제)" };
 
+    /// <summary>
+    /// <see cref="feint"/> 자리에 어느 적 보조 슬롯을 열지. 셋 다 <b>적 한 명의 다른 시각 구간</b>이라
+    /// 배우를 늘리지 않고 슬롯만 갈아 끼운다(배우를 더 그리면 화면에 적이 여럿 서 있게 된다).
+    /// </summary>
+    private enum EnemyAuxSlot
+    {
+        Feint,   // 표적이 된 순간 ~ 임팩트 (Attacker.Player 전용)
+        Hit,     // 임팩트 — 맞았는데 안 죽었다(사슬 중간 타격)
+        Parry    // 임팩트 — 막아냈다
+    }
+
+    private EnemyAuxSlot enemyAuxSlot = EnemyAuxSlot.Feint;
+
+    private static string AuxSlotPath(EnemyAuxSlot slot) => slot switch
+    {
+        EnemyAuxSlot.Hit => "enemyHit",
+        EnemyAuxSlot.Parry => "enemyParry",
+        _ => "enemyFeint"
+    };
+
+    private static string AuxSlotLabel(EnemyAuxSlot slot) => slot switch
+    {
+        EnemyAuxSlot.Hit => "적 — enemyHit (피격)",
+        EnemyAuxSlot.Parry => "적 — enemyParry (패링)",
+        _ => "적 — enemyFeint (견제)"
+    };
+
     // 시간축 (임팩트 기준 상대시간)
     private float t;
     private bool isPlaying;
@@ -169,7 +196,22 @@ public class AnimationClipTrimmerWindow : EditorWindow
         EditorGUILayout.LabelField("역할",
             enemyIsAttacker ? "Enemy — 적 공격 → 플레이어 패링" : "Player — 플레이어 공격 → 적 사망");
 
-        if (!enemyIsAttacker && feint.HasClip)
+        EditorGUI.BeginChangeCheck();
+        enemyAuxSlot = (EnemyAuxSlot)EditorGUILayout.EnumPopup(
+            new GUIContent("적 보조 슬롯", "적 한 명의 다른 시각 구간이라 배우를 늘리지 않고 슬롯만 바꾼다.\n" +
+                                      "Feint = 표적이 된 순간~임팩트 / Hit = 맞았는데 안 죽음(사슬 중간) / Parry = 막아냄."),
+            enemyAuxSlot);
+        if (EditorGUI.EndChangeCheck()) LoadFromPattern();
+
+        if (enemyAuxSlot != EnemyAuxSlot.Feint)
+        {
+            EditorGUILayout.HelpBox(
+                "피격·패링은 임팩트에 시작합니다 — ImpactTime을 찍지 않으면 t = 0이 클립 시작입니다.\n" +
+                "⚠ 트림 0.5초 이하 권장: 길면 다음 패턴의 견제 클립이 끊습니다.",
+                MessageType.Info);
+        }
+
+        if (!enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Feint && feint.HasClip)
         {
             EditorGUILayout.HelpBox(
                 $"적은 한 줄로 진행합니다 — 견제 → (t = {-HandoffLead:0.00}s에서 처치 확정) → 사망.\n" +
@@ -214,7 +256,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
         enemy.label = enemyIsAttacker ? "적 — enemyAttack" : "적 — enemyDeath (사망)";
 
         // 견제는 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 enemyAttack이 채운다.
-        feint.slotPath = enemyIsAttacker ? null : "enemyFeint";
+        // 피격·패링은 역할과 무관하게 열어 둔다(적이 공격자여도 막힐 수는 있다).
+        feint.slotPath = enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Feint ? null : AuxSlotPath(enemyAuxSlot);
+        feint.label = AuxSlotLabel(enemyAuxSlot);
 
         var so = new SerializedObject(targetPattern);
         LoadActor(so, player);

@@ -385,7 +385,7 @@ Pattern [Pattern(4, 1)]     역할: Player — 플레이어 공격 → 적 사�
 - [ ] `Pattern`의 `sliceTarget` / `sliceTargetOffset` **2필드** 제거
   - ⚠ **`impactOffset`은 이 그룹이 아니다.** 이름이 갈렸고(`sliceTargetImpactOffset`에서 개명)
     지금은 다섯 소비자가 읽는 공통 앵커 보정이다 — **같이 지우면 안 된다**
-- [ ] `Pattern`의 구 `SuccessAnimationClip` + 트림 4필드 제거
+- [x] `Pattern`의 구 `SuccessAnimationClip` + 트림 4필드 제거 (2026-08-05, `docs/PatternChain/`)
   - 짝 에디터에서는 **이미 빠졌다**(3단계 참조). 남은 접근 경로는 패턴 인스펙터뿐이라,
     필드를 지우면 그것도 같이 사라진다
 - [ ] `CharacterActionPlayer`의 구 필드 폴백 경로 제거

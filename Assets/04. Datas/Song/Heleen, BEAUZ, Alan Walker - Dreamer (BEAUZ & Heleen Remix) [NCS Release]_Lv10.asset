@@ -18,10 +18,19 @@ MonoBehaviour:
   beatOffset: 0
   patternPool:
   - {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
+  - {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
+  - {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+  - {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
   - {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
   - {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
-  - {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
-  - {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+  - {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+  - {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
+  - {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+  - {fileID: 11400000, guid: cef745ae830485d4aaced1340bd2253b, type: 2}
+  - {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
+  - {fileID: 11400000, guid: d93fa021f33b2d141a53a7cbe58105fd, type: 2}
+  - {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
   entries:
   - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
     onsetTimes:
@@ -168,37 +177,51 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: cef745ae830485d4aaced1340bd2253b, type: 2}
     onsetTimes:
     - 16.4
     - 16.800001
-    - 17.2
     exposureDurations:
-    - 0.5
     - 0.5
     - 0.5
     spawnTimes:
     - 15.9
     - 16.300001
-    - 16.7
     enemyCue:
-      killOnSuccess: 1
+      killOnSuccess: 0
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - template: {fileID: 11400000, guid: d93fa021f33b2d141a53a7cbe58105fd, type: 2}
     onsetTimes:
+    - 17.2
     - 17.6
-    - 18
-    - 18.4
-    - 18.800001
     exposureDurations:
     - 0.5
     - 0.5
+    spawnTimes:
+    - 16.7
+    - 17.1
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
+    onsetTimes:
+    - 18
+    - 18.4
+    exposureDurations:
     - 0.5
     - 0.5
     spawnTimes:
-    - 17.1
     - 17.5
     - 17.9
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
+    onsetTimes:
+    - 18.800001
+    exposureDurations:
+    - 0.5
+    spawnTimes:
     - 18.300001
     enemyCue:
       killOnSuccess: 1
@@ -238,37 +261,51 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: cef745ae830485d4aaced1340bd2253b, type: 2}
     onsetTimes:
     - 22
     - 22.4
-    - 22.800001
     exposureDurations:
-    - 0.5
     - 0.5
     - 0.5
     spawnTimes:
     - 21.5
     - 21.9
-    - 22.300001
     enemyCue:
-      killOnSuccess: 1
+      killOnSuccess: 0
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - template: {fileID: 11400000, guid: d93fa021f33b2d141a53a7cbe58105fd, type: 2}
     onsetTimes:
+    - 22.800001
     - 23.2
-    - 23.6
-    - 24
-    - 24.4
     exposureDurations:
     - 0.5
     - 0.5
+    spawnTimes:
+    - 22.300001
+    - 22.7
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
+    onsetTimes:
+    - 23.6
+    - 24
+    exposureDurations:
     - 0.5
     - 0.5
     spawnTimes:
-    - 22.7
     - 23.1
     - 23.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
+    onsetTimes:
+    - 24.4
+    exposureDurations:
+    - 0.5
+    spawnTimes:
     - 23.9
     enemyCue:
       killOnSuccess: 1

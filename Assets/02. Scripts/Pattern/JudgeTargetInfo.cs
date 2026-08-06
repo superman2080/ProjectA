@@ -2,7 +2,7 @@ namespace PatternSpace
 {
     /// <summary>
     /// 판정 대상이 선두가 되는 순간의 불변 페이로드. 캐릭터 액션이 성공 애니 시작을 예약하는 데 쓴다.
-    /// 배속은 소비자가 <see cref="Template"/>.AnimationSpeed로 읽는다.
+    /// 배속은 소비자가 <see cref="Template"/>의 클립 슬롯(<c>ClipAlignment.Speed</c>)에서 읽는다.
     /// </summary>
     public readonly struct JudgeTargetInfo
     {

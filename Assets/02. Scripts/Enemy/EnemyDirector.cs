@@ -46,6 +46,53 @@ namespace EnemySpace
         [Tooltip("무대 배치 후보 수. 늘리면 간격이 고르지만 스폰 비용이 는다.")]
         [SerializeField] private int spawnCandidateCount = 24;
 
+        [Header("Cluster")]
+        [Tooltip("적을 무리 지어 배치한다. 끄면 예전처럼 무대 전체에 흩어진다(회귀 없음).")]
+        [SerializeField] private bool clusterEnabled = true;
+
+        [Tooltip("한 무리의 적 수. 무대에 유지할 총원(ringCount)은 이 값 × 2로 파생된다 —\n" +
+                 "지금 싸우는 무리(active)와 다음 무리(staged) 둘만 살아 있다.\n" +
+                 "⚠ 이 값이 곧 '제자리 난타가 몇 패턴 이어지는가'다. 무리 안에서는 이동이 0에 가까우므로\n" +
+                 "4면 3패턴 연속 정지 뒤 한 번 크게 대시한다(docs/EnemyCluster).\n" +
+                 "⚠ 하한 3 — 2 이하면 '무리'로 안 읽히고 매 처치마다 집결지가 바뀌어 어지럽다.")]
+        [Min(3)]
+        [SerializeField] private int clusterSize = 4;
+
+        [Tooltip("무리의 반경(m). 키우면 무리 안에서도 거리 선택지가 생겨 정지 구간이 줄지만,\n" +
+                 "'무리'라기보다 '느슨한 그룹'으로 읽힌다.")]
+        [SerializeField] private float clusterRadius = 2f;
+
+        [Tooltip("무리 이동 속도(m/s). 결투 접근(cruiseSpeed)과 다른 값이어야 한다 — 이건 합류이지 돌진이 아니다.")]
+        [SerializeField] private float clusterMoveSpeed = 3f;
+
+        [Tooltip("무리 스폰 시 한 명씩 나오는 간격(초). 전원이 동시에 나타나면 팝인이 티 난다.")]
+        [SerializeField] private float spawnStagger = 0.15f;
+
+        [Tooltip("스폰이 화면에 걸릴 때 자기 자리에서 밀어낼 수 있는 최대 거리(m).\n" +
+                 "자리가 이미 화면 밖이면 0 — 그 자리에 그대로 선다.")]
+        [SerializeField] private float spawnMaxOffset = 6f;
+
+        [Header("Wander")]
+        [Tooltip("교전 중이 아닌 적이 플레이어 주위를 배회한다. 끄면 자기 자리에 정지(예전 동작).\n" +
+                 "⚠ active 무리 전용이다 — staged가 배회하면 집결 자체가 무너진다.")]
+        [SerializeField] private bool wanderEnabled = true;
+
+        [Tooltip("배회하며 플레이어와 유지할 거리(m). ⚠ duelDistance보다 커야 한다 — 교전 시 좁혀 들어갈 여지.")]
+        [SerializeField] private float standoffDistance = 3.5f;
+
+        [Tooltip("배회 이동 속도(m/s). ⚠ 걷기 클립의 실제 루트 이동 속도와 같아야 발이 안 미끄러진다.\n" +
+                 "Walk 4종 실측값이 정확히 1.297 m/s다.")]
+        [SerializeField] private float wanderSpeed = 1.3f;
+
+        [Tooltip("궤도가 도는 속도(도/초).")]
+        [SerializeField] private float orbitSpeed = 15f;
+
+        [Tooltip("이 간격(초, 랜덤 범위)마다 궤도 방향을 뒤집는다. 한 방향으로만 돌면 회전목마로 보인다.")]
+        [SerializeField] private Vector2 orbitReverseInterval = new Vector2(3f, 7f);
+
+        [Tooltip("궤도 각도의 개체별 랜덤 오프셋(도). 0이면 넷이 정확한 원 위에 서서 인공적이다.")]
+        [SerializeField] private float orbitJitter = 12f;
+
         [Header("Roster")]
         [Tooltip("등장시킬 적 종류. 여러 종을 넣으면 같은 모델 반복이 티 나지 않는다.")]
         [SerializeField] private EnemyDefinition[] rosterPool;
@@ -79,6 +126,13 @@ namespace EnemySpace
         [Tooltip("회피/패링을 가르는 여유(초). 후퇴 + 되돌아오기에 이만큼 더 남아야 물러난다.\n" +
                  "키우면 패링이 잦아지고, 0에 가까우면 회피가 잦아지는 대신 재접근이 빠듯해진다.")]
         [SerializeField] private float retreatWindowMargin = 0.35f;
+
+        [Header("Chain")]
+        [Range(0f, 1f)]
+        [Tooltip("사슬(한 적에게 이어지는 패턴들)을 처치로 인정할 성공 타수의 비율.\n" +
+                 "1이면 전부 성공해야 하고, 0에 가까우면 마지막 타만 맞으면 된다.\n" +
+                 "비사슬 엔트리(길이 1)는 어느 값이든 1타 필요 — 기존 채보 동작과 같다.")]
+        [SerializeField] private float chainKillRatio = 0.6f;
 
         [Tooltip("회피한 적에게 다시 다가갈 때, 남은 빈 시간(=1) 중 이동에 쓸 비율.\n" +
                  "0.5면 절반 만에 도착하고 나머지 절반은 서서 기다린다 — 같은 거리를 절반 시간에 가므로 속도는 2배다.\n" +
@@ -289,6 +343,11 @@ namespace EnemySpace
 
         private EnemyView currentOpponent;
 
+        // 사슬 누적. 수명은 currentOpponent와 같다 — 상대가 바뀌는 곳이 곧 리셋 지점이다.
+        // 임계 미달로 살아남은 적은 리셋하지 않는다: 계속 맞아 온 적이라 다음 사슬에서 성공이 누적돼 결국 죽는다.
+        private int chainHits;
+        private int chainSuccesses;
+
         /// <summary>
         /// 지금 교전 중인 상대. 없으면 null.
         ///
@@ -296,6 +355,36 @@ namespace EnemySpace
         /// 구독보다 먼저 승격이 일어났으면 그 이벤트는 이미 지나갔다. 구독 직후 한 번 읽어 동기화하라고 연다.</para>
         /// </summary>
         public EnemyView CurrentOpponent => currentOpponent;
+
+        // ── 무리 상태 ────────────────────────────────────────────────────────
+        // ring(전체 목록)은 그대로 두고 소속만 따로 든다. 무리를 통째로 옮기려면
+        // 누가 그 무리인지 확정적으로 알아야 한다 — 위치로 추정하면 후퇴·결투로 흔들린다.
+        private readonly List<EnemyView> activeCluster = new List<EnemyView>();
+        private readonly List<EnemyView> stagedCluster = new List<EnemyView>();
+
+        /// <summary>표적 후보 버퍼. positionScratch와 인덱스가 1:1이어야 한다.</summary>
+        private readonly List<EnemyView> candidateScratch = new List<EnemyView>();
+
+        /// <summary>다음 무리가 놓인 방향. 집결지를 새로 지정할 때만 다시 뽑는다.</summary>
+        private Vector3 stagedDirection;
+
+        /// <summary>
+        /// <b>집결지</b> — 다음 무리가 모이는 고정된 한 점.
+        ///
+        /// <para><b>한 번 정하면 무리가 찰 때까지 안 움직인다.</b> 예전에는 창이 바뀔 때마다 무리를 통째로
+        /// 옮겼는데(재배치), 플레이 결과 <b>적들이 우르르 몰려다니는 그림</b>이 되어 폐기했다.
+        /// 지금은 점이 고정이고 <b>적이 하나씩 태어나 거기로 걸어와 합류</b>한다.</para>
+        /// </summary>
+        private Vector3 stagedCenter;
+
+        /// <summary>
+        /// 마지막으로 계산된 목표 거리. 집결지를 지정할 때 쓴다 —
+        /// 사망 시점에는 창을 알 수 없으므로 <see cref="BindReservation"/>이 지나가며 남겨 둔다.
+        /// </summary>
+        private float lastDesiredDistance;
+
+        /// <summary>무대에 유지할 총원. 무리 모드에서는 <b>사망 1 : 스폰 1</b>이라 언제나 clusterSize다.</summary>
+        private int RingCapacity => clusterEnabled ? Mathf.Max(clusterSize, 1) : ringCount;
 
         // 프리팹별 자체 풀(EffectManager·SliceTargetDirector 선례). Pool(PoolKey 단일 매핑)은 프리팹 수 증가에 맞지 않는다.
         private readonly Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
@@ -378,8 +467,24 @@ namespace EnemySpace
         {
             Prewarm();
 
-            for (int i = ring.Count; i < ringCount; i++)
-                SpawnIntoStage();
+            if (clusterEnabled)
+            {
+                // 첫 무리만 세운다. 다음 무리는 <b>사망마다 한 명씩</b> 집결지로 모여 스스로 채워진다 —
+                // 미리 다 세우면 곡 시작부터 두 덩어리가 보여 원래 문제(정신없음)로 되돌아간다.
+                activeCluster.Clear();
+                stagedCluster.Clear();
+
+                Vector3 activeCenter = EnemyRing.PickClusterCenter(
+                    PlayerPosition, Vector3.forward, minTargetDistance * 2f, Center, stageRadius, minPlayerDistance);
+                SpawnCluster(activeCluster, activeCenter);
+
+                DesignateStagedCenter();
+            }
+            else
+            {
+                for (int i = ring.Count; i < RingCapacity; i++)
+                    SpawnIntoStage();
+            }
 
             ReleaseCurrentOpponent();
         }
@@ -496,6 +601,211 @@ namespace EnemySpace
             return view;
         }
 
+        // ── 무리 (docs/EnemyCluster) ──────────────────────────────────────────
+
+        /// <summary>
+        /// 무리 하나를 통째로 세운다. <b>각자 자기 자리 근처에 나타나 짧게 걸어 들어온다</b> —
+        /// 무대 가장자리에서 걸어오게 하면 첫 이동만 무대 횡단(최대 16m)이 되어 재배치 예산으로 감당할 수 없다.
+        ///
+        /// <para><paramref name="stagger"/>로 한 명씩 시차를 둔다. 넷이 동시에 나타나면 팝인이 티 난다.</para>
+        /// </summary>
+        private void SpawnCluster(List<EnemyView> cluster, Vector3 center)
+        {
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            System.Func<Vector3, bool> isVisible = cam != null ? BuildVisibilityTest(cam) : null;
+            Vector3 viewPosition = cam != null ? cam.transform.position : Center;
+
+            int count = Mathf.Max(clusterSize, 1);
+            for (int i = cluster.Count; i < count; i++)
+            {
+                Vector3 slot = EnemyRing.PlaceInCluster(center, i, count, clusterRadius, minSpacing);
+                var view = SpawnAt(slot, isVisible, viewPosition, i * Mathf.Max(spawnStagger, 0f));
+                if (view == null) return; // 풀이 말랐다 — 다음 기회에 다시 시도한다
+
+                cluster.Add(view);
+            }
+        }
+
+        /// <summary>
+        /// 적 하나를 <paramref name="slot"/>에 세운다. 화면에 걸리면 가장 가까운 화면 밖 지점에서 걸어 들어온다.
+        ///
+        /// <para><b>등장 연출은 여기 하나로 격리돼 있다.</b> 후속 파티클 등장은 이 메서드만 갈아끼우면 되고,
+        /// 그때는 오프셋도 절두체 판정도 통째로 필요 없어진다(자리에 바로 나타나면 되므로).</para>
+        /// </summary>
+        private EnemyView SpawnAt(Vector3 slot, System.Func<Vector3, bool> isVisible, Vector3 viewPosition, float delay)
+        {
+            var definition = PickDefinition();
+            if (definition == null) return null;
+
+            Vector3 from = EnemyRing.PickSpawnNearCluster(
+                slot, Center, stageRadius, PlayerPosition, minPlayerDistance,
+                viewPosition, ViewForward, isVisible, spawnMaxOffset);
+
+            var go = Rent(definition.Prefab, definition.MaxPoolSize);
+            if (go == null) return null;
+
+            var view = go.GetComponent<EnemyView>();
+            if (view == null) view = go.AddComponent<EnemyView>();
+
+            // 오프셋이 0이면(자리가 이미 화면 밖) 이동 없이 그 자리에 선다 — 정상 경로다.
+            float travel = Vector3.Distance(from, slot);
+            float duration = travel <= 0.01f ? 0.01f : travel / Mathf.Max(clusterMoveSpeed, 0.1f);
+
+            float angle = EnemyRing.DirectionToAngle(slot - Center);
+            view.Setup(definition, angle, slot, from, duration + Mathf.Max(delay, 0f), PlayerPosition);
+
+            view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
+            view.ApplyBackgroundBudget(true);
+            ring.Add(view);
+            return view;
+        }
+
+        /// <summary>
+        /// 다음 무리가 모일 <b>집결지를 새로 지정한다</b>. 무리가 비었을 때만 부른다 —
+        /// 한 번 정하면 그 무리가 다 찰 때까지 고정이다.
+        ///
+        /// <para><b>무리를 통째로 옮기지 않는다.</b> 창이 바뀔 때마다 재배치하던 예전 방식은
+        /// 플레이 결과 <b>적들이 우르르 몰려다니는 그림</b>이 되어 폐기했다. 거리를 음악에 맞추는 일은
+        /// 이 한 번의 지정이 하고, 그 뒤로는 <b>적이 하나씩 걸어와 합류</b>할 뿐이다.</para>
+        /// </summary>
+        private void DesignateStagedCenter()
+        {
+            // 사망 시점에는 창을 알 수 없다. BindReservation이 지나가며 남긴 마지막 목표 거리를 쓴다.
+            float desired = lastDesiredDistance > 0f ? lastDesiredDistance : minTargetDistance * 2f;
+            desired = Mathf.Clamp(desired, minTargetDistance, stageRadius * 2f);
+
+            Vector3 avoidCenter = ClusterCenterOf(activeCluster, PlayerPosition);
+            float avoidRadius = activeCluster.Count > 0 ? clusterRadius * 2f : 0f;
+
+            // 방향은 매번 새로 뽑는다 — 무리가 통째로 안 움직이므로 요동이 생길 여지가 없다.
+            stagedDirection = EnemyRing.PickClusterDirection(
+                PlayerPosition, Vector3.zero, Center, stageRadius, desired,
+                avoidCenter, avoidRadius, () => UnityEngine.Random.value);
+
+            stagedCenter = EnemyRing.PickClusterCenter(
+                PlayerPosition, stagedDirection, desired, Center, stageRadius, minPlayerDistance);
+        }
+
+        /// <summary>
+        /// 집결지에 적 <b>하나</b>를 태워 보낸다. 사망 하나당 정확히 한 번 불린다.
+        ///
+        /// <para>자리는 <b>이미 모인 인원 수</b>가 정한다 — 무리가 채워지는 순서대로 대형이 완성된다.
+        /// 무리가 이미 찼으면 아무것도 하지 않는다(승격이 비워 줄 때까지 기다린다).</para>
+        /// </summary>
+        private void SpawnOneIntoStaged()
+        {
+            int count = Mathf.Max(clusterSize, 1);
+            if (stagedCluster.Count >= count) return;
+
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            System.Func<Vector3, bool> isVisible = cam != null ? BuildVisibilityTest(cam) : null;
+            Vector3 viewPosition = cam != null ? cam.transform.position : Center;
+
+            Vector3 slot = EnemyRing.PlaceInCluster(stagedCenter, stagedCluster.Count, count, clusterRadius, minSpacing);
+            var view = SpawnAt(slot, isVisible, viewPosition, 0f);
+            if (view != null) stagedCluster.Add(view);
+        }
+
+        // ── 배회 (docs/EnemyIdleWander) ───────────────────────────────────────
+
+        private float orbitPhase;
+        private float orbitDirection = 1f;
+        private float orbitReverseAt;
+
+        // 개체별 각도 지터. 인스턴스ID로 뽑아 대여 동안 고정된다 — 매 프레임 랜덤이면 떨린다.
+        private static float JitterOf(EnemyView view, float amount) =>
+            amount <= 0f ? 0f : (Mathf.Abs(view.GetInstanceID() * 0.6180339887f % 1f) - 0.5f) * 2f * amount;
+
+        /// <summary>
+        /// 교전 중이 아닌 <b>active 무리</b>의 적들을 플레이어 주위 궤도에 세운다.
+        ///
+        /// <para><b>staged는 대상이 아니다.</b> 그쪽이 배회하면 집결지에 모이지 못해 무리 자체가 안 만들어진다.</para>
+        ///
+        /// <para><b>슬롯 인덱스는 리스트 순서로 고정한다.</b> 매 프레임 가까운 자리로 재배정하면
+        /// 적끼리 자리를 바꾸며 서로를 가로지른다.</para>
+        /// </summary>
+        private void TickWander()
+        {
+            if (!clusterEnabled || !wanderEnabled) return;
+
+            // 한 방향으로만 돌면 회전목마다. 주기적으로 뒤집는다.
+            if (Time.time >= orbitReverseAt)
+            {
+                orbitDirection = -orbitDirection;
+                orbitReverseAt = Time.time + UnityEngine.Random.Range(
+                    Mathf.Min(orbitReverseInterval.x, orbitReverseInterval.y),
+                    Mathf.Max(orbitReverseInterval.x, orbitReverseInterval.y));
+            }
+
+            orbitPhase += orbitSpeed * orbitDirection * Time.deltaTime;
+
+            Vector3 player = PlayerPosition;
+            int count = Mathf.Max(activeCluster.Count, 1);
+
+            for (int i = 0; i < activeCluster.Count; i++)
+            {
+                var view = activeCluster[i];
+                if (view == null) continue;
+
+                // 지금 싸우는 상대는 배회하지 않는다. 나머지 금지 조건은 EnemyView가 스스로 거른다.
+                if (view == currentOpponent) { view.StopWander(); continue; }
+
+                Vector3 slot = EnemyRing.PickOrbitSlot(
+                    player, i, count, standoffDistance, orbitPhase,
+                    Center, stageRadius, JitterOf(view, orbitJitter));
+
+                view.SetWander(slot, wanderSpeed);
+            }
+
+            // staged는 집결지에 서 있어야 한다 — 혹시 켜져 있으면 끈다.
+            foreach (var view in stagedCluster)
+                if (view != null) view.StopWander();
+        }
+
+        /// <summary>무리의 무게중심. 비면 <paramref name="fallback"/>.</summary>
+        private static Vector3 ClusterCenterOf(List<EnemyView> cluster, Vector3 fallback)
+        {
+            if (cluster == null || cluster.Count == 0) return fallback;
+
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (var e in cluster)
+            {
+                if (e == null) continue;
+                sum += e.transform.position;
+                n++;
+            }
+
+            return n == 0 ? fallback : sum / n;
+        }
+
+        /// <summary>
+        /// 죽거나 사라진 적을 무리 목록에서 걷어낸다. <c>ring</c>에서 빠지는 곳마다 같이 불러야
+        /// 무리가 유령을 들고 있지 않는다.
+        /// </summary>
+        private void ForgetFromClusters(EnemyView view)
+        {
+            activeCluster.Remove(view);
+            stagedCluster.Remove(view);
+        }
+
+        /// <summary>
+        /// 지금 무리가 비었으면 다음 무리를 승격시키고 새 다음 무리를 채운다.
+        ///
+        /// <para>승격과 동시에 <see cref="stagedDirection"/>을 비운다 — 새 무리는 방향을 처음부터 고른다.
+        /// 이월하면 방금 승격된 무리와 같은 방향에 겹쳐 놓인다.</para>
+        /// </summary>
+        private void PromoteClusterIfEmpty()
+        {
+            if (!clusterEnabled || activeCluster.Count > 0) return;
+
+            activeCluster.AddRange(stagedCluster);
+            stagedCluster.Clear();
+
+            // 무리가 비었으니 다음 집결지를 새로 지정한다. 이후 사망마다 한 명씩 여기로 걸어온다.
+            DesignateStagedCenter();
+        }
+
         private EnemyDefinition PickDefinition()
         {
             if (rosterPool == null || rosterPool.Length == 0) return null;
@@ -543,14 +853,38 @@ namespace EnemySpace
             float desired = cruiseSpeed * Mathf.Max(window, 0f) / Mathf.Max(playerShare, 0.01f) + duelDistance;
             desired = Mathf.Clamp(desired, minTargetDistance, stageRadius * 2f);
 
+            // 집결지 지정은 사망 시점에 일어나 창을 볼 수 없다. 여기서 마지막 값을 남겨 둔다.
+            lastDesiredDistance = desired;
+
+            // ⚠ 무리 모드에서는 후보를 '지금 싸우는 무리'로 묶는다. 링 전체에서 거리로 고르면
+            // desired가 클 때 다음 무리(staged)를 집어 무리 모델이 통째로 깨진다 —
+            // 플레이어가 두 무리 사이를 왔다 갔다 하게 된다.
+            candidateScratch.Clear();
             positionScratch.Clear();
-            foreach (var e in ring) positionScratch.Add(e.transform.position);
+
+            bool restrict = clusterEnabled && activeCluster.Count > 0;
+            foreach (var e in ring)
+            {
+                if (restrict && !activeCluster.Contains(e)) continue;
+                candidateScratch.Add(e);
+                positionScratch.Add(e.transform.position);
+            }
+
+            // 무리가 비었는데 링에는 남아 있다(승격 직전 등) — 그때만 링 전체로 폴백한다.
+            if (candidateScratch.Count == 0)
+            {
+                foreach (var e in ring)
+                {
+                    candidateScratch.Add(e);
+                    positionScratch.Add(e.transform.position);
+                }
+            }
 
             int index = EnemyRing.PickTargetByDistance(positionScratch, from, desired);
             if (index < 0) return null;
 
-            var picked = ring[index];
-            ring.RemoveAt(index);
+            var picked = candidateScratch[index];
+            ring.Remove(picked);
             picked.ApplyBackgroundBudget(false);
             return picked;
         }
@@ -730,6 +1064,10 @@ namespace EnemySpace
                 var previous = currentOpponent;
                 currentOpponent = TakeTargetForWindow(arriveTime - Time.time, duelDistance);
                 if (currentOpponent != previous) OnOpponentChanged?.Invoke(previous, currentOpponent);
+
+                // 새 상대 = 새 사슬. 누적은 상대와 수명을 같이한다.
+                chainHits = 0;
+                chainSuccesses = 0;
             }
 
             var opponent = currentOpponent;
@@ -824,9 +1162,13 @@ namespace EnemySpace
             var opponent = r.opponent;
             if (opponent != null)
             {
-                // killOnSuccess를 성공하면 처치, 실패하면 죽지 않고 교전이 이어진다.
+                // 사슬 누적은 처치 판정보다 먼저 올린다 — 마지막 타 자신이 카운트에 들어가야 한다.
+                chainHits++;
+                if (playerSucceeded) chainSuccesses++;
+
+                // killOnSuccess를 성공하고 사슬 임계를 채웠으면 처치, 아니면 죽지 않고 교전이 이어진다.
                 // 이 분기가 "실패하면 같은 상대와 계속"의 유일한 소유자다 — 아래 배정은 그 결과를 읽기만 한다.
-                if (r.cue.killOnSuccess && playerSucceeded)
+                if (r.cue.killOnSuccess && playerSucceeded && chainSuccesses >= RequiredHits(chainHits))
                     KillOpponent(opponent, ResolveDeathSet(r), r.impactTime, r.template?.EnemyDeath); // 안에서 상대 해제
                 else
                 {
@@ -835,7 +1177,14 @@ namespace EnemySpace
                     Vector3 retreatTarget = EnemyRing.PickRetreatTarget(
                         opponent.transform.position, -opponent.transform.forward, Center, stageRadius, retreat);
 
-                    opponent.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, retreatTarget);
+                    // 리액션 클립은 패턴이 소유한다. 회피(물러남)만 뷰의 고정 스테이트로 남는다 —
+                    // 클립·후퇴 이동·무대 경계 클램프가 한 덩어리라 ClipAlignment 하나로 안 끝난다.
+                    ClipAlignment reactionClip = playerSucceeded
+                        ? r.template?.EnemyHit
+                        : (retreat <= 0f ? r.template?.EnemyParry : null);
+
+                    opponent.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, retreatTarget,
+                                     reactionClip, r.impactTime);
 
                     // 반응 통지 — 판정은 EnemyView.Resolve의 parried 식과 '같은 retreat 값'을 본다.
                     // 다른 값으로 다시 계산하면 애니메이션과 이펙트가 언젠가 어긋난다.
@@ -866,9 +1215,25 @@ namespace EnemySpace
         ///
         /// <para>다음 예약이 없으면(곡 공백) <b>물러나지 않는다.</b> 돌아올 사람이 없어 물러난 채로 남는다.</para>
         /// </summary>
+        /// <summary>
+        /// 이 길이의 사슬을 처치로 인정할 <b>최소 성공 타수</b>. 최소 1 — 마지막 타는 언제나 성공해야 한다
+        /// (빗나간 임팩트에 절단을 붙이면 그 순간 적은 패링·회피 모션 중이라 처치 연출이 걸릴 자리가 없다).
+        ///
+        /// <para>비사슬 엔트리는 길이가 1이라 어느 비율에서도 1을 돌려준다 — <b>기존 채보에 회귀가 없다.</b></para>
+        /// </summary>
+        private int RequiredHits(int chainLength) =>
+            Mathf.Max(1, Mathf.CeilToInt(chainLength * chainKillRatio));
+
         private float ResolveRetreatDistance(Reservation r, bool playerSucceeded)
         {
-            if (playerSucceeded || AttackerOf(r.template) == Attacker.Enemy) return failRetreatDistance;
+            // 적이 공격자인 패턴의 결말은 어느 쪽이든 물러난다 — 성공은 패링당해 밀려나는 것이고,
+            // 실패는 벤 뒤의 여파다. 둘 다 회피가 아니므로 창을 보지 않는다.
+            if (AttackerOf(r.template) == Attacker.Enemy) return failRetreatDistance;
+
+            // 사슬 중간 타격에는 넉백이 없다. 물러나면 플레이어가 매 타격마다 다시 붙어야 하는데,
+            // 그 재접근은 TakeTargetForWindow를 안 거쳐 거리가 창에 안 맞춰진다(docs/FailConverge/) —
+            // 사슬은 그 구간을 매 타격 반복하게 된다. 제자리에 세우면 그 문제 자체가 없다.
+            if (playerSucceeded) return 0f;
 
             // r은 위에서 이미 제거됐으므로 선두가 곧 다음 패턴이다(FIFO).
             if (reservations.Count == 0) return 0f;
@@ -926,8 +1291,23 @@ namespace EnemySpace
 
             if (currentOpponent == opponent) currentOpponent = null;
 
-            // 링을 다시 채우고(등 뒤에서 걸어 들어온다) 다음 상대로 전환한다.
-            if (ring.Count < ringCount) SpawnIntoStage();
+            // 사슬이 끝났다. 다음 상대는 새 카운터로 시작한다.
+            chainHits = 0;
+            chainSuccesses = 0;
+
+            if (clusterEnabled)
+            {
+                // 하나 죽었으니 하나 태운다 — 사망 1 : 스폰 1. 새 적은 집결지로 걸어가 합류한다.
+                // 순서가 중요하다: 걷어내기 → 보충 → 승격. 승격을 먼저 하면 방금 태운 적이 승격에 휩쓸린다.
+                ForgetFromClusters(opponent);
+                SpawnOneIntoStaged();
+                PromoteClusterIfEmpty();
+            }
+            else if (ring.Count < RingCapacity)
+            {
+                SpawnIntoStage();
+            }
+
             ReleaseCurrentOpponent();
         }
 
@@ -947,6 +1327,10 @@ namespace EnemySpace
 
                 pending.burstTime = pending.opponent.ApplyHitStop(duration, pending.burstTime);
             }
+
+            // 살아남은 상대(사슬 중간 타격)도 같이 언다. 안 그러면 플레이어만 멈추고 적 리액션만 흐른다.
+            // 죽는 중이면 위 순회가 이미 얼렸고 뷰의 hitStopped 가드가 두 번째 호출을 막는다.
+            currentOpponent?.ApplyHitStop(duration, 0f);
         }
 
         /// <summary>사망 클립이 끝난 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
@@ -1089,6 +1473,7 @@ namespace EnemySpace
             RecycleDebris();
             RecycleCorpses();
             EnforcePieceBudget();
+            TickWander();
         }
 
         /// <summary>
@@ -1141,11 +1526,13 @@ namespace EnemySpace
                 if (!view.DissolveFinished) continue;
 
                 ring.RemoveAt(i);
+                ForgetFromClusters(view);
                 ReleaseEnemy(view);
             }
 
             if (currentOpponent != null && currentOpponent.DissolveFinished)
             {
+                ForgetFromClusters(currentOpponent);
                 ReleaseEnemy(currentOpponent);
                 currentOpponent = null;
             }
@@ -1286,6 +1673,65 @@ namespace EnemySpace
         /// 반경은 카메라 화각·격자 크기와 같이 봐야 정해진다. 숫자만 봐선 못 정하므로 씬 뷰에 그린다.
         /// <b>편집 중에도 그린다</b> — 플레이 없이 반경을 잡아야 하기 때문.
         /// </summary>
+        /// <summary>
+        /// 무리 상태. <b>집결지가 고정인지, 몇 명이 모였는지, 누가 아직 걸어오는 중인지</b>를 그린다 —
+        /// 집결지가 프레임마다 움직이면 그게 곧 예전의 우르르 이동 버그다.
+        /// </summary>
+        private void DrawClusterGizmos()
+        {
+            Vector3 activeCenter = ClusterCenterOf(activeCluster, PlayerPosition);
+
+            Gizmos.color = Color.red;
+            DrawCircle(activeCenter, clusterRadius);
+
+            // 집결지 — 무리가 찰 때까지 여기 고정이다.
+            Gizmos.color = Color.cyan;
+            DrawCircle(stagedCenter, clusterRadius);
+            Gizmos.DrawLine(PlayerPosition, stagedCenter);
+
+            // 아직 걸어오는 중인 적: 현재 위치 → 자기 자리.
+            Gizmos.color = Color.green;
+            foreach (var e in stagedCluster)
+            {
+                if (e == null) continue;
+                Gizmos.DrawLine(e.transform.position, e.Destination);
+            }
+
+            UnityEditor.Handles.color = Color.cyan;
+            UnityEditor.Handles.Label(stagedCenter + Vector3.up * 1.2f,
+                $"집결 {stagedCluster.Count}/{clusterSize}   dist={Vector3.Distance(PlayerPosition, stagedCenter):0.0}m\n" +
+                $"active {activeCluster.Count}   desired={lastDesiredDistance:0.0}m");
+
+            if (!wanderEnabled) return;
+
+            // 배회 궤도 — 플레이어 주위 standoff 원과, 각 적이 자기 슬롯으로 가는 선.
+            Gizmos.color = Color.yellow;
+            DrawCircle(PlayerPosition, standoffDistance);
+
+            int count = Mathf.Max(activeCluster.Count, 1);
+            for (int i = 0; i < activeCluster.Count; i++)
+            {
+                var view = activeCluster[i];
+                if (view == null) continue;
+
+                bool engaged = view == currentOpponent;
+                Gizmos.color = engaged ? Color.red : (view.Wandering ? Color.yellow : Color.grey);
+
+                if (engaged) continue;
+
+                Vector3 slot = EnemyRing.PickOrbitSlot(
+                    PlayerPosition, i, count, standoffDistance, orbitPhase,
+                    Center, stageRadius, JitterOf(view, orbitJitter));
+
+                Gizmos.DrawLine(view.transform.position, slot);
+                Gizmos.DrawWireSphere(slot, 0.2f);
+
+                // 배회를 안 하고 있으면 이유가 뷰 안에 있다 — 라벨로 끌어낸다.
+                if (!view.Wandering)
+                    UnityEditor.Handles.Label(view.transform.position + Vector3.up * 1.6f, $"정지({view.Current})");
+            }
+        }
+
         void OnDrawGizmos()
         {
             if (!drawGizmos) return;
@@ -1307,10 +1753,13 @@ namespace EnemySpace
 
             UnityEditor.Handles.color = gizmoRingColor;
             UnityEditor.Handles.Label(center + Vector3.up * 0.5f,
-                $"stage r={stageRadius:0.0}  count={ringCount}  spacing={minSpacing:0.0}m\n" +
-                $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s");
+                $"stage r={stageRadius:0.0}  count={RingCapacity}  spacing={minSpacing:0.0}m\n" +
+                $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s" +
+                (clusterEnabled ? $"\ncluster {clusterSize}  r={clusterRadius:0.0}  move={clusterMoveSpeed:0.0}m/s" : ""));
 
             if (!Application.isPlaying) return;
+
+            if (clusterEnabled) DrawClusterGizmos();
 
             foreach (var e in ring)
             {
