@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
+  m_Name: PatternChain(3, 4)
+  m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
+  patternDatas:
+  - index: 3
+  - index: 4
+  attacker: 1
+  enemyAttack:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerAttack:
+    clip: {fileID: 7400000, guid: d360f8e09f492784bbe927e1c4fb6d99, type: 2}
+    startOffset: 0
+    duration: 1
+    impactTime: 0.17746113
+    speed: 1
+  enemyFeint:
+    clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
+    startOffset: 0
+    duration: 0.0025906859
+    impactTime: 0.0025906859
+    speed: 1
+  enemyDeath:
+    clip: {fileID: 7400000, guid: ba3aea449950e0249b2cf236dd7b7c00, type: 2}
+    startOffset: 0.00129535
+    duration: 0.8160622
+    impactTime: 0.00129535
+    speed: 1
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  sliceTarget: {fileID: 0}
+  sliceTargetOffset: {x: 0, y: 0}
+  impactOffset: 0
+  duelDistanceOffset: 0
+  effectCues: []

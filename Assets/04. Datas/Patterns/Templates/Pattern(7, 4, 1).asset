@@ -16,11 +16,6 @@ MonoBehaviour:
   - index: 7
   - index: 4
   - index: 1
-  successAnimationClip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
-  animationStartOffset: 0
-  animationDuration: 0.38422722
-  animationImpactTime: 0.3148789
-  animationSpeed: 1.2
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}
@@ -40,13 +35,32 @@ MonoBehaviour:
     duration: 0.38422722
     impactTime: 0.3148789
     speed: 1.2
+  enemyFeint:
+    clip: {fileID: 7400000, guid: acfaa3806b1b1d9499e1c233ced07a1f, type: 2}
+    startOffset: 0
+    duration: 0.0005543346
+    impactTime: 0.0005543346
+    speed: 1
   enemyDeath:
+    clip: {fileID: 7400000, guid: ba3aea449950e0249b2cf236dd7b7c00, type: 2}
+    startOffset: 0
+    duration: 0.05779025
+    impactTime: 0.05779025
+    speed: 1
+  enemyHit:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
-  enemyDeathSliceSet: {fileID: 0}
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
   sliceTarget: {fileID: 11400000, guid: 0b359d383ee51ab4bba4036115b949d6, type: 2}
   sliceTargetOffset: {x: 0, y: 0}
   impactOffset: 0
+  duelDistanceOffset: 0
+  effectCues: []

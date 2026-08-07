@@ -10,7 +10,8 @@ using UnityEngine;
 ///
 /// <para><b>왜 도착 시각을 지켜야 하는가</b>: 결투 앵커는 플레이어의 자식이다. 스윙 도중 플레이어가 움직이면
 /// 앵커가 따라가 적이 겨냥하던 지점이 늦게 바뀐다 → 칼이 어긋난다.
-/// 그래서 이동은 <b>클립 시작 시각까지</b> 끝난다(<c>DuelPlan.ArriveTime</c>).
+/// 그래서 이동은 <b>클립 시작 시각까지</b> 끝난다(<c>DuelPlan.PlayerArriveTime</c> — 보통 <c>ArriveTime</c>과 같고,
+/// 재접근에서는 그보다 앞당겨진다. <b>늦어지는 일은 없다</b>).
 /// 여유가 모자란 경우는 디렉터가 애초에 "플레이어 제자리" 계획을 준다.</para>
 ///
 /// <para><b>원위치로 돌아가지 않는다.</b> 벤 자리에서 다음 적을 향해 나아가는 것이 무쌍의 흐름이고,
@@ -74,8 +75,9 @@ public class PlayerCombatMover : MonoBehaviour
         Vector3 facing = Vector3.ProjectOnPlane(plan.EnemyPosition - target, Vector3.up);
         Quaternion rotation = facing.sqrMagnitude < 1e-6f ? transform.rotation : Quaternion.LookRotation(facing);
 
-        // 도착 시각은 디렉터가 정한다(= 클립 시작). 이미 지났으면 즉시 붙인다.
-        ScheduleMove(target, Mathf.Max(plan.ArriveTime - Time.time, 0.01f));
+        // 도착 시각은 디렉터가 정한다. 보통 클립 시작(ArriveTime)이지만, 재접근에서는 그보다 앞당겨진
+        // PlayerArriveTime이 온다 — 거리가 창에 안 맞춰지는 그 경로에서 기어가지 않게. 이미 지났으면 즉시 붙인다.
+        ScheduleMove(target, Mathf.Max(plan.PlayerArriveTime - Time.time, 0.01f));
         ScheduleTurn(rotation);
     }
 

@@ -70,3 +70,6 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Weapon Bone Bake 복원 지점 — 로컬 전용(69MB). 굽기 전 원본은 git 히스토리에도 남는다.
+Assets/05. Animations/Clip/_Backup/

@@ -22,7 +22,7 @@ MonoBehaviour:
   animationStartOffset: 0
   animationDuration: 1.2258651
   animationImpactTime: 1.0882354
-  animationSpeed: 2
+  animationSpeed: 1.5
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}

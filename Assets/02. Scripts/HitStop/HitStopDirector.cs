@@ -11,9 +11,10 @@ using UnityEngine;
 /// 통상 히트스톱이 0.05~0.10초라 <b>단 한 번으로 판정이 무너진다</b>.
 /// 그래서 여기서 멈추는 것은 <b>Animator의 Speed Multiplier</b>(<c>AttackSpeed</c>/<c>DeathSpeed</c>)뿐이다.</para>
 ///
-/// <para><b>공백은 캐치업 배속이 흡수한다.</b> 정지한 만큼 남은 클립을 빨리 돌려 각 배우가
-/// <b>원래 예정된 절대 시각</b>(<c>actionEndTime</c>·<c>burstTime</c>)을 지킨다. 그래서 연계 판정·복귀 스케줄·
-/// <c>OnEnemyBurst</c>·카메라 쉐이크 예약이 하나도 밀리지 않는다.</para>
+/// <para><b>공백은 밀어서 처리한다.</b> 두 배우 모두 임팩트 시점에 흡수할 잔여가 없어(플레이어는 임팩트가
+/// 트림 끝 근처, 적은 절단이 임팩트 바로 그 순간) 캐치업이 성립하지 않는다 — 임팩트 <i>이후</i>의 일정
+/// (<c>actionEndTime</c>·<c>recoveryEndTime</c>·<c>burstTime</c>)을 정지 시간만큼 통째로 민다.
+/// <b>임팩트 자체는 이미 지나간 뒤라 §6 정렬은 안 깨진다.</b></para>
 ///
 /// <para><b>시각과 시간의 진실의 원천은 여기 하나다.</b> 임팩트 시각을 아는 곳은 넷이지만
 /// (<c>CharacterActionPlayer</c>·<c>EnemyView</c>·<c>CameraDirector</c>·<c>SliceTargetDirector</c>)
@@ -42,21 +43,16 @@ public class HitStopDirector : MonoBehaviour
     [Tooltip("정지 동안 카메라를 잠글 대상. 비우면 카메라는 안 멈추고 큐도 안 밀린다(나머지는 그대로).")]
     [SerializeField] private CameraDirector cameraDirector;
 
+    [Tooltip("정지 동안 파티클을 얼릴 대상. 비우면 이펙트만 계속 흐른다(나머지는 그대로).")]
+    [SerializeField] private PatternEffectDirector patternEffectDirector;
+
     [Header("Tuning")]
     [Tooltip("전체 On/Off. 끄면 예약도 잡지 않는다.")]
     [SerializeField] private bool hitStopEnabled = true;
 
     [Tooltip("멈추는 시간(초). 배우·카메라가 공유하는 하나의 값이다.\n" +
-             "이 값이 클수록 적의 캐치업 배속이 올라가고, 여유가 없는 적은 아예 건너뛴다.")]
+             "적의 절단(시체 교체·폭발)도 이만큼 뒤로 밀린다.")]
     [SerializeField] private float hitStopDuration = 0.1f;
-
-    [Tooltip("[적 전용] 캐치업 배속의 상한. 걸리면 그 적의 절단 시각이 부족분만큼 뒤로 밀린다.\n" +
-             "플레이어는 캐치업이 아니라 밀기라 이 값을 쓰지 않는다.")]
-    [SerializeField] private float maxCatchupSpeed = 3f;
-
-    [Tooltip("[적 전용] 임팩트 이후 잔여가 '정지시간 × 이 배수'보다 짧으면 그 적은 멈추지 않는다.\n" +
-             "멈췄다가 폭발적인 배속으로 튀는 것보다 안 멈추는 게 낫다.")]
-    [SerializeField] private float minCatchupHeadroom = 3f;
 
     // 대기 중인 예약(최대 하나). 근거는 CameraDirector와 같다 —
     // 패턴 완료는 순차적이고 A의 임팩트보다 B의 완료가 최소 0.4초 뒤라 동시에 둘이 뜨지 않는다.
@@ -119,15 +115,10 @@ public class HitStopDirector : MonoBehaviour
     }
 
     /// <summary>
-    /// 두 배우에게 각자 멈추라고 지시한다. <b>⚠ 공백을 처리하는 모델이 서로 다르다</b> —
-    /// 배우마다 임팩트 프레임이 클립 어디에 찍히느냐가 정반대이기 때문이다.
-    ///
-    /// <list type="bullet">
-    /// <item><b>플레이어 = 밀기.</b> 공격 클립은 임팩트가 트림 <i>끝</i> 근처라 잔여가 실측 0.036~0.109초뿐(10/10 패턴).
-    /// 정지 0.08초가 그보다 길어 캐치업이 원리적으로 불가능하다 → 복귀 스케줄을 통째로 민다.</item>
-    /// <item><b>적 = 캐치업.</b> 사망 클립은 <c>ImpactTime</c>이 트림 <i>시작</i> 근처라(§11-3) 잔여가
-    /// 0.245~0.953초로 넉넉하다 → 원래 <c>burstTime</c>을 그대로 지킨다.</item>
-    /// </list>
+    /// 두 배우에게 각자 멈추라고 지시한다. <b>둘 다 '밀기' 모델이다</b> — 정지 창 안에 흡수할 잔여가
+    /// 양쪽 다 없기 때문이다(플레이어는 임팩트가 트림 <i>끝</i> 근처라 잔여 0.036~0.109초,
+    /// 적은 절단이 임팩트 <i>바로 그 순간</i>이라 잔여 0). 플레이어는 복귀 스케줄을,
+    /// 적은 절단 시각(<c>burstTime</c>)을 정지 시간만큼 뒤로 민다.
     ///
     /// <para><b>한쪽만 멈춰도 타격감은 성립한다.</b> 사망 클립이 없는 패턴은 적이 빠지고 플레이어만 멈춘다.</para>
     /// </summary>
@@ -137,11 +128,16 @@ public class HitStopDirector : MonoBehaviour
             actionPlayer.ApplyHitStop(hitStopDuration);
 
         if (enemyDirector != null)
-            enemyDirector.ApplyHitStop(hitStopDuration, maxCatchupSpeed, minCatchupHeadroom);
+            enemyDirector.ApplyHitStop(hitStopDuration);
 
         // 카메라도 같은 창만큼 얼린다 — 쉐이크를 끄고, 잠그고, 해제 뒤에 큐를 낸다.
         // 여기서 카메라를 직접 만지지는 않는다(Cinemachine 호출은 전부 CameraDirector 안에 남는다).
         if (cameraDirector != null)
             cameraDirector.HoldForHitStop(hitStopDuration);
+
+        // 이펙트도 같은 창만큼. 캐릭터가 멈췄는데 스파크만 흐르면 "멈췄다"가 아니라
+        // "캐릭터만 렉 걸렸다"로 읽힌다. 여기서도 파티클을 직접 만지지 않는다(호출은 이펙트 층에 남는다).
+        if (patternEffectDirector != null)
+            patternEffectDirector.ApplyHitStop(hitStopDuration);
     }
 }

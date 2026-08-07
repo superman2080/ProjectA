@@ -14,14 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
   - index: 6
+  - index: 7
   - index: 3
-  - index: 0
-  - index: 1
-  successAnimationClip: {fileID: 7400000, guid: 0c1c95d6350e91740ab3b2a1869a3a4e, type: 2}
-  animationStartOffset: 0.3832237
-  animationDuration: 1.0545502
-  animationImpactTime: 1.2969491
-  animationSpeed: 2
+  - index: 4
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}
@@ -41,13 +36,32 @@ MonoBehaviour:
     duration: 1.0545502
     impactTime: 1.2969491
     speed: 2
+  enemyFeint:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
   enemyDeath:
     clip: {fileID: 7400000, guid: b09ed3b8cfb710946a0bd35187498bd2, type: 3}
     startOffset: 0
     duration: 0.86764485
     impactTime: 0.25476682
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 8d11aeee66b35b14dbd11c23175c02e3, type: 2}
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  sliceTarget: {fileID: 11400000, guid: 779d4b972e3c56b47b8ad7ec7f73c338, type: 2}
   sliceTargetOffset: {x: 0, y: 0}
   impactOffset: 0
   duelDistanceOffset: 0
+  effectCues: []

@@ -159,7 +159,7 @@ public class MeshSliceBakerTests
     // ── 단일 평면 ────────────────────────────────────────────────────────────
 
     [Test]
-    public void 정육면체를_수평면으로_자르면_조각2개_부피절반_캡루프1개()
+    public void CubeCutByHorizontalPlaneYieldsTwoHalvesWithOneCapLoop()
     {
         var cube = MakeCube(2f);
         var planes = new[] { SlicePlane.FromPointNormal(Vector3.zero, Vector3.up) };
@@ -177,7 +177,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void Dice_3장이면_조각8개()
+    public void ThreeDicePlanesYieldEightPieces()
     {
         var cube = MakeCube(2f);
         var planes = SliceShape.Dice.ToPlanes(cube.bounds);
@@ -190,7 +190,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 절단면_기준으로_정점이_한쪽에만_몰린다()
+    public void PieceVerticesStayOnOneSideOfThePlane()
     {
         var cube = MakeCube(2f);
         var plane = SlicePlane.FromPointNormal(Vector3.zero, Vector3.up);
@@ -213,7 +213,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 떨어진_두_덩어리를_자르면_연결요소분해로_4조각()
+    public void TwoDisjointBlobsSplitIntoFourConnectedComponents()
     {
         // 한 메쉬에 서로 떨어진 정육면체 두 개를 담는다.
         var a = MakeCube(2f, new Vector3(-3f, 0f, 0f));
@@ -239,7 +239,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 서브메쉬_M개면_조각은_M더하기1이고_캡이_마지막()
+    public void CapGoesIntoLastSubmeshSoPieceHasOneMoreThanSource()
     {
         // 정육면체를 서브메쉬 2개로 쪼갠다(앞 6삼각형 / 뒤 6삼각형).
         var cube = MakeCube(2f);
@@ -270,7 +270,7 @@ public class MeshSliceBakerTests
     // ── 교차(다중 획) ───────────────────────────────────────────────────────
 
     [Test]
-    public void 가로세로_2장이면_4조각이고_각_부피는_4분의1()
+    public void TwoCrossingPlanesYieldFourQuarterVolumePieces()
     {
         var cube = MakeCube(2f);
         var planes = new[]
@@ -291,7 +291,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 평면_적용_순서를_바꿔도_결과가_같다()
+    public void PlaneOrderDoesNotChangeResult()
     {
         var cubeA = MakeCube(2f);
         var cubeB = MakeCube(2f);
@@ -316,7 +316,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 여러번_잘라도_캡_서브메쉬가_늘어나지_않는다()
+    public void RepeatedCutsDoNotAddMoreCapSubmeshes()
     {
         var cube = MakeCube(2f);
         var planes = SliceShape.Dice.ToPlanes(cube.bounds); // 3장
@@ -333,7 +333,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 교차지점에_구멍이_없다()
+    public void NoHoleAtPlaneIntersection()
     {
         var cube = MakeCube(2f);
         var planes = new[]
@@ -350,7 +350,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 거의_겹치는_평면의_퇴화조각은_폐기된다()
+    public void DegeneratePiecesFromNearlyCoincidentPlanesAreDiscarded()
     {
         var cube = MakeCube(2f);
         var planes = new[]
@@ -375,7 +375,7 @@ public class MeshSliceBakerTests
     //  · IsClosed — 엣지 공유 수만 세므로 방향을 보지 않는다.
 
     [Test]
-    public void 캡_삼각형이_절단면_바깥을_향한다()
+    public void CapTrianglesFaceOutwardFromTheCutPlane()
     {
         var cube = MakeCube(2f);
         var plane = SlicePlane.FromPointNormal(Vector3.zero, Vector3.up);
@@ -402,7 +402,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 조각의_모든_면이_일관되게_바깥을_향한다()
+    public void AllPieceFacesPointConsistentlyOutward()
     {
         // 원점을 지나지 않는 평면으로 잘라야 캡의 부호 기여가 0이 아니게 되어 감기 오류에 민감해진다.
         var cube = MakeCube(2f);
@@ -422,7 +422,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 절단면에_이미_엣지루프가_있어도_캡이_생성된다()
+    public void CapIsBuiltEvenWhenAnEdgeLoopAlreadyLiesOnThePlane()
     {
         // 옆면이 y=0에서 이미 두 단으로 나뉜 큐브. 실제 프롭에서 흔하고,
         // 프리셋 평면이 bounds 중심을 지나므로 대칭형 모델에서는 오히려 기본 상황이다.
@@ -444,7 +444,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 평면이_모델을_스치기만_하면_캡을_만들지_않는다()
+    public void NoCapWhenThePlaneOnlyGrazesTheMesh()
     {
         // 평면이 큐브의 윗면(y=+1)에 정확히 접한다. 갈린 게 아니므로 허공에 판을 만들면 안 된다.
         var cube = MakeCube(2f);
@@ -458,7 +458,7 @@ public class MeshSliceBakerTests
     }
 
     [Test]
-    public void 평면이_없으면_원본_하나가_그대로_나온다()
+    public void NoPlanesReturnsTheSourceMeshUnchanged()
     {
         var cube = MakeCube(2f);
 

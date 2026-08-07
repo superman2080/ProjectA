@@ -121,6 +121,9 @@ Vector3 mid = playerPos + toEnemy * playerShare;   // 0.5 → playerShare(0.85)
 - `EnemyView.MoveSpeed` / `EarliestArrival` — 적 몫이 1m 남짓이라 창 전체로 늘이면 기어간다. 빨리 가서 서야 한다
 - `ScheduleMoveAfter` — 실패 후퇴 뒤 다음 접근을 잇는 데 계속 쓴다
 - `Resolve`의 짧은 후퇴(`failRetreatDistance`) — 회피 연출. **후퇴한 그 자리에 선다**(제자리 복귀 없음, 플레이어가 다시 찾아간다)
+  - ⚠ **이후 변경됨**: 후퇴는 이제 `Attacker.Enemy` 실패(플레이어가 맞은 경우)에만 남는다.
+    `Attacker.Player` 실패는 적이 **제자리에서 패링**한다(후퇴 거리 0) — 재접근이 `TakeTargetForWindow`를
+    안 거쳐 0.9 m/s로 기어가는 문제가 있었다. 근거: `docs/FailConverge/`
 - `RingPosition` — 이름만 무대 배치 위치로 의미가 바뀐다. 복귀 목적지로는 더 안 쓴다
 - `BuildDuelPlan`의 중점 계산 — `0.5` → `playerShare`로 바뀔 뿐 구조는 유지
 - `AssignAttack`의 이동 인자 — 적이 여전히 자기 몫을 간다
@@ -212,6 +215,7 @@ Research 6 — Quickshift 클립이 1초인데 평균 창이 1.48초다. 배속 
   - 플레이어가 무대 밖으로 안 나간다(표적이 무대 안이므로 자동)
   - 로코모션 클립이 창을 **끝까지 채운다** — 미끄러지는 구간 없음(D-7)
   - 실패 시 적이 짧게 물러난 **그 자리**에 서 있고 플레이어가 다시 찾아간다
+    (⚠ 이후 변경: 플레이어 공격 실패는 후퇴 없이 제자리 패링 — `docs/FailConverge/`)
   - 곡 전체에서 적 인스턴스·시체가 쌓이지 않는다
 
 ## 범위 밖
@@ -220,3 +224,16 @@ Research 6 — Quickshift 클립이 1초인데 평균 창이 1.48초다. 배속 
 - 무대 메쉬 생성
 - 노드 단위 피격 반응
 - 래그돌
+
+---
+
+## ⚠ 후속 변경 — 등장 이동이 되돌아왔다 (2026-08, `docs/EnemyCluster/`)
+
+이 문서의 *"시야 밖이면 걸어 들어올 이유가 없다 → `entryDuration` 제거, 즉시 배치"*는 **더 이상 기본 경로가 아니다.**
+
+**근거가 반전됐다.** 여기서 등장 이동을 없앤 전제는 "아무도 못 보므로"였는데, 무리 배치(`EnemyCluster`)는 **적이 무리로 모여 있고 무리째 옮겨 다니는 것을 보여 주는 것이 목적**이다. 그래서:
+
+- 스폰은 **자기 자리에서 가장 가까운 화면 밖 지점**에서 일어나고, 거기서 자리까지 **짧게 걸어온다**(`EnemyDirector.SpawnAt`). 자리가 이미 화면 밖이면 오프셋 0 = 이동 없음이라, 예전의 "즉시 배치"가 **특수 케이스로 흡수됐다.**
+- 무대 전체에 흩뿌리는 `EnemyRing.PickStagePosition` 경로는 **`clusterEnabled = false`일 때의 폴백**으로만 남는다(이 문서의 나머지 결정 — 월드 고정 무대, `TakeTargetForWindow`의 창 기반 거리, `playerShare = 1`, `EarliestArrival` — 은 전부 그대로 유효하다).
+
+바뀌지 않은 것: **스폰이 화면 밖에서 일어난다**는 규율 자체. 팝인은 여전히 즉시 티가 나므로 절두체 판정이 스폰에만 남아 있다.

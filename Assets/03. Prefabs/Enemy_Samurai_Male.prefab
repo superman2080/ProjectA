@@ -1129,6 +1129,37 @@ SkinnedMeshRenderer:
     m_Center: {x: 0.3717391, y: -0.017104387, z: -0.00000011920929}
     m_Extent: {x: 0.766632, y: 0.09951265, z: 0.72829753}
   m_DirtyAABB: 0
+--- !u!1 &3623624046869762021
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7801350800355108518}
+  m_Layer: 0
+  m_Name: Trail Point B
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7801350800355108518
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3623624046869762021}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.105, y: -2.448, z: -0.18}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1580909103283021987}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3658686930456966514
 GameObject:
   m_ObjectHideFlags: 0
@@ -1632,6 +1663,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 4807001900707801444}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &5242389938247342149
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7555146956880353419}
+  m_Layer: 0
+  m_Name: Trail Point A
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7555146956880353419
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5242389938247342149}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.265, y: -2.478, z: -2.3}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1580909103283021987}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5499769337071123083
 GameObject:
   m_ObjectHideFlags: 0
@@ -1898,6 +1960,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1580909103283021987}
   - component: {fileID: 6534072738411309040}
+  - component: {fileID: 5783092953607910578}
   m_Layer: 0
   m_Name: BladeR
   m_TagString: Untagged
@@ -1917,7 +1980,9 @@ Transform:
   m_LocalPosition: {x: 0.77731186, y: 1.4427713, z: -0.03480024}
   m_LocalScale: {x: 0.40166733, y: 0.40166718, z: 0.4016671}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 7801350800355108518}
+  - {fileID: 7555146956880353419}
   m_Father: {fileID: 4312812100700690415}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!137 &6534072738411309040
@@ -1981,6 +2046,68 @@ SkinnedMeshRenderer:
     m_Center: {x: -0.0000005066395, y: 0.0000015869737, z: -0.3908038}
     m_Extent: {x: 0.054395746, y: 0.04949395, z: 0.569969}
   m_DirtyAABB: 0
+--- !u!114 &5783092953607910578
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6386723720496754651}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62cbe53ec0e8b004ab83d7b663b93274, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Hovl.HS_SwordMeshTrail
+  preset: {fileID: 11400000, guid: ee484555ac0de2d438f46d578b071b0a, type: 2}
+  trailMaterial: {fileID: 0}
+  dissolvePropertyName: _Dissolve
+  maximumDissolve: 0
+  trailLifetime: 0.2
+  minimumSectionDistance: 0.015
+  sampleInterval: 0
+  linesAlongTrail: 2
+  fadeAlphaOverLifetime: 1
+  alphaOverLifetime:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  startActive: 0
+  clearPreviousTrailOnStart: 1
+  smoothLowFps: 1
+  maximumSmoothedSectionDistance: 0.08
+  maxIntermediateSectionsPerFrame: 8
+  pointA: {fileID: 7555146956880353419}
+  pointB: {fileID: 7801350800355108518}
+  automaticAxis: 0
+  recalculatePointsOnAwake: 0
+  pointAInset: 0
+  pointBInset: 0
+  endpointPadding: 0
+  sortingOrder: 0
+  receiveShadows: 0
+  shadowCastingMode: 0
+  presetPointAEffectInstances: []
+  appliedEffectPreset: {fileID: 11400000, guid: ee484555ac0de2d438f46d578b071b0a, type: 2}
 --- !u!1 &6417377265762584954
 GameObject:
   m_ObjectHideFlags: 0
@@ -2376,6 +2503,7 @@ GameObject:
   - component: {fileID: 4312812100700690415}
   - component: {fileID: 1786722491109092285}
   - component: {fileID: 5191731194735194306}
+  - component: {fileID: 626304581283446270}
   m_Layer: 0
   m_Name: Enemy_Samurai_Male
   m_TagString: Untagged
@@ -2455,8 +2583,26 @@ MonoBehaviour:
   gazeTurnSpeed: 360
   knockBackStateName: KnockBack
   evadeStateName: Evade
+  parryStateName: Parry
+  parrySpeedParam: ParrySpeed
+  parrySpeed: 2
   crossFadeDuration: 0.12
   dissolveProperty: _Dissolve
+--- !u!114 &626304581283446270
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7891724665517407530}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55929824ad40a3d40ac459c868105d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Hovl.HS_SwordTrailAnimationEvents
+  swordTrails:
+  - {fileID: 5783092953607910578}
+  workWithoutAnimation: 1
 --- !u!1 &8015704869091790689
 GameObject:
   m_ObjectHideFlags: 0

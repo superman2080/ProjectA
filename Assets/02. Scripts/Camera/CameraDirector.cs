@@ -11,8 +11,12 @@ using UnityEngine;
 ///
 /// <para><b>큐는 셋이고, 각각 화면에서 실제로 사건이 일어나는 순간에 맞춘다.</b>
 /// 성공/실패(표적 파괴)는 <b>Deadline</b> — 칼날 임팩트 프레임·표적 절단과 같은 식이다.
-/// 반면 피격은 <see cref="PatternHandler.OnJudgeTargetFirstMiss"/> 순간에 <b>즉시</b>다
-/// (<c>CharacterActionPlayer</c>가 그때 Hit 클립을 바로 재생하므로). 실패는 사건이 둘이라 큐도 둘이다.</para>
+/// 반면 피격은 <see cref="CharacterActionPlayer.OnPlayerHit"/> — <b>적 칼이 실제로 닿는 순간</b>이다
+/// (첫 미스 순간이 아니다. 그때는 적 칼이 아직 오는 중이라 화면에는 아무 일도 안 일어났다).
+/// 실패는 사건이 둘이라 큐도 둘이다.</para>
+///
+/// <para>⚠ <b>플레이어가 공격자인 패턴(<c>Attacker.Player</c>)은 실패해도 피격 큐가 없다</b> —
+/// 적이 애초에 휘두르지 않았고 <c>OnPlayerHit</c>도 발행되지 않는다. 그 실패에는 <c>PatternFailure</c> 하나만 난다.</para>
 ///
 /// <para><b>예약은 하나면 충분하다.</b> 패턴 완료는 순차적이고, A의 Deadline은 A 마지막 노드 +goodWindow(0.1초)인데
 /// B의 완료는 A보다 최소 0.4초 뒤다 → 동시에 대기 중인 예약은 최대 하나다. 리스트를 두지 않는다.</para>
@@ -35,9 +39,13 @@ using UnityEngine;
 /// 방향은 그룹 오브젝트의 회전으로 나가며, 그래서 카메라가 언제나 플레이어 등 뒤에 선다(<see cref="ApplyFraming"/>).</para>
 ///
 /// <para><b>Cinemachine 타입은 네 이음매에만 등장한다</b> — <see cref="ApplyShake"/>,
-/// <see cref="ApplyPunch"/>, <see cref="ApplyFraming"/>, <see cref="IntroRoutine"/>.
+/// <see cref="ApplyLens"/>, <see cref="ApplyFraming"/>, <see cref="IntroRoutine"/>.
 /// 위층(트리거·카탈로그·타이밍·거리 계산)은 Cinemachine을 모르므로, 나중에 쉐이크를 Impulse로 갈아끼우거나
 /// 프레이밍 방식을 바꿔도 그대로 남는다.</para>
+///
+/// <para><b>FOV를 미는 소비자는 둘이다</b> — 임팩트 순간의 <b>펀치</b>(짧은 감쇠)와 마지막 노트를 향해 조였다 펴는
+/// <b>줌</b>(<see cref="ScheduleZoom"/>). 둘은 임팩트에 동시에 살아 있으므로 각자 오프셋만 갱신하고
+/// <see cref="ApplyLens"/>가 합산해 한 번에 쓴다. 렌즈에 직접 쓰면 나중에 쓴 쪽이 앞의 것을 지운다.</para>
 ///
 /// <para><b>쉐이크와 펀치는 채널이 다르다</b> — 쉐이크는 Perlin 노이즈, 펀치는 렌즈 FOV다.
 /// 임팩트 순간 둘이 같이 나가도 간섭하지 않는다. <b>애니메이터를 멈추는 히트스톱은 여기 없다</b>
@@ -84,6 +92,29 @@ public class CameraDirector : MonoBehaviour
 
     [Tooltip("모든 큐가 공유하는 흔들림 주파수. 0.2초 남짓 쉐이크에서는 큐별로 나눌 만한 차이가 나지 않는다.")]
     [SerializeField] private float shakeFrequency = 1.6f;
+
+    [Header("Impact Zoom")]
+    [Tooltip("마지막 노트 임팩트 줌. 끄면 FOV는 펀치만 만진다.")]
+    [SerializeField] private bool zoomEnabled = true;
+
+    [Tooltip("줌인 최대 화각 변화(도). 음수 = 화각이 좁아진다(조여든다). " +
+             "임팩트에 이 값에서 0으로 되돌아오는 것이 줌아웃이다.")]
+    [SerializeField] private float zoomFovDelta = -8f;
+
+    [Tooltip("임팩트 기준 몇 초 전부터 조이기 시작할지. " +
+             "패턴 간격이 촘촘하면(최소 0.4초) 앞 패턴의 줌아웃에 밀려 램프가 압축된다.")]
+    [SerializeField] private float zoomLeadTime = 0.3f;
+
+    [Tooltip("임팩트에서 원래 화각으로 펴지는 시간(초). 히트스톱이 걸리면 정지 창만큼 뒤로 밀린다.")]
+    [SerializeField] private float zoomReleaseDuration = 0.12f;
+
+    [Tooltip("이 개수 이상의 노드를 가진 패턴에서만 줌이 걸린다. " +
+             "노트가 적으면 조일 구간 자체가 없어 연출이 성립하지 않는다.")]
+    [SerializeField] private int minNodeCount = 3;
+
+    [Tooltip("줌인 구간의 시간 배분. 줌아웃은 선형이다(임팩트에서 펴지는 맛이 곡선보다 낫다).")]
+    [SerializeField]
+    private AnimationCurve zoomEase = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
     [Header("Framing")]
     [Tooltip("게임플레이 vcam이 추적하는 타겟 그룹. 비우면 프레이밍 기능만 꺼진다.")]
@@ -153,6 +184,20 @@ public class CameraDirector : MonoBehaviour
     private float punchDelta;
     private float punchStartTime;
     private float punchDuration;
+
+    // ⚠ FOV 오프셋 소비자가 둘이다(펀치·줌). 각자 자기 오프셋만 갱신하고
+    // ApplyLens가 합산해 한 번에 쓴다 — 각자 렌즈에 직접 쓰면 서로를 지운다.
+    private float punchOffset;
+    private float zoomOffset;
+
+    // 진행 중인 줌. hasZoom이 false면 zoomOffset은 0이다.
+    private bool hasZoom;
+    private float zoomRampStart;
+    private float zoomImpactTime;
+
+    // 대기 중인 줌(최대 하나). 스케줄이 이전 임팩트보다 먼저 오므로 덮어쓸 수 없다 — 아래 ScheduleZoom 참조.
+    private bool hasPendingZoom;
+    private float pendingZoomImpact;
 
     // 히트스톱 락. 이 시각까지 카메라는 완전히 얼어 있고, 큐는 해제 뒤로 미뤄진다.
     private float holdUntil;
@@ -296,6 +341,7 @@ public class CameraDirector : MonoBehaviour
         }
 
         StopShake(); // 꺼진 채 흔들림이 남지 않도록.
+        StopZoom();  // 꺼진 채 좁혀진 화각이 씬에 남지 않도록.
         StopIntro(); // 인트로 도중 꺼져도 vcam이 높은 우선순위로 남지 않도록.
 
         // ⚠ 잠금 도중 꺼지면 Brain이 꺼진 채 남아 카메라가 영구히 굳는다.
@@ -353,12 +399,24 @@ public class CameraDirector : MonoBehaviour
     /// 패턴이 넘어가는 순간 — 앵글 교체를 <b>예약</b>한다(발사는 카메라 큐가 끝난 뒤, <see cref="Update"/>에서).
     /// 이 이벤트는 임팩트보다 먼저 오므로 여기서 바로 교체하면 블렌드가 임팩트·쉐이크를 덮는다.
     /// </summary>
-    private void HandleJudgeTargetBegan(JudgeTargetInfo info) => angleSwitcher.OnPatternBoundary();
+    private void HandleJudgeTargetBegan(JudgeTargetInfo info)
+    {
+        angleSwitcher.OnPatternBoundary();
+
+        if (!zoomEnabled) return;
+
+        // 노트가 적은 패턴은 조일 구간 자체가 없다. 진행 중인 줌은 자기 시각대로 마저 끝난다.
+        if (info.Template == null || info.Template.AllData.Count < minNodeCount) return;
+
+        // 임팩트 앵커는 §7-3·§11과 같은 식이다 — 칼날 임팩트 프레임·표적 절단·히트스톱과 한 시각.
+        ScheduleZoom(info.Deadline + info.Template.ImpactOffset);
+    }
 
     private void HandleAllCleared()
     {
         hasPending = false;
         StopShake();
+        StopZoom();
         angleSwitcher.Reset();
     }
 
@@ -416,6 +474,7 @@ public class CameraDirector : MonoBehaviour
 
         UpdateShake();
         UpdatePunch();
+        UpdateZoom();
         UpdateFraming();
 
         // 예약된 앵글 교체는 큐가 전부 끝난 뒤에야 발사된다 — 블렌드가 임팩트·쉐이크를 덮지 않게.
@@ -450,11 +509,22 @@ public class CameraDirector : MonoBehaviour
         }
 
         StopShake();
+
+        // ⚠ 펀치만 지운다. 줌은 살려 둔다 — 히트스톱은 임팩트 순간이라 매 성공마다 걸리고,
+        // 여기서 같이 지우면 조여 있던 화각이 정지 진입 프레임에 통째로 풀린다.
         punchDuration = 0f;
         punchDelta = 0f;
-        ApplyPunch(0f);
+        punchOffset = 0f;
+        ApplyLens();
 
         holdUntil = Time.time + duration;
+
+        // 줌아웃도 <b>밀기</b>다 — 플레이어 actionEndTime·적 burstTime과 같은 규칙(§7-3의 "두 배우 모두 밀기").
+        // 정지 창 동안 Brain이 꺼져 있어 렌즈에 쓴 값이 화면에 도달하지도 않으므로, 그냥 두면 해제 프레임에
+        // 램프가 창 길이만큼 건너뛰어 화각이 한 프레임에 튄다(0.1초 정지 / 0.12초 줌아웃 = 83%).
+        // Max인 이유: 이 클래스와 HitStopDirector의 Update 실행 순서는 보장되지 않는다 —
+        // 어느 쪽이 먼저 돌든 줌아웃은 정확히 잠금 해제 순간부터 시작한다.
+        if (hasZoom) zoomImpactTime = Mathf.Max(zoomImpactTime, holdUntil);
 
         if (brain != null && brain.enabled)
         {
@@ -495,12 +565,107 @@ public class CameraDirector : MonoBehaviour
         {
             punchDuration = 0f;
             punchDelta = 0f;
-            ApplyPunch(0f);
+            punchOffset = 0f;
+            ApplyLens();
             return;
         }
 
-        ApplyPunch(punchDelta * Decay(t));
+        punchOffset = punchDelta * Decay(t);
+        ApplyLens();
     }
+
+    // ── 임팩트 줌 ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 마지막 노트 임팩트를 향해 화각을 조였다가 임팩트에서 펴는 램프를 예약한다.
+    /// 시각원은 <see cref="HandleJudgeTargetBegan"/> — 임팩트 시각과 노드 수를 <b>미리</b> 알 수 있는 유일한 이벤트다
+    /// (<c>OnPatternComplete</c>는 마지막 노트 뒤라 조일 구간이 이미 지나갔다).
+    ///
+    /// <para>⚠ <b>진행 중인 줌을 덮어쓰면 안 된다.</b> 이 스케줄은 이전 패턴이 <b>완료되는 순간</b>(마지막 노드 입력)에
+    /// 오는데, 그 패턴의 임팩트는 거기서 <c>goodWindow</c>(0.1초)만큼 뒤다 → <b>새 스케줄이 이전 임팩트보다 먼저 도착한다.</b>
+    /// 덮어쓰면 최대로 조여 있던 화각이 그 프레임에 풀려, 줌아웃이 임팩트가 아니라 마지막 노트 입력에 즉발로 일어난다.
+    /// 그래서 대기 슬롯에 넣고 현재 줌이 끝나는 프레임에 승계한다. 슬롯이 하나면 되는 근거는 큐 예약과 같다(패턴 완료가 순차적).</para>
+    /// </summary>
+    private void ScheduleZoom(float impactTime)
+    {
+        if (hasZoom)
+        {
+            hasPendingZoom = true;
+            pendingZoomImpact = impactTime;
+            return;
+        }
+
+        BeginZoom(impactTime);
+    }
+
+    /// <summary>
+    /// 램프 구간을 확정한다. 늦게 승계되면 <b>램프를 그 자리에서 시작해 압축한다</b> —
+    /// 건너뛰면 화각이 한 프레임에 튀므로, 짧은 램프가 언제나 낫다.
+    /// 임팩트마저 지났으면 그 패턴은 줌을 버린다(펼 시간밖에 안 남았다).
+    /// </summary>
+    private void BeginZoom(float impactTime)
+    {
+        if (Time.time >= impactTime) return;
+
+        zoomImpactTime = impactTime;
+        zoomRampStart = Mathf.Max(impactTime - zoomLeadTime, Time.time);
+        hasZoom = true;
+    }
+
+    private void UpdateZoom()
+    {
+        if (!hasZoom)
+        {
+            PromotePendingZoom();
+            return;
+        }
+
+        float t = Time.time;
+        if (t < zoomRampStart) return; // 예약만 돼 있고 아직 조이기 전 — 화각은 휴지값 그대로다.
+
+        if (t < zoomImpactTime)
+        {
+            float span = zoomImpactTime - zoomRampStart;
+            float k = span > 0f ? (t - zoomRampStart) / span : 1f;
+            zoomOffset = zoomFovDelta * zoomEase.Evaluate(k);
+        }
+        else if (zoomReleaseDuration > 0f && t < zoomImpactTime + zoomReleaseDuration)
+        {
+            zoomOffset = zoomFovDelta * (1f - (t - zoomImpactTime) / zoomReleaseDuration);
+        }
+        else
+        {
+            zoomOffset = 0f;
+            hasZoom = false;
+        }
+
+        ApplyLens();
+
+        if (!hasZoom) PromotePendingZoom();
+    }
+
+    private void PromotePendingZoom()
+    {
+        if (!hasPendingZoom) return;
+
+        hasPendingZoom = false;
+        BeginZoom(pendingZoomImpact);
+    }
+
+    private void StopZoom()
+    {
+        hasZoom = false;
+        hasPendingZoom = false;
+        zoomOffset = 0f;
+        ApplyLens();
+    }
+
+    /// <summary>
+    /// 줌이 <b>화면에 보이는 중</b>인가. 예약만 돼 있고 아직 조이기 전이면 false다 —
+    /// <c>hasZoom</c>을 그대로 쓰면 예약 구간까지 잠겨 앵글 교체가 발사될 창이 사라진다
+    /// (패턴 간격 0.4초 &lt; 리드타임 + 줌아웃).
+    /// </summary>
+    private bool IsZoomActive => hasZoom && Time.time >= zoomRampStart;
 
     // ── 프레이밍 ─────────────────────────────────────────────────────────────
 
@@ -657,17 +822,20 @@ public class CameraDirector : MonoBehaviour
     }
 
     /// <summary>
-    /// 펀치를 실제로 렌즈에 적용하는 <b>유일한 지점</b>. <see cref="ApplyShake"/>·<see cref="ApplyFraming"/>·
+    /// 렌즈를 실제로 만지는 <b>유일한 지점</b>. <see cref="ApplyShake"/>·<see cref="ApplyFraming"/>·
     /// <see cref="IntroRoutine"/>과 함께 Cinemachine 타입이 등장하는 네 곳 중 하나다.
+    ///
+    /// <para><b>오프셋을 합산해서 쓴다.</b> FOV를 미는 소비자가 둘(펀치·줌)이라, 각자 렌즈에 직접 쓰면
+    /// 나중에 쓴 쪽이 앞의 것을 지운다 — 둘은 임팩트 순간에 동시에 살아 있다.</para>
     /// </summary>
-    private void ApplyPunch(float delta)
+    private void ApplyLens()
     {
         var cam = ResolveEffectCamera();
         if (cam == null) return;
 
         var idle = GetIdle(cam);
         var lens = cam.Lens;
-        lens.FieldOfView = idle.fov + delta;
+        lens.FieldOfView = idle.fov + punchOffset + zoomOffset;
         cam.Lens = lens;
     }
 
@@ -741,8 +909,11 @@ public class CameraDirector : MonoBehaviour
         cam.Lens = lens;
     }
 
-    /// <summary>진행 중인 카메라 큐가 있는가. 앵글 교체가 <b>쉐이크가 끝난 뒤에</b> 발사되도록 판단 근거를 준다.</summary>
-    public bool IsCuePlaying => shakeDuration > 0f || punchDuration > 0f;
+    /// <summary>
+    /// 진행 중인 카메라 큐가 있는가. 앵글 교체가 <b>쉐이크·펀치·줌이 끝난 뒤에</b> 발사되도록 판단 근거를 준다.
+    /// 블렌드(0.4초)가 줌 램프와 겹치면 화면이 뭉개진다.
+    /// </summary>
+    public bool IsCuePlaying => shakeDuration > 0f || punchDuration > 0f || IsZoomActive;
 
     // ── 인트로 ──────────────────────────────────────────────────────────────
 

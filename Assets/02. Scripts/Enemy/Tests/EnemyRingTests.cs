@@ -12,7 +12,7 @@ public class EnemyRingTests
     // ── 스폰 각도: 시야 반대편 ──────────────────────────────────────────────
 
     [Test]
-    public void PickSpawnAngle_비어있으면_시야_반대편을_고른다()
+    public void PickSpawnAnglePicksBehindViewWhenRingIsEmpty()
     {
         float angle = EnemyRing.PickSpawnAngle(new List<float>(), viewYaw: 0f, minAngleGap: 30f);
 
@@ -21,7 +21,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_시야가_돌면_등뒤도_따라_돈다()
+    public void PickSpawnAngleFollowsViewYaw()
     {
         float angle = EnemyRing.PickSpawnAngle(new List<float>(), viewYaw: 90f, minAngleGap: 30f);
 
@@ -29,7 +29,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_점유된_각도와_최소간격을_지킨다()
+    public void PickSpawnAngleKeepsMinimumGapFromOccupiedAngles()
     {
         var occupied = new List<float> { 180f, 200f, 160f };
 
@@ -40,7 +40,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickSpawnAngle_자리가_꽉_차도_실패하지_않는다()
+    public void PickSpawnAngleStillReturnsAngleWhenRingIsFull()
     {
         // 원주 전체를 촘촘히 점유 — 간격을 지키는 후보가 하나도 없다.
         var occupied = new List<float>();
@@ -55,7 +55,7 @@ public class EnemyRingTests
     // ── 다음 상대: 링 각도 순 ───────────────────────────────────────────────
 
     [Test]
-    public void PickNextOpponent_한_방향으로만_진행한다()
+    public void PickNextOpponentAdvancesInOneDirection()
     {
         var angles = new List<float> { 10f, 100f, 200f, 300f };
 
@@ -65,7 +65,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_한_바퀴_돌면_처음으로_돌아온다()
+    public void PickNextOpponentWrapsAroundAfterFullCircle()
     {
         var angles = new List<float> { 10f, 100f, 200f };
 
@@ -75,7 +75,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_자기_자신은_마지막_순번이_된다()
+    public void PickNextOpponentPutsItselfLast()
     {
         var angles = new List<float> { 50f, 120f };
 
@@ -85,7 +85,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void PickNextOpponent_후보가_없으면_음수()
+    public void PickNextOpponentReturnsNegativeWhenNoCandidates()
     {
         Assert.AreEqual(-1, EnemyRing.PickNextOpponent(new List<float>(), 0f));
         Assert.AreEqual(-1, EnemyRing.PickNextOpponent(null, 0f));
@@ -94,7 +94,7 @@ public class EnemyRingTests
     // ── 각도 ↔ 위치 왕복 ───────────────────────────────────────────────────
 
     [Test]
-    public void 각도와_방향은_서로_역함수다()
+    public void AngleAndDirectionAreInverse()
     {
         var center = new Vector3(3f, 0f, -2f);
 
@@ -108,7 +108,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 영도는_플러스Z다()
+    public void ZeroDegreesPointsTowardPositiveZ()
     {
         Vector3 position = EnemyRing.AngleToPosition(Vector3.zero, 0f, 4f);
 
@@ -125,7 +125,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_화면_안_후보를_피한다()
+    public void PickStagePositionAvoidsVisibleCandidates()
     {
         // +Z 절반을 화면 안으로 본다.
         System.Func<Vector3, bool> visible = p => p.z > 0f;
@@ -144,7 +144,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_기존_적과_간격을_지킨다()
+    public void PickStagePositionKeepsSpacingFromOtherEnemies()
     {
         var occupied = new List<Vector3> { new Vector3(3f, 0f, -3f), new Vector3(-4f, 0f, -1f) };
 
@@ -163,7 +163,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_전부_보여도_실패하지_않는다()
+    public void PickStagePositionStillReturnsPositionWhenAllAreVisible()
     {
         Random.InitState(1);
         Vector3 pos = EnemyRing.PickStagePosition(
@@ -177,7 +177,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 무대배치는_무대_밖으로_나가지_않는다()
+    public void PickStagePositionStaysInsideStage()
     {
         for (int seed = 0; seed < 20; seed++)
         {
@@ -195,7 +195,7 @@ public class EnemyRingTests
     // ── 표적 선택: 목표 거리 ────────────────────────────────────────────────
 
     [Test]
-    public void 목표거리에_가장_가까운_적을_고른다()
+    public void PickTargetByDistancePicksClosestToDesiredDistance()
     {
         var candidates = new List<Vector3>
         {
@@ -210,7 +210,7 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 목표거리_선택은_높이를_무시한다()
+    public void PickTargetByDistanceIgnoresHeight()
     {
         var candidates = new List<Vector3>
         {
@@ -222,9 +222,236 @@ public class EnemyRingTests
     }
 
     [Test]
-    public void 표적_후보가_없으면_음수다()
+    public void PickTargetByDistanceReturnsNegativeWhenNoCandidates()
     {
         Assert.That(EnemyRing.PickTargetByDistance(new List<Vector3>(), Vector3.zero, 5f), Is.EqualTo(-1));
         Assert.That(EnemyRing.PickTargetByDistance(null, Vector3.zero, 5f), Is.EqualTo(-1));
+    }
+
+    // ── Retreat: stays inside the stage ─────────────────────────────────────
+
+    [Test]
+    public void PickRetreatTargetGoesStraightBackWhenWellInsideStage()
+    {
+        Vector3 target = EnemyRing.PickRetreatTarget(
+            position: Vector3.zero, back: Vector3.back, stageCenter: Vector3.zero, stageRadius: 8f, distance: 1.5f);
+
+        Assert.That(Vector3.Distance(target, new Vector3(0f, 0f, -1.5f)), Is.LessThan(0.01f));
+    }
+
+    [Test]
+    public void PickRetreatTargetVeersSidewaysButStaysInsideStage()
+    {
+        // Standing near the rim (radius 8) and trying to back out through it (+Z).
+        Vector3 position = new Vector3(0f, 0f, 7.5f);
+        Vector3 target = EnemyRing.PickRetreatTarget(
+            position, back: Vector3.forward, stageCenter: Vector3.zero, stageRadius: 8f, distance: 1.5f);
+
+        Assert.That(target.magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
+        Assert.That(Vector3.Distance(target, position), Is.GreaterThan(0.1f), "did not move at all");
+
+        // Candidates are limited to the rear half-circle; going forward would not read as a retreat.
+        Assert.That(Vector3.Dot((target - position).normalized, Vector3.forward), Is.GreaterThan(-0.01f));
+    }
+
+    [Test]
+    public void PickRetreatTargetStaysPutWhenDistanceIsZero()
+    {
+        Vector3 position = new Vector3(1f, 0f, 2f);
+
+        Assert.That(EnemyRing.PickRetreatTarget(position, Vector3.back, Vector3.zero, 8f, 0f), Is.EqualTo(position));
+    }
+
+    // ── 무리 배치 (docs/EnemyCluster) ──────────────────────────────────────
+
+    private static float Always() => 0.5f;
+
+    [Test]
+    public void PickClusterDirectionKeepsPreviousWhenStillUsable()
+    {
+        // 방향 유지가 목적지 요동 대책의 핵심이다 — 쓸 만한데 새로 뽑으면 무리가 무대를 가로질러 서성인다.
+        Vector3 previous = Vector3.forward;
+        Vector3 result = EnemyRing.PickClusterDirection(
+            playerPosition: Vector3.zero, previous, stageCenter: Vector3.zero, stageRadius: 8f,
+            desiredDistance: 4f, avoidCenter: new Vector3(-6f, 0f, 0f), avoidRadius: 2f, random: Always);
+
+        Assert.That(Vector3.Distance(result, previous), Is.LessThan(0.01f));
+    }
+
+    [Test]
+    public void PickClusterDirectionRerollsWhenPreviousLeavesStage()
+    {
+        // 무대 가장자리에 서서 바깥(+Z)을 향하면 그 방향으로는 desired만큼 못 간다.
+        Vector3 player = new Vector3(0f, 0f, 7f);
+        Vector3 result = EnemyRing.PickClusterDirection(
+            player, Vector3.forward, Vector3.zero, stageRadius: 8f,
+            desiredDistance: 6f, avoidCenter: Vector3.zero, avoidRadius: 0f, random: Always);
+
+        Vector3 point = player + result.normalized * 6f;
+        Assert.That(new Vector2(point.x, point.z).magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
+    }
+
+    [Test]
+    public void PickClusterDirectionAvoidsTheActiveCluster()
+    {
+        // 다음 무리를 지금 싸우는 무리 위에 겹쳐 놓으면 두 무리가 한 덩어리로 보인다.
+        Vector3 avoid = new Vector3(0f, 0f, 4f);
+        Vector3 result = EnemyRing.PickClusterDirection(
+            Vector3.zero, Vector3.forward, Vector3.zero, stageRadius: 8f,
+            desiredDistance: 4f, avoid, avoidRadius: 3f, random: Always);
+
+        Vector3 point = result.normalized * 4f;
+        Assert.That(Vector3.Distance(point, avoid), Is.GreaterThanOrEqualTo(2.99f));
+    }
+
+    [Test]
+    public void PickClusterCenterShortensRatherThanLeavingStage()
+    {
+        // 무대를 벗어나면 거리를 '줄이는' 쪽으로 자른다 — 늘리면 플레이어가 창 안에 도달하지 못한다.
+        Vector3 player = new Vector3(0f, 0f, 6f);
+        Vector3 center = EnemyRing.PickClusterCenter(
+            player, Vector3.forward, desiredDistance: 10f,
+            stageCenter: Vector3.zero, stageRadius: 8f, minPlayerDistance: 2f);
+
+        Assert.That(new Vector2(center.x, center.z).magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
+        Assert.That(Vector3.Distance(center, player), Is.LessThanOrEqualTo(10.01f), "grew past desired");
+    }
+
+    [Test]
+    public void PickClusterCenterHonoursDesiredDistanceWhenItFits()
+    {
+        Vector3 center = EnemyRing.PickClusterCenter(
+            Vector3.zero, Vector3.forward, desiredDistance: 5f,
+            stageCenter: Vector3.zero, stageRadius: 8f, minPlayerDistance: 2f);
+
+        Assert.That(Vector3.Distance(center, Vector3.zero), Is.EqualTo(5f).Within(0.01f));
+    }
+
+    [Test]
+    public void PlaceInClusterIsDeterministicAndInsideRadius()
+    {
+        // 결정적이지 않으면 재배치마다 대형이 바뀌어 '무리가 옮겨간 것'이 아니라 '흩어졌다 모인 것'으로 보인다.
+        Vector3 center = new Vector3(2f, 0f, -3f);
+        const int Count = 4;
+
+        for (int i = 0; i < Count; i++)
+        {
+            Vector3 a = EnemyRing.PlaceInCluster(center, i, Count, clusterRadius: 2f, minSpacing: 1f);
+            Vector3 b = EnemyRing.PlaceInCluster(center, i, Count, clusterRadius: 2f, minSpacing: 1f);
+
+            Assert.That(a, Is.EqualTo(b), $"slot {i} was not deterministic");
+            Assert.That(Vector3.Distance(a, center), Is.LessThanOrEqualTo(2.01f), $"slot {i} left the cluster");
+        }
+    }
+
+    [Test]
+    public void PlaceInClusterKeepsSlotsApart()
+    {
+        const int Count = 4;
+        var slots = new List<Vector3>();
+        for (int i = 0; i < Count; i++)
+            slots.Add(EnemyRing.PlaceInCluster(Vector3.zero, i, Count, clusterRadius: 2f, minSpacing: 1f));
+
+        for (int i = 0; i < Count; i++)
+        for (int j = i + 1; j < Count; j++)
+            Assert.That(Vector3.Distance(slots[i], slots[j]), Is.GreaterThan(0.5f), $"slots {i},{j} overlap");
+    }
+
+    [Test]
+    public void PickSpawnNearClusterReturnsSlotWhenAlreadyHidden()
+    {
+        // 자리가 이미 화면 밖이면 오프셋 0 — 이동 없이 그 자리에 선다. 정상 경로다.
+        Vector3 slot = new Vector3(1f, 0f, 1f);
+        Vector3 result = EnemyRing.PickSpawnNearCluster(
+            slot, Vector3.zero, 8f, Vector3.zero, 2f, Vector3.zero, Vector3.forward,
+            isVisible: _ => false, maxOffset: 6f);
+
+        Assert.That(result, Is.EqualTo(slot));
+    }
+
+    [Test]
+    public void PickSpawnNearClusterPicksNearestHiddenPoint()
+    {
+        // 자리만 화면 안이면 최소 오프셋으로 비껴 나야 한다 — 무대 가장자리까지 밀려나면 첫 이동이 무대 횡단이 된다.
+        Vector3 slot = new Vector3(3f, 0f, 0f);
+        Vector3 result = EnemyRing.PickSpawnNearCluster(
+            slot, Vector3.zero, 8f, Vector3.zero, 1f, Vector3.zero, Vector3.forward,
+            isVisible: p => Vector3.Distance(p, slot) < 0.5f, maxOffset: 6f);
+
+        Assert.That(result, Is.Not.EqualTo(slot));
+        Assert.That(Vector3.Distance(result, slot), Is.LessThanOrEqualTo(1.6f), "pushed further than needed");
+    }
+
+    // ── 배회 궤도 (docs/EnemyIdleWander) ──────────────────────────────────
+
+    [Test]
+    public void PickOrbitSlotSitsAtStandoffDistance()
+    {
+        Vector3 player = new Vector3(1f, 0f, -2f);
+        Vector3 slot = EnemyRing.PickOrbitSlot(
+            player, index: 0, count: 4, standoffDistance: 3.5f, phase: 0f,
+            stageCenter: Vector3.zero, stageRadius: 8f);
+
+        Assert.That(Vector3.Distance(slot, player), Is.EqualTo(3.5f).Within(0.01f));
+    }
+
+    [Test]
+    public void PickOrbitSlotSpreadsSlotsEvenly()
+    {
+        // 균등 분할이 곧 겹침 방지다 — 반발 계산을 두지 않는 이유.
+        const int Count = 4;
+        var slots = new List<Vector3>();
+        for (int i = 0; i < Count; i++)
+            slots.Add(EnemyRing.PickOrbitSlot(Vector3.zero, i, Count, 3.5f, 0f, Vector3.zero, 8f));
+
+        for (int i = 0; i < Count; i++)
+        for (int j = i + 1; j < Count; j++)
+            Assert.That(Vector3.Distance(slots[i], slots[j]), Is.GreaterThan(2f), $"slots {i},{j} too close");
+    }
+
+    [Test]
+    public void PickOrbitSlotShortensRatherThanLeavingStage()
+    {
+        // 플레이어가 가장자리에 붙으면 궤도 바깥쪽은 무대 밖이다 — 각도가 아니라 '거리'를 줄여야
+        // 자리가 안 뒤섞인다.
+        Vector3 player = new Vector3(0f, 0f, 7.5f);
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 slot = EnemyRing.PickOrbitSlot(player, i, 4, 3.5f, 0f, Vector3.zero, 8f);
+            Assert.That(new Vector2(slot.x, slot.z).magnitude, Is.LessThanOrEqualTo(8.01f), $"slot {i} left the stage");
+            Assert.That(Vector3.Distance(slot, player), Is.LessThanOrEqualTo(3.51f), $"slot {i} grew past standoff");
+        }
+    }
+
+    [Test]
+    public void PickOrbitSlotIsDeterministic()
+    {
+        Vector3 a = EnemyRing.PickOrbitSlot(Vector3.zero, 2, 4, 3.5f, 47f, Vector3.zero, 8f, jitter: 9f);
+        Vector3 b = EnemyRing.PickOrbitSlot(Vector3.zero, 2, 4, 3.5f, 47f, Vector3.zero, 8f, jitter: 9f);
+
+        Assert.That(a, Is.EqualTo(b));
+    }
+
+    [Test]
+    public void PickOrbitSlotRotatesWithPhase()
+    {
+        Vector3 a = EnemyRing.PickOrbitSlot(Vector3.zero, 0, 4, 3.5f, 0f, Vector3.zero, 8f);
+        Vector3 b = EnemyRing.PickOrbitSlot(Vector3.zero, 0, 4, 3.5f, 90f, Vector3.zero, 8f);
+
+        Assert.That(Vector3.Distance(a, b), Is.GreaterThan(1f), "phase did not rotate the orbit");
+        Assert.That(Vector3.Distance(b, Vector3.zero), Is.EqualTo(3.5f).Within(0.01f), "rotation changed the radius");
+    }
+
+    [Test]
+    public void PickSpawnNearClusterFallsBackWhenEverythingIsVisible()
+    {
+        // 전부 화면 안이어도 실패하지 않는다 — 기존 PickStagePosition과 같은 규율.
+        Vector3 slot = new Vector3(3f, 0f, 0f);
+        Vector3 result = EnemyRing.PickSpawnNearCluster(
+            slot, Vector3.zero, 8f, Vector3.zero, 1f, Vector3.zero, Vector3.forward,
+            isVisible: _ => true, maxOffset: 6f);
+
+        Assert.That(new Vector2(result.x, result.z).magnitude, Is.LessThanOrEqualTo(8.01f));
+        Assert.That(Vector3.Distance(result, Vector3.zero), Is.GreaterThanOrEqualTo(0.99f), "spawned inside the player guard");
     }
 }

@@ -163,6 +163,197 @@ namespace EnemySpace
             return foundHidden ? bestHidden : bestFallback;
         }
 
+        // ── 무리 배치 (유동) ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// 다음 무리가 놓일 <b>방향</b>. <paramref name="previousDirection"/>이 아직 쓸 만하면 <b>그대로 돌려준다</b>.
+        ///
+        /// <para><b>방향을 고정하는 것이 요동 대책의 핵심이다.</b> 목표 거리는 창(음악이 정한다)에서 나와
+        /// 패턴마다 0.5~2.1초로 4배 흔들린다. 거리만 흔들리면 무리가 "다가왔다 물러났다" 하는 것으로 읽히지만,
+        /// 방향까지 매번 다시 뽑으면 무리가 무대를 가로질러 왔다 갔다 해서 <b>목적 없이 서성이는 그림</b>이 된다.
+        /// 순간이동이면 중간 결과가 안 보여 상관없지만, 걸어서 옮기면 <b>갱신 한 번이 곧 보이는 동작 하나</b>다.</para>
+        ///
+        /// <para>방향을 바꾸는 경우는 둘뿐이다 — 그 방향으로 <paramref name="desiredDistance"/>를 갔을 때
+        /// 무대를 벗어나거나, 지금 교전 중인 무리(<paramref name="avoidCenter"/>)와 겹칠 때.</para>
+        /// </summary>
+        public static Vector3 PickClusterDirection(
+            Vector3 playerPosition, Vector3 previousDirection, Vector3 stageCenter, float stageRadius,
+            float desiredDistance, Vector3 avoidCenter, float avoidRadius,
+            System.Func<float> random, int candidateCount = 16)
+        {
+            if (IsDirectionUsable(previousDirection, playerPosition, stageCenter, stageRadius, desiredDistance, avoidCenter, avoidRadius))
+                return Flat(previousDirection).normalized;
+
+            candidateCount = Mathf.Max(candidateCount, 4);
+
+            // 같은 규율 — "될 때까지 재시도"가 아니라 "가장 나은 후보". 전부 부적합해도 실패하지 않는다.
+            Vector3 best = Vector3.forward;
+            float bestScore = float.MinValue;
+            float offset = random != null ? random() * 360f : 0f;
+
+            for (int i = 0; i < candidateCount; i++)
+            {
+                float angle = offset + 360f * i / candidateCount;
+                Vector3 dir = AngleToPosition(Vector3.zero, angle, 1f);
+
+                if (IsDirectionUsable(dir, playerPosition, stageCenter, stageRadius, desiredDistance, avoidCenter, avoidRadius))
+                    return dir;
+
+                // 폴백 점수: 교전 중인 무리에서 먼 쪽이 낫다.
+                float score = Flat(playerPosition + dir * desiredDistance - avoidCenter).magnitude;
+                if (score <= bestScore) continue;
+
+                bestScore = score;
+                best = dir;
+            }
+
+            return best;
+        }
+
+        private static bool IsDirectionUsable(
+            Vector3 direction, Vector3 playerPosition, Vector3 stageCenter, float stageRadius,
+            float desiredDistance, Vector3 avoidCenter, float avoidRadius)
+        {
+            Vector3 flat = Flat(direction);
+            if (flat.sqrMagnitude < 1e-6f) return false;
+
+            Vector3 point = playerPosition + flat.normalized * desiredDistance;
+            if (Flat(point - stageCenter).magnitude > stageRadius) return false;
+            if (avoidRadius > 0f && Flat(point - avoidCenter).magnitude < avoidRadius) return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// 무리 중심. 방향은 <see cref="PickClusterDirection"/>이 정했으므로 여기서는 <b>거리만 클램프</b>한다.
+        ///
+        /// <para><b>무대를 벗어나면 거리를 줄이는 쪽으로 자른다.</b> 늘리면 플레이어가 창 안에 도달하지 못해
+        /// 칼이 닿는 순간에 아직 달리는 중이 된다 — 짧게 자르면 일찍 도착해 서 있을 뿐이라 훨씬 낫다.</para>
+        /// </summary>
+        public static Vector3 PickClusterCenter(
+            Vector3 playerPosition, Vector3 direction, float desiredDistance,
+            Vector3 stageCenter, float stageRadius, float minPlayerDistance)
+        {
+            Vector3 flat = Flat(direction);
+            if (flat.sqrMagnitude < 1e-6f) flat = Vector3.forward;
+            flat.Normalize();
+
+            float maxInside = TravelInsideCircle(playerPosition, flat, stageCenter, stageRadius, desiredDistance);
+            float distance = Mathf.Min(desiredDistance, maxInside);
+            distance = Mathf.Max(distance, minPlayerDistance);
+
+            Vector3 center = playerPosition + flat * distance;
+            center.y = playerPosition.y;
+            return center;
+        }
+
+        /// <summary>
+        /// 무리 안 <paramref name="index"/>번째 자리. <b>결정적이어야 한다</b> —
+        /// 재배치마다 대형이 바뀌면 같은 무리로 안 읽히고, 무리가 통째로 옮겨간 게 아니라 흩어졌다 모인 것처럼 보인다.
+        ///
+        /// <para>황금각 나선이라 인원수가 바뀌어도 고르게 퍼지고, 중심 한 명 + 바깥 원이라는 뭉친 대형이 나온다.
+        /// <paramref name="minSpacing"/>은 반경의 하한으로만 쓴다 — 서로 밀어내면 무리가 흐트러진다(그게 원래 문제였다).</para>
+        /// </summary>
+        public static Vector3 PlaceInCluster(Vector3 center, int index, int count, float clusterRadius, float minSpacing)
+        {
+            if (count <= 1) return center;
+
+            index = Mathf.Clamp(index, 0, count - 1);
+
+            const float GoldenAngle = 137.507764f;
+            float t = count <= 1 ? 0f : (float)index / (count - 1);
+            float radius = Mathf.Sqrt(t) * clusterRadius;
+
+            // 이웃이 minSpacing보다 가까워지지 않도록 반경의 하한을 준다(0번은 중심에 남긴다).
+            if (index > 0) radius = Mathf.Max(radius, minSpacing * 0.5f);
+
+            return AngleToPosition(center, GoldenAngle * index, radius);
+        }
+
+        /// <summary>
+        /// 스폰 지점. <b>자기 자리에서 가장 가까운 화면 밖 지점</b>을 고른다.
+        ///
+        /// <para><b>왜 무대 가장자리가 아닌가</b>: 가장자리에서 걸어오게 하면 첫 이동만 무대 횡단(최대 16m)이 되어
+        /// 재배치 예산으로는 감당할 수 없다. 자리 근처에 내면 초기 이동이 0에 가까워지고, 실제 이동은 재배치만 남는다.</para>
+        ///
+        /// <para><b>여기가 이 시스템에서 카메라를 보는 유일한 곳이다.</b> 재배치(연속 이동)는 보여도 무해하지만
+        /// 스폰은 팝인이라 즉시 티가 난다. 실패 양상이 달라서 판정을 여기만 남겼다.</para>
+        ///
+        /// <para>반경을 0부터 키워 가며 훑고 <b>처음 찾은 화면 밖 후보를 즉시 반환</b>한다 —
+        /// 가장 가까운 것이 곧 최선이라 더 볼 이유가 없다. 자리 자체가 화면 밖이면 오프셋 0이다.</para>
+        /// </summary>
+        public static Vector3 PickSpawnNearCluster(
+            Vector3 slot, Vector3 stageCenter, float stageRadius,
+            Vector3 playerPosition, float minPlayerDistance,
+            Vector3 viewPosition, Vector3 viewForward,
+            System.Func<Vector3, bool> isVisible, float maxOffset, int ringCount = 8, int radialSteps = 4)
+        {
+            if (isVisible == null || !isVisible(slot)) return slot;
+
+            ringCount = Mathf.Max(ringCount, 3);
+            radialSteps = Mathf.Max(radialSteps, 1);
+
+            Vector3 bestFallback = slot;
+            float bestFacing = float.MaxValue;
+
+            for (int step = 1; step <= radialSteps; step++)
+            {
+                float radius = maxOffset * step / radialSteps;
+
+                for (int i = 0; i < ringCount; i++)
+                {
+                    Vector3 candidate = AngleToPosition(slot, 360f * i / ringCount, radius);
+                    candidate.y = slot.y;
+
+                    if (Flat(candidate - stageCenter).magnitude > stageRadius) continue;
+                    if (Flat(candidate - playerPosition).magnitude < minPlayerDistance) continue;
+
+                    if (!isVisible(candidate)) return candidate; // 가까운 것부터 훑으므로 첫 발견이 최선
+
+                    float facing = Vector3.Dot(Flat(candidate - viewPosition).normalized, Flat(viewForward).normalized);
+                    if (facing >= bestFacing) continue;
+
+                    bestFacing = facing;
+                    bestFallback = candidate;
+                }
+            }
+
+            return bestFallback;
+        }
+
+        // ── 배회 궤도 (docs/EnemyIdleWander) ──────────────────────────────────
+
+        /// <summary>
+        /// 플레이어 주위 배회 궤도의 <paramref name="index"/>번째 자리.
+        ///
+        /// <para><b>각도를 균등 분할하는 것이 곧 겹침 방지다.</b> 서로 밀어내는 반발 계산을 두지 않는다 —
+        /// 그게 원래 "적이 흩어져서 정신없다"의 원인이었다(<see cref="PickStagePosition"/>의 clearance 최대화).
+        /// 균등 분할은 결정적이고, 인덱스가 고정이면 적끼리 자리를 바꾸며 서로를 가로지르는 일도 없다.</para>
+        ///
+        /// <para><paramref name="phase"/>가 시간에 따라 도는 값이라 궤도 전체가 천천히 회전한다.
+        /// <paramref name="jitter"/>는 개체별 고정 오프셋 — 없으면 넷이 정확한 원 위에 서서 인공적이다.</para>
+        ///
+        /// <para>결과는 무대 안으로 클램프된다. 플레이어가 가장자리에 붙어 있으면 궤도의 바깥쪽 절반이
+        /// 무대 밖이므로, 그 자리는 <b>거리를 줄여</b> 안으로 당긴다 — 각도를 바꾸면 자리가 뒤섞인다.</para>
+        /// </summary>
+        public static Vector3 PickOrbitSlot(
+            Vector3 playerPosition, int index, int count, float standoffDistance, float phase,
+            Vector3 stageCenter, float stageRadius, float jitter = 0f)
+        {
+            count = Mathf.Max(count, 1);
+            index = Mathf.Clamp(index, 0, count - 1);
+
+            float angle = phase + 360f * index / count + jitter;
+            Vector3 direction = AngleToPosition(Vector3.zero, angle, 1f);
+
+            float distance = Mathf.Max(standoffDistance, 0.1f);
+            distance = Mathf.Min(distance, TravelInsideCircle(playerPosition, direction, stageCenter, stageRadius, distance));
+
+            Vector3 slot = playerPosition + direction * distance;
+            slot.y = playerPosition.y;
+            return slot;
+        }
+
         /// <summary>
         /// <paramref name="desiredDistance"/>에 <b>가장 가까운 거리</b>의 후보 인덱스. 후보가 없으면 -1.
         ///
@@ -187,6 +378,75 @@ namespace EnemySpace
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// 회피할 자리. <b>등 뒤 반원 안에서 무대를 벗어나지 않는 방향</b>을 고른다.
+        ///
+        /// <para><b>정직하게 뒤로 가는 것이 1순위다.</b> 후보를 0°, ±step, ±2step… 순으로(= 등 뒤에서 벌어지는 순서로)
+        /// 훑으며 <b>온전한 거리를 갈 수 있는 첫 방향</b>을 그대로 쓴다. 그래서 무대 한복판에서는 언제나 정확히
+        /// 뒤로 물러나고, 가장자리에 몰렸을 때만 옆으로 비껴 빠진다.</para>
+        ///
+        /// <para><see cref="PickSpawnAngle"/>·<see cref="PickStagePosition"/>과 같은 규율 —
+        /// <b>"될 때까지 재시도"가 아니라 "가장 나은 후보를 고른다"</b>. 어느 방향으로도 온전히 못 가면
+        /// 가장 멀리 갈 수 있는 방향으로 <b>거리를 잘라</b> 돌려준다. 실패하지 않으므로 호출자에 예외 경로가 없다.</para>
+        ///
+        /// <para><paramref name="maxSpreadDegrees"/>가 90도면 후보는 <b>등 뒤 반원</b>이다 —
+        /// 그보다 벌리면 옆이나 앞으로 나가 회피로 안 읽힌다.</para>
+        /// </summary>
+        /// <param name="position">지금 서 있는 자리.</param>
+        /// <param name="back">물러나고 싶은 방향(정규화 전이어도 된다. 보통 -forward).</param>
+        public static Vector3 PickRetreatTarget(
+            Vector3 position, Vector3 back, Vector3 stageCenter, float stageRadius, float distance,
+            float maxSpreadDegrees = 90f, int candidateCount = 7)
+        {
+            if (distance <= 0f) return position;
+
+            Vector3 baseDir = Flat(back);
+            if (baseDir.sqrMagnitude < 1e-6f) return position;
+            baseDir.Normalize();
+
+            candidateCount = Mathf.Max(candidateCount, 1);
+            float step = maxSpreadDegrees / candidateCount;
+
+            Vector3 bestDir = baseDir;
+            float bestTravel = -1f;
+
+            // 0, +step, -step, +2step, -2step … — 등 뒤에서 벌어지는 순서.
+            for (int i = 0; i <= candidateCount; i++)
+            {
+                for (int sign = 1; sign >= -1; sign -= 2)
+                {
+                    Vector3 dir = Quaternion.Euler(0f, sign * step * i, 0f) * baseDir;
+                    float travel = TravelInsideCircle(position, dir, stageCenter, stageRadius, distance);
+
+                    // 온전히 갈 수 있으면 더 벌릴 이유가 없다 — 가장 뒤쪽 후보가 이긴다.
+                    if (travel >= distance) return position + dir * distance;
+
+                    if (travel > bestTravel) { bestTravel = travel; bestDir = dir; }
+
+                    if (i == 0) break; // 0도는 부호가 없다
+                }
+            }
+
+            return position + bestDir * Mathf.Max(bestTravel, 0f);
+        }
+
+        /// <summary>
+        /// <paramref name="from"/>에서 <paramref name="dir"/>로 갈 때 원 안에 머무를 수 있는 거리
+        /// (<paramref name="maxDistance"/>로 클램프). 원 밖으로 나가는 지점까지의 거리를 직선-원 교차로 구한다.
+        ///
+        /// <para>ponytail: 이미 원 <b>밖</b>에 서 있는데 안쪽으로 향하면 '반대편으로 나가는 지점'을 돌려준다
+        /// (관통 거리). 스폰이 언제나 원 안이라 실제로는 안 나오는 상태이고, 필요해지면 근접 교차점을 빼면 된다.</para>
+        /// </summary>
+        private static float TravelInsideCircle(Vector3 from, Vector3 dir, Vector3 center, float radius, float maxDistance)
+        {
+            Vector3 f = Flat(from - center);
+            float b = Vector3.Dot(f, Flat(dir));
+            float disc = b * b - (f.sqrMagnitude - radius * radius);
+            if (disc < 0f) return 0f; // 원과 아예 만나지 않는다(밖에서 비껴가는 방향)
+
+            return Mathf.Clamp(-b + Mathf.Sqrt(disc), 0f, maxDistance);
         }
 
         private static float MinDistance(IReadOnlyList<Vector3> points, Vector3 to)
