@@ -157,15 +157,31 @@ public static class WeaponBoneBaker
             if (katana) WriteCurves(target, PathWeaponR, times, posR, rotR);
             if (doSheath) WriteCurves(target, PathWeaponL, times, posL, rotL);
 
+            // 되읽기 검증은 커브를 쓴 뒤, 인스턴스가 살아 있는 동안에만 가능하다.
+            string verifyR = katana ? VerifyBake(instance, bones.HandR, bones.WeaponR, target, gripR, fps) : null;
+            string verifyL = doSheath ? VerifyBake(instance, sheathBone, bones.WeaponL, target, gripL, fps) : null;
+
             EditorUtility.SetDirty(target);
             AssetDatabase.SaveAssets();
 
             var sb = new StringBuilder();
             sb.AppendLine("굽기 완료: " + target.name);
             sb.AppendLine("  " + (frames + 1) + "프레임 / " + fps + "fps / 길이 " + target.length.ToString("F3") + "초");
-            if (katana) sb.AppendLine("  " + Describe("칼  ", gripR, HandOffsetLimit));
-            if (sheath == SheathMode.Waist) sb.AppendLine("  " + Describe("검집(허리)", gripL, WaistOffsetLimit));
-            else if (sheath == SheathMode.Hand) sb.AppendLine("  " + Describe("검집(손)  ", gripL, HandOffsetLimit));
+            if (katana)
+            {
+                sb.AppendLine("  " + Describe("칼  ", gripR, HandOffsetLimit));
+                sb.AppendLine("    " + verifyR);
+            }
+            if (sheath == SheathMode.Waist)
+            {
+                sb.AppendLine("  " + Describe("검집(허리)", gripL, WaistOffsetLimit));
+                sb.AppendLine("    " + verifyL);
+            }
+            else if (sheath == SheathMode.Hand)
+            {
+                sb.AppendLine("  " + Describe("검집(손)  ", gripL, HandOffsetLimit));
+                sb.AppendLine("    " + verifyL);
+            }
             sb.AppendLine("  " + backupNote);
             return sb.ToString();
         }
@@ -309,6 +325,47 @@ public static class WeaponBoneBaker
             BodyTravel = bodyTravel,
             WeaponTravel = weaponTravel,
         };
+    }
+
+    /// <summary>
+    /// 구워 넣은 커브를 <b>런타임과 같은 경로</b>(<see cref="ClipSampler"/>)로 되읽어 실제 잔차를 잰다.
+    ///
+    /// <para>여태 보고하던 편차는 <b>참조 클립의 그립이 상수인가</b>였지 굽기 결과의 오차가 아니었다 —
+    /// 참조가 완벽해도(편차 0.00) 대상에서 어긋날 수 있다. 이 값이 그 구멍을 막는다.</para>
+    ///
+    /// <para><b>키와 키 사이 중점만 본다.</b> 키 시각의 잔차는 정의상 0이라(그 값을 그대로 구웠으므로)
+    /// 샘플링 fps가 낮아 생기는 보간 오차가 통째로 안 잡힌다 — 실측 <c>SlashCombo</c> 120fps에서
+    /// 키 0.00000m / 중점 0.02215m다.</para>
+    ///
+    /// <para>⚠ 이 숫자는 <b>인게임</b>(<c>applyRootMotion=false</c>) 값이다. Animation 창·인스펙터 프리뷰는
+    /// <c>AnimationMode</c>라 루트모션을 포즈에 넣어 몸만 전진시키는데 무기 커브는 root 기준 생 커브라
+    /// 그 이동량이 통째로 오차로 보인다 — 실측 <c>SlashCombo</c> 그래프 0.0000m / 프리뷰 <b>0.5834m</b>.
+    /// 프리뷰에서 칼이 떠 보이는 것은 굽기 실패가 아니다.</para>
+    /// </summary>
+    private static string VerifyBake(GameObject instance, Transform bone, Transform weapon, AnimationClip target, Grip grip, int fps)
+    {
+        int frames = Mathf.Max(2, Mathf.RoundToInt(target.length * fps));
+        float maxPos = 0f, maxRot = 0f, worstTime = 0f;
+
+        using (var sampler = new ClipSampler(instance, target))
+        for (int i = 0; i < frames; i++)
+        {
+            float t = target.length * (i + 0.5f) / frames;
+            sampler.Sample(t);
+
+            float distance = Vector3.Distance(weapon.position, bone.TransformPoint(grip.Position));
+            if (distance > maxPos)
+            {
+                maxPos = distance;
+                worstTime = t;
+            }
+
+            maxRot = Mathf.Max(maxRot, Quaternion.Angle(weapon.rotation, bone.rotation * grip.Rotation));
+        }
+
+        return string.Format("→ 되읽기 잔차(키 사이): 위치 max={0:F4}m  회전 max={1:F2}도 (worst t={2:F3}초)  {3}",
+            maxPos, maxRot, worstTime,
+            maxPos > 0.01f ? "△ 키 사이가 벌어졌다 — 샘플링 fps를 올려라" : "○ 인게임에서 손에 붙는다");
     }
 
     /// <summary>기준 본(손/허리)의 현재 자세에 오프셋을 곱해 무기의 root 기준 로컬 TRS를 만든다.</summary>

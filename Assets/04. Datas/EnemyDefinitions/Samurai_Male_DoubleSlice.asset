@@ -15,6 +15,22 @@ MonoBehaviour:
   prefab: {fileID: 7891724665517407530, guid: 0b6c0dc99f690d6448862df79bfe876c, type: 3}
   displayName: Samurai
   deathSliceSet: {fileID: 11400000, guid: 779d4b972e3c56b47b8ad7ec7f73c338, type: 2}
+  ambushAttacks:
+  - clip: {fileID: 7400000, guid: 62be8b2e60a474240b441196e8292349, type: 2}
+    startOffset: 0
+    duration: 0.489517
+    impactTime: 0.4041206
+    speed: 2
+  - clip: {fileID: 7400000, guid: f67de248f8947da40b042795e914709f, type: 2}
+    startOffset: 0
+    duration: 0.8396832
+    impactTime: 0.5923077
+    speed: 2
+  - clip: {fileID: 7400000, guid: 0e2fcbecedc05a742bfb97b18957bb73, type: 2}
+    startOffset: 0
+    duration: 0.2765859
+    impactTime: 0.1915802
+    speed: 2
   scaleJitter: 0.05
   initialPoolSize: 4
   maxPoolSize: 12

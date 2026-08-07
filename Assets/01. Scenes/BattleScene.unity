@@ -566,7 +566,7 @@ GameObject:
   - component: {fileID: 250229439}
   - component: {fileID: 250229438}
   m_Layer: 0
-  m_Name: Cam_FrontLow
+  m_Name: Cam_RightLow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -806,8 +806,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.027367044, y: -0.6018417, z: 0.020643005, w: 0.7978794}
-  m_LocalPosition: {x: 3.1800041, y: 1.4675707, z: -0.9085716}
+  m_LocalRotation: {x: 0.09998542, y: -0.34496912, z: 0.036987018, w: 0.93254024}
+  m_LocalPosition: {x: 3.3694103, y: 3.2653804, z: -3.9309788}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -974,6 +974,7 @@ MonoBehaviour:
   fullFrameDistance: 3
   dropoffDistance: 6
   weightDamping: 0.15
+  ambusherMaxWeight: 1
   cameraTurnDamping: 0.45
   chartPlayer: {fileID: 854156976}
   introCamera: {fileID: 1935771832}
@@ -1647,7 +1648,7 @@ GameObject:
   - component: {fileID: 464872067}
   - component: {fileID: 464872066}
   m_Layer: 0
-  m_Name: Cam_LowLeft
+  m_Name: Cam_NearLowRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2083,7 +2084,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690579358}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07088902, y: 0.000000026390353, z: -0.0000000016614163, w: 0.9974842}
+  m_LocalRotation: {x: 0.07088902, y: 0.000000013242109, z: 2.3849436e-10, w: 0.9974842}
   m_LocalPosition: {x: 0, y: 2.5, z: -7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2780,7 +2781,7 @@ GameObject:
   - component: {fileID: 937148014}
   - component: {fileID: 937148013}
   m_Layer: 0
-  m_Name: Cam_Shoulder
+  m_Name: Cam_FarShoulderRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2871,7 +2872,7 @@ MonoBehaviour:
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: 7, y: 2, z: -2}
+  FollowOffset: {x: 6, y: 3.5, z: -7}
 --- !u!114 &937148017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2923,8 +2924,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937148012}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.027367046, y: -0.6018416, z: 0.020643007, w: 0.7978795}
-  m_LocalPosition: {x: 7, y: 2, z: -2}
+  m_LocalRotation: {x: 0.09998541, y: -0.3449691, z: 0.036987018, w: 0.93254024}
+  m_LocalPosition: {x: 6, y: 3.5, z: -7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3417,7 +3418,7 @@ MonoBehaviour:
   capsuleMode: 1
   capSegments: 24
   outlineWidth: 3
-  outlineColor: {r: 1, g: 1, b: 1, a: 0.6}
+  outlineColor: {r: 1, g: 1, b: 1, a: 0.47058824}
   useGradient: 1
   fillGradient:
     serializedVersion: 2
@@ -3451,8 +3452,8 @@ MonoBehaviour:
     m_NumAlphaKeys: 2
   outlineGradient:
     serializedVersion: 2
-    key0: {r: 1, g: 0.24313726, b: 0.27450982, a: 0.5882353}
-    key1: {r: 1, g: 0.3137255, b: 0.19607843, a: 0.39215687}
+    key0: {r: 1, g: 0.24313726, b: 0.27450982, a: 0.39215687}
+    key1: {r: 1, g: 0.3137255, b: 0.19607843, a: 0.19607843}
     key2: {r: 0, g: 0, b: 0, a: 0}
     key3: {r: 0, g: 0, b: 0, a: 0}
     key4: {r: 0, g: 0, b: 0, a: 0}
@@ -3535,8 +3536,8 @@ MonoBehaviour:
   image: {fileID: 1579853741}
   hitGraphic: {fileID: 1349266778}
   visualGroup: {fileID: 1579853743}
-  perfectColor: {r: 0, g: 0, b: 1, a: 1}
-  goodColor: {r: 0, g: 1, b: 0, a: 1}
+  perfectColor: {r: 0, g: 1, b: 1, a: 1}
+  goodColor: {r: 0, g: 1, b: 0.5019608, a: 1}
   missColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &1349266778
 MonoBehaviour:
@@ -3615,6 +3616,97 @@ Transform:
   - {fileID: 1935771833}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1402213977
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1402213981}
+  - component: {fileID: 1402213980}
+  - component: {fileID: 1402213979}
+  - component: {fileID: 1402213978}
+  m_Layer: 0
+  m_Name: DodgePrompt
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1402213978
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1402213977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 374f0c0c240c7a948939fb82acfeafe2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DodgePromptView
+  root: {fileID: 0}
+  ringStartScale: 5
+  ringColor: {r: 1, g: 0.35, b: 0.25, a: 1}
+--- !u!114 &1402213979
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1402213977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 0.45, b: 0.3, a: 0.9}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &1402213980
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1402213977}
+  m_CullTransparentMesh: 1
+--- !u!224 &1402213981
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1402213977}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1565592729}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 90, y: 90}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1406144273
 GameObject:
   m_ObjectHideFlags: 0
@@ -3886,6 +3978,7 @@ RectTransform:
   - {fileID: 1406144274}
   - {fileID: 1707306252}
   - {fileID: 1144124593}
+  - {fileID: 1402213981}
   m_Father: {fileID: 392694030}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -4434,6 +4527,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1729954865}
   - component: {fileID: 1729954864}
+  - component: {fileID: 1729954866}
   m_Layer: 0
   m_Name: EnemyDirector
   m_TagString: Untagged
@@ -4469,6 +4563,12 @@ MonoBehaviour:
   clusterMoveSpeed: 3
   spawnStagger: 0.15
   spawnMaxOffset: 6
+  wanderEnabled: 1
+  standoffDistance: 3.5
+  wanderSpeed: 1.3
+  orbitSpeed: 15
+  orbitReverseInterval: {x: 3, y: 7}
+  orbitJitter: 12
   rosterPool:
   - {fileID: 11400000, guid: 717046d96ae1fdd48a90a1a922ee9cac, type: 2}
   maxAttackSpeed: 2.5
@@ -4510,6 +4610,42 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1471157119}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1729954866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1729954863}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3504adb3cde2a248a948d1f95c52122, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySpace.DodgeDirector
+  actionPlayer: {fileID: 6328205791487977059}
+  enemyDirector: {fileID: 1729954864}
+  mover: {fileID: 6328205791487977061}
+  prompt: {fileID: 1402213978}
+  handler: {fileID: 1565592730}
+  cameraDirector: {fileID: 330585549}
+  dodgeEnabled: 1
+  fallbackAmbushClips: []
+  dodgeClipLeft: {fileID: 7400000, guid: e53fcf39dc8400f4abee0d0d0670b9d7, type: 2}
+  dodgeClipRight: {fileID: 7400000, guid: b12faa6b28d341645b2b2248520d71bf, type: 2}
+  rollDuration: 0.8
+  rollSpeed: 1.6
+  rollMoveDuration: 0.25
+  ringExposure: 0.4
+  dodgeWindow: 0.15
+  margin: 0.2
+  minIdleWindow: 0.8
+  cooldown: 6
+  stageDistance: 2.5
+  lungeDistance: 1.5
+  promptHeight: 1.7
+  rollDegrees: 60
+  dodgeKey: 1
+  logWindows: 1
 --- !u!1 &1840902469
 GameObject:
   m_ObjectHideFlags: 0
@@ -5009,6 +5145,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8603744818403506175, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
   m_PrefabInstance: {fileID: 6328205791487977057}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6328205791487977061 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8730576839184429808, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+  m_PrefabInstance: {fileID: 6328205791487977057}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fb2461aa21fd824d9ae2689573fa9c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerCombatMover
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

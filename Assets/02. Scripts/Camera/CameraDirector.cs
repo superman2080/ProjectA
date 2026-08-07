@@ -129,6 +129,12 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("가중치가 목표를 따라가는 시간상수(초). 거리 계산이 튀어도 구도는 부드럽게 따라온다.")]
     [SerializeField] private float weightDamping = 0.35f;
 
+    [Tooltip("기습한 적(3번째 칸)의 가중치 상한. 기습자는 코앞(≈2.5m)이라 가중치가 거의 1이 되어\n" +
+             "세 점을 담느라 카메라가 크게 물러난다. 너무 넓으면 fullFrameDistance가 아니라 이 값으로 조인다\n" +
+             "— 상대 칸의 구도에는 영향이 없다.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float ambusherMaxWeight = 1f;
+
     [Tooltip("카메라 궤도가 플레이어 방향을 따라가는 시간상수(초). " +
              "PlayerCombatMover.turnDuration(0.15초)보다 충분히 길어야 한다 — " +
              "같으면 상대 교체 때 화면이 0.15초에 반 바퀴 돈다. 0 이하면 즉시 스냅.")]
@@ -220,6 +226,10 @@ public class CameraDirector : MonoBehaviour
     private Transform opponentTransform;
     private float opponentWeight;
 
+    // 기습자 칸(2번). 상대 칸과 완전히 같은 규율으로 돈다 — 칸은 고정이고 대상만 갈아끼운다.
+    private Transform ambusherTransform;
+    private float ambusherWeight;
+
     // 카메라 궤도의 방향. 플레이어 yaw를 목표로 뒤따르며, SmoothDampAngle이 속도를 들고 있어
     // 목표가 감쇠 도중에 또 바뀌어도(상대 연속 교체) 이어진다.
     private float cameraYaw;
@@ -272,8 +282,10 @@ public class CameraDirector : MonoBehaviour
         targetGroup.Targets.Clear();
         targetGroup.AddMember(actionPlayer.transform, 1f, 1f);
         targetGroup.AddMember(null, 0f, 1f); // 1번 칸은 자리만 잡아 둔다. 대상은 승격될 때 채운다.
+        targetGroup.AddMember(null, 0f, 1f); // 2번 칸 = 기습자. 평소엔 대상 null·가중치 0이라 구도에 영향이 없다.
 
         opponentWeight = 0f;
+        ambusherWeight = 0f;
 
         // 첫 프레임에 0°에서 감쇠가 시작되면 카메라가 한 바퀴 돌며 들어온다. 지금 방향에서 출발시킨다.
         cameraYaw = actionPlayer.transform.eulerAngles.y;
@@ -443,6 +455,25 @@ public class CameraDirector : MonoBehaviour
 
         opponentTransform = next;
         opponentWeight = 0f;
+    }
+
+    /// <summary>
+    /// 슬롯 2(기습자)의 대상을 갈아끼운다. 요구: "공격하는 적이 있으면 카메라 타깃에 바로 추가".
+    ///
+    /// <para><b>멤버를 넣고 빼지 않는다</b> — 칸은 <see cref="SetupFraming"/>에서 고정으로 만들어 두고
+    /// 여기서는 대상과 가중치만 바꾼다(§7-2: 넣었다 뺐다 하면 바운드가 계단식으로 튄다).
+    /// 비울 때 <c>null</c>을 주면 가중치가 감쇠로 빠져 <b>컷이 생기지 않는다</b>.</para>
+    ///
+    /// <para>가중치 0 리셋은 <see cref="SetOpponent"/>과 같은 이유다 — 대상 위치는 순간이동하므로
+    /// 이월하면 그 감쇠 시간 동안 엉뚱한 점을 무겁게 껴안는다.</para>
+    /// </summary>
+    public void SetAmbusher(EnemySpace.EnemyView view)
+    {
+        var next = view != null ? view.transform : null;
+        if (next == ambusherTransform) return;
+
+        ambusherTransform = next;
+        ambusherWeight = 0f;
     }
 
     private void HandleCountdownStarted(float duration)
@@ -691,19 +722,8 @@ public class CameraDirector : MonoBehaviour
     {
         if (!framingEnabled) return;
 
-        float target = 0f;
-        if (opponentTransform != null && opponentTransform.gameObject.activeInHierarchy)
-        {
-            // 높이는 무시한다 — 구도 판단은 평면 거리의 문제다.
-            float distance = Vector3.ProjectOnPlane(
-                opponentTransform.position - actionPlayer.transform.position, Vector3.up).magnitude;
-
-            target = 1f - Mathf.Clamp01((distance - fullFrameDistance) / (dropoffDistance - fullFrameDistance));
-        }
-
-        opponentWeight = weightDamping > 0f
-            ? Mathf.Lerp(opponentWeight, target, 1f - Mathf.Exp(-Time.deltaTime / weightDamping))
-            : target;
+        opponentWeight = Damp(opponentWeight, ResolveWeight(opponentTransform));
+        ambusherWeight = Damp(ambusherWeight, ResolveWeight(ambusherTransform) * ambusherMaxWeight);
 
         // yaw만 가져온다. 플레이어는 지금 평면 회전만 하지만, 훗날 피격 리액션 등으로 기울면
         // 회전을 통째로 복사한 궤도가 지면을 뚫거나 하늘로 솟는다.
@@ -713,8 +733,28 @@ public class CameraDirector : MonoBehaviour
             ? Mathf.SmoothDampAngle(cameraYaw, targetYaw, ref cameraYawVelocity, cameraTurnDamping)
             : targetYaw;
 
-        ApplyFraming(opponentTransform, opponentWeight, cameraYaw);
+        ApplyFraming(opponentTransform, opponentWeight, ambusherTransform, ambusherWeight, cameraYaw);
     }
+
+    /// <summary>
+    /// 대상 하나를 <b>얼마나 담을지</b>. 상대 칸과 기습자 칸이 <b>같은 식</b>을 쓴다 —
+    /// 계산이 하나라 두 칸이 어긋날 수가 없다. 대상이 없거나 꺼져 있으면 0(= 바운드에서 빠진다).
+    /// </summary>
+    private float ResolveWeight(Transform target)
+    {
+        if (target == null || !target.gameObject.activeInHierarchy) return 0f;
+
+        // 높이는 무시한다 — 구도 판단은 평면 거리의 문제다.
+        float distance = Vector3.ProjectOnPlane(
+            target.position - actionPlayer.transform.position, Vector3.up).magnitude;
+
+        return 1f - Mathf.Clamp01((distance - fullFrameDistance) / (dropoffDistance - fullFrameDistance));
+    }
+
+    private float Damp(float current, float target) =>
+        weightDamping > 0f
+            ? Mathf.Lerp(current, target, 1f - Mathf.Exp(-Time.deltaTime / weightDamping))
+            : target;
 
     /// <summary>
     /// 그룹을 실제로 갱신하는 <b>유일한 지점</b> — 멤버(무엇을 담을지)와 회전(어느 방향에서 담을지) 둘 다.
@@ -728,13 +768,18 @@ public class CameraDirector : MonoBehaviour
     /// <para>⚠ <b>그룹을 <c>GroupAverage</c>로 바꾸면 안 된다</b> — 회전이 멤버 배치에서 파생돼
     /// 구도가 적을 따라 돌고, 상대 가중치가 0인 구간에서는 정의되지 않아 튄다.</para>
     /// </summary>
-    private void ApplyFraming(Transform opponent, float weight, float yaw)
+    private void ApplyFraming(Transform opponent, float weight, Transform ambusher, float ambushWeight, float yaw)
     {
-        if (targetGroup == null || targetGroup.Targets.Count < 2) return;
+        if (targetGroup == null || targetGroup.Targets.Count < 3) return;
 
         var slot = targetGroup.Targets[1];
         slot.Object = opponent;
         slot.Weight = weight;
+
+        // 2번 칸 = 기습자. 칸은 언제나 있고 대상만 들고 난다(가중치 0이면 바운드에 개입하지 않는다).
+        var ambushSlot = targetGroup.Targets[2];
+        ambushSlot.Object = ambusher;
+        ambushSlot.Weight = ambushWeight;
 
         targetGroup.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
     }

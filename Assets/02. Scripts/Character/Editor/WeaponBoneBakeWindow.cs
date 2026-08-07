@@ -60,9 +60,10 @@ public class WeaponBoneBakeWindow : EditorWindow
         EditorGUILayout.Space();
         bakeKatana = EditorGUILayout.Toggle("칼 굽기 (add_weapon_r)", bakeKatana);
         sheathMode = (WeaponBoneBaker.SheathMode)EditorGUILayout.Popup("검집 (add_weapon_l)", (int)sheathMode, SheathModeLabels);
+        // 상한 240 — SlashCombo처럼 루트모션이 큰 콤보는 120fps에서도 키 사이 잔차가 2.2cm 남는다.
         sampleFps = Mathf.Clamp(EditorGUILayout.IntField(
-            new GUIContent("샘플링 fps", "대상 커브의 키 간격. 낮추면 빠른 스윙에서 키 사이가 벌어진다(30fps=21cm, 120fps=0.9cm)."),
-            sampleFps), 5, 120);
+            new GUIContent("샘플링 fps", "대상 커브의 키 간격. 낮추면 빠른 스윙에서 키 사이가 벌어진다(30fps=21cm, 120fps=0.9cm). 굽기 후 '되읽기 잔차'를 보고 올려라."),
+            sampleFps), 5, 240);
         backupBeforeBake = EditorGUILayout.Toggle("굽기 전 백업", backupBeforeBake);
 
         // 오프셋이 진짜 상수가 아닐 때 평균은 어느 프레임에서도 안 맞는다. 가장 잘 보이는 한 프레임을 집는 노브.

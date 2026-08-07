@@ -460,21 +460,10 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
     onsetTimes:
     - 37.600002
     - 38
-    exposureDurations:
-    - 0.5
-    - 0.5
-    spawnTimes:
-    - 37.100002
-    - 37.5
-    enemyCue:
-      killOnSuccess: 1
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
-    onsetTimes:
     - 38.4
     - 38.8
     - 39.2
@@ -482,7 +471,11 @@ MonoBehaviour:
     - 0.5
     - 0.5
     - 0.5
+    - 0.5
+    - 0.5
     spawnTimes:
+    - 37.100002
+    - 37.5
     - 37.9
     - 38.3
     - 38.7

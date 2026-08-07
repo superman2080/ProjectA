@@ -69,6 +69,9 @@ public class PlayerCombatMover : MonoBehaviour
     /// </summary>
     private void HandleDuelScheduled(EnemyDirector.DuelPlan plan)
     {
+        // 결투 도착 시각은 칼이 맞는 시각이라 놓칠 수 없다 — 구르는 중이면 즉시 중단하고 이동에 양보한다.
+        rolling = false;
+
         Vector3 target = plan.PlayerPosition;
         target.y = transform.position.y; // 앵커 높이가 실려 붕 뜨지 않게 — 이동은 평면에서만 한다.
 
@@ -123,8 +126,80 @@ public class PlayerCombatMover : MonoBehaviour
         turning = true;
     }
 
+    // ── 회피 구르기(원호) ────────────────────────────────────────────────────
+    private bool rolling;
+    private Vector3 rollCenter;
+    private float rollRadius;
+    private float rollFromAngle;   // 중심 기준 시작 각(도)
+    private float rollDeltaAngle;  // 부호 있는 회전량(도). +면 시계 방향
+    private float rollStart;
+    private float rollEnd;
+
+    /// <summary>
+    /// <paramref name="center"/>를 축으로 <b>원호를 그리며</b> 구른다. 회피 성공이 부른다.
+    ///
+    /// <para><b>직선 보간이면 안 된다</b> — 반경 1.5m에서 60°를 직선으로 이으면 중간에 13%(≈0.2m) 안쪽으로 파고든다.
+    /// 결투 간격이 1m 남짓이라 그만큼 칼이 어긋난다. <b>각도를 보간해야 반경이 보존</b>되고,
+    /// 그래야 결투 앵커(ImpactAnchor)가 상대에게서 벗어나지 않는다.</para>
+    ///
+    /// <para>회전은 <see cref="ScheduleTurn"/>을 쓰지 않고 매 프레임 중심을 바라보게 직접 갱신한다 —
+    /// 0.15초짜리 회전 스케줄이 0.8초짜리 구르기와 싸우면 도는 도중에 시선이 멈춘다.</para>
+    /// </summary>
+    public void RollArc(Vector3 center, float signedDegrees, float duration)
+    {
+        Vector3 offset = Vector3.ProjectOnPlane(transform.position - center, Vector3.up);
+        if (offset.sqrMagnitude < 1e-4f) return; // 중심과 겹쳐 있으면 돌 축이 없다
+
+        rollCenter = center;
+        rollRadius = offset.magnitude;
+        rollFromAngle = Mathf.Atan2(offset.x, offset.z) * Mathf.Rad2Deg;
+        rollDeltaAngle = signedDegrees;
+        rollStart = Time.time;
+        rollEnd = Time.time + Mathf.Max(duration, 0.01f);
+
+        rolling = true;
+        moving = false;   // 이동과 동시에 돌면 두 주인이 위치를 매 프레임 덮어쓴다
+        turning = false;  // 회전도 이 구간에는 구르기가 소유한다
+    }
+
+    /// <summary>구른 뒤 서게 될 자리. 방향(좌/우)을 고를 때 "적이 없는 쪽"을 재는 데 쓴다.</summary>
+    public Vector3 PredictArcEnd(Vector3 center, float signedDegrees)
+    {
+        Vector3 offset = Vector3.ProjectOnPlane(transform.position - center, Vector3.up);
+        if (offset.sqrMagnitude < 1e-4f) return transform.position;
+
+        Vector3 rotated = Quaternion.AngleAxis(signedDegrees, Vector3.up) * offset;
+        Vector3 end = center + rotated;
+        end.y = transform.position.y;
+        return end;
+    }
+
+    private void TickRoll()
+    {
+        float t = Mathf.Clamp01((Time.time - rollStart) / (rollEnd - rollStart));
+        float angle = rollFromAngle + rollDeltaAngle * Mathf.SmoothStep(0f, 1f, t);
+
+        float rad = angle * Mathf.Deg2Rad;
+        Vector3 position = rollCenter + new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)) * rollRadius;
+        position.y = transform.position.y;
+        transform.position = position;
+
+        Vector3 facing = Vector3.ProjectOnPlane(rollCenter - position, Vector3.up);
+        if (facing.sqrMagnitude > 1e-6f)
+            transform.rotation = Quaternion.LookRotation(facing);
+
+        if (t >= 1f) rolling = false;
+    }
+
     void Update()
     {
+        // 구르는 동안은 위치·회전의 주인이 하나다. 이동/회전 보간이 같이 돌면 서로를 덮어쓴다.
+        if (rolling)
+        {
+            TickRoll();
+            return;
+        }
+
         if (turning)
         {
             float t = Mathf.Clamp01((Time.time - turnStart) / (turnEnd - turnStart));

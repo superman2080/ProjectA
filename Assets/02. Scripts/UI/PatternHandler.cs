@@ -63,6 +63,12 @@ public class PatternHandler : MonoBehaviour
     public JudgementResult? DebugLastUsedMode => debugLastUsedMode;
 
     /// <summary>
+    /// 오토플레이(자동 Perfect)가 켜져 있는가. <b>패턴 밖 판정(기습 회피)도 이 스위치 하나를 따른다</b> —
+    /// 회피가 자기 토글을 들면 "패턴만 오토 / 회피만 오토"라는 아무도 원하지 않는 조합이 생긴다.
+    /// </summary>
+    public bool DebugAutoPerfect => debugInputEnabled && debugAutoPerfect;
+
+    /// <summary>
     /// 채보 없이 패턴 하나를 지금 투입한다. <c>debugInputTimes</c>가 비었거나 노드 수와 안 맞으면
     /// <b>균등 간격으로 자동 생성</b>한다 — 패턴을 바꿀 때마다 배열을 손보지 않아도 되게.
     ///

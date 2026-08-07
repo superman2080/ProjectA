@@ -58,6 +58,9 @@ namespace ChartGen
         private readonly List<ChartEntryDraft> drafts = new List<ChartEntryDraft>();
         private Vector2 scroll;
 
+        /// <summary>창 전체 스크롤. 안쪽 목록 스크롤(<see cref="scroll"/>)과 별개다.</summary>
+        private Vector2 windowScroll;
+
         /// <summary>이 곡이 쓸 패턴. 비우면 템플릿 폴더 전체를 쓴다. 저장 시 SongChart에 함께 기록된다.</summary>
         private readonly List<Pattern> patternPool = new List<Pattern>();
         private bool poolFoldout = true;
@@ -97,6 +100,10 @@ namespace ChartGen
 
         private void OnGUI()
         {
+            // 창 전체 스크롤. 작은 모니터에서는 저장 버튼까지 못 내려간다.
+            // 목록의 안쪽 스크롤(DrawEntryList)은 높이가 250 고정이라 중첩돼도 바깥 높이가 발산하지 않는다.
+            windowScroll = EditorGUILayout.BeginScrollView(windowScroll);
+
             DrawSourceFields();
             EditorGUILayout.Space();
             DrawPatternPool();
@@ -116,6 +123,9 @@ namespace ChartGen
                 DrawSaveButton();
             }
 
+            EditorGUILayout.EndScrollView();
+
+            // 리스트 변경은 스크롤뷰를 닫은 뒤에 — 그리는 도중 컨트롤 수가 바뀌면 GUILayout이 터진다.
             FlushPending();
         }
 
@@ -402,7 +412,8 @@ namespace ChartGen
 
         private void DrawWaveform()
         {
-            Rect rect = GUILayoutUtility.GetRect(position.width - 20, 120, GUILayout.ExpandWidth(true));
+            // 최소폭을 창 크기에서 재면 바깥 스크롤바 폭만큼 넘쳐 가로 스크롤이 생긴다. 폭은 ExpandWidth에 맡긴다.
+            Rect rect = GUILayoutUtility.GetRect(0f, 120f, GUILayout.ExpandWidth(true));
             EditorGUI.DrawRect(rect, new Color(0.15f, 0.15f, 0.15f));
 
             if (clip == null || clip.length <= 0f) return;
