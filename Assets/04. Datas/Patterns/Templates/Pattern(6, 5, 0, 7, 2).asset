@@ -1,0 +1,98 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
+  m_Name: Pattern(6, 5, 0, 7, 2)
+  m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
+  patternDatas:
+  - index: 6
+  - index: 5
+  - index: 0
+  - index: 7
+  - index: 2
+  attacker: 1
+  enemyAttack:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  playerAttack:
+    clip: {fileID: 7400000, guid: 916b0ba659ddf0f429f9bfd996666e17, type: 2}
+    startOffset: 0
+    duration: 1.5151639
+    impactTime: 1.254902
+    speed: 1
+  enemyFeint:
+    clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
+    startOffset: 0
+    duration: 0.26026186
+    impactTime: 0
+    speed: 1
+  enemyDeath:
+    clip: {fileID: 7400000, guid: 681b322cea2d3b146bebfcace0bd4fbc, type: 2}
+    startOffset: 0
+    duration: 0.18207172
+    impactTime: 0.079734184
+    speed: 1
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+  sliceTarget: {fileID: 11400000, guid: 8af6377bc96d2bc429724c450249b05c, type: 2}
+  sliceTargetOffset: {x: 0, y: 0}
+  impactOffset: 0
+  duelDistanceOffset: 0
+  effectCues:
+  - label: Slash Fire VFX
+    prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
+    condition: 0
+    timing: 4
+    nodeIndex: 0
+    timeOffset: -1.25
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 1.16, z: -0.83}
+    rotationOffset: {x: 0, y: 0, z: -180}
+    scale: 0
+    speed: 1
+    poolSize: 0
+  - label: Slash Fire VFX
+    prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
+    condition: 0
+    timing: 4
+    nodeIndex: 0
+    timeOffset: -0.057
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 1.16, z: -0.83}
+    rotationOffset: {x: 0, y: 0, z: 9.8}
+    scale: 0
+    speed: 1
+    poolSize: 0

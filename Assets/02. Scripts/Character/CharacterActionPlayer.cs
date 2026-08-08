@@ -151,6 +151,19 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     public event Action OnPlayerHit;
 
+    /// <summary>
+    /// 확장 포인트: <b>플레이어 애니메이션이 비어 있는 구간</b>(start, end). 도착도 끝나고 마무리 노출도 끝났는데
+    /// 다음 액션 클립은 아직 시작 전인, <b>가만히 서 있기만 하는 시간</b>이다.
+    ///
+    /// <para><b>이 구간을 아는 클래스는 여기뿐이다</b> — 네 값(<see cref="recoveryEndTime"/>·<see cref="convergeUntil"/>·
+    /// <see cref="pendingScheduleStart"/>·<c>FirstNodeTime</c>)을 동시에 드는 곳이 여기밖에 없기 때문.
+    /// 그래서 이 구간에 무언가를 끼워 넣는 연출(기습 회피 등)은 폴링하지 않고 이 이벤트만 구독한다.</para>
+    ///
+    /// <para>§11-6 무리 배치가 이 구간을 키웠다 — 무리 안에서는 이동이 0에 가까워
+    /// 예전에 대시가 채우던 시간이 통째로 "서 있는 시간"이 됐다.</para>
+    /// </summary>
+    public event Action<float, float> OnIdleWindow;
+
     /// <summary>스윙 구간 안인지. 종료 신호가 두 경로(트림 끝 / 인터럽트)로 들어와 중복 발행되지 않게 한다.</summary>
     private bool swingActive;
 
@@ -596,6 +609,46 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     private void HandleJudgeTargetBegan(JudgeTargetInfo info)
     {
+        SchedulePendingSuccess(info);
+
+        // ⚠ 예약이 끝난 <b>뒤</b>에 낸다 — 공백의 끝이 pendingScheduleStart이므로 그 값이 확정돼야 한다.
+        RaiseIdleWindow(info);
+    }
+
+    /// <summary>
+    /// 다음 액션 클립이 시작되기 전까지의 <b>빈 구간</b>을 알린다.
+    ///
+    /// <para><b>⚠ <c>OnDuelScheduled</c>보다 뒤라는 순서에 의존한다</b> — <see cref="convergeUntil"/>이 그 핸들러에서
+    /// 갱신되기 때문이다. 이미 보장돼 있다: <c>OnPatternComplete</c>(디렉터가 <c>BindNextReservation</c> →
+    /// <c>OnDuelScheduled</c>) → <c>RaiseJudgeTargetBegan</c>.</para>
+    ///
+    /// <para>슬롯이 비어 무연출인 패턴에서는 <see cref="pendingScheduleStart"/>가 <b>낡은 값</b>이라 쓰면 안 된다.
+    /// 그때는 이 패턴이 끝나는 시각(<c>Deadline</c>)까지가 통째로 빈 구간이다.</para>
+    ///
+    /// <para><b>⚠ 첫 노드로 자르지 않는다.</b> 초안은 <c>min(pendingScheduleStart, FirstNodeTime)</c>이었는데,
+    /// 실측(<c>Dreamer_Lv10</c> 89개 연결)에서 <b>83개가 "앞 패턴 마지막 노드 → 다음 첫 노드 = 정확히 0.40초"</b>였다.
+    /// 거기서 <see cref="recoveryHoldDuration"/>을 빼면 남는 창이 0.15초로 <b>상수처럼 굳어</b>
+    /// 이 구간을 쓰는 연출이 원리적으로 성립할 수 없었다.
+    ///
+    /// <para>시간의 공급처는 전부 <b>노드를 입력하는 구간 안</b>에 있다 — 공격 클립은 첫 노드가 아니라
+    /// <c>임팩트 − 와인드업</c>(템플릿 실측 p50 0.26초)에 시작하므로, 그 사이 캐릭터는 서 있기만 한다.
+    /// 그래서 창의 끝은 <b>클립 시작</b> 하나로 잡는다(p50 0.54초, ≥0.8초가 45%).
+    /// 이 구간에 붙는 연출은 <b>패턴 입력과 동시에 일어난다</b>는 뜻이고, 그건 의도된 요구다.</para>
+    /// </summary>
+    private void RaiseIdleWindow(JudgeTargetInfo info)
+    {
+        if (OnIdleWindow == null) return;
+
+        float start = Mathf.Max(Mathf.Max(recoveryEndTime, convergeUntil), Time.time);
+        float end = hasPending ? pendingScheduleStart : info.Deadline;
+
+        if (end - start <= 0f) return;
+
+        OnIdleWindow.Invoke(start, end);
+    }
+
+    private void SchedulePendingSuccess(JudgeTargetInfo info)
+    {
         missedThisTarget = false;
         hasPending = false;
         hasPendingHit = false;
@@ -726,6 +779,18 @@ public class CharacterActionPlayer : MonoBehaviour
         if (!hasPendingHit || Time.time < pendingHitTime) return;
         hasPendingHit = false;
 
+        PlayHitReaction();
+    }
+
+    /// <summary>
+    /// 피격 리액션을 <b>지금</b> 재생한다. 패턴 실패(<see cref="TryStartPendingHit"/>)와
+    /// 패턴 밖의 피격(기습 회피 실패)이 같은 경로를 쓴다 — 맞는 건 맞는 거라 가를 이유가 없다.
+    ///
+    /// <para><see cref="OnPlayerHit"/>가 여기서 나므로 <b>카메라 피격 큐·체력 감소가 그대로 따라온다</b>
+    /// (구독자 쪽에 새 배선이 필요 없다).</para>
+    /// </summary>
+    public void PlayHitReaction()
+    {
         AnimationClip hit = NextHitClip();
         if (hit != null)
             PlaySlot(hit, 0f, hit.length, 1f, isSwing: false);
@@ -733,6 +798,20 @@ public class CharacterActionPlayer : MonoBehaviour
             RaiseSwingEnded(); // 힛 클립이 없어도 진행 중이던 베기는 취소됐다.
 
         OnPlayerHit?.Invoke();
+    }
+
+    /// <summary>
+    /// 클립 하나를 <b>일회성</b>으로 재생한다(회피 구르기 등). 휘두르는 동작이 아니므로 트레일은 켜지지 않는다.
+    ///
+    /// <para><b>예약(<c>hasPending</c>)은 건드리지 않는다</b> — 다음 공격은 자기 <c>Deadline</c>에서 독립 예약이라
+    /// 제시각에 시작하고, 겹치면 크로스페이드가 이 클립을 끊을 뿐 임팩트 정렬은 안 깨진다.</para>
+    /// </summary>
+    /// <param name="speed">배속. 창이 빠듯할 때 구르기를 압축하는 노브다.</param>
+    public void PlayOneShot(AnimationClip clip, float speed = 1f)
+    {
+        if (clip == null) return;
+
+        PlaySlot(clip, 0f, clip.length, Mathf.Max(speed, 0.01f), isSwing: false);
     }
 
     /// <summary>피격 리액션 클립을 번갈아 반환한다. 배선이 없으면 null. (랜덤을 원하면 이 인덱스 선택만 교체.)</summary>

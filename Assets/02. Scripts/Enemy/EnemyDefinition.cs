@@ -18,6 +18,13 @@ namespace EnemySpace
         [Tooltip("처치 시 갈라질 절단 프록시. 비우면 절단 없이 소멸한다.")]
         [SerializeField] private SliceSpace.SliceSet deathSliceSet;
 
+        [Header("Ambush")]
+        [Tooltip("패턴 밖 공백에서 기습할 때 쓸 공격 클립들. 발동마다 랜덤으로 하나를 고른다.\n" +
+                 "⚠ 적 종류가 소유한다 — 클립은 리그·무기에 종속이라 패턴에 둘 수 없다(DeathSliceSet과 같은 논리).\n" +
+                 "⚠ 길이를 섞어 넣을 것 — 창이 짧으면 짧은 클립만 후보에 남는다. 긴 것만 넣으면 좁은 공백에서 안 뜬다.\n" +
+                 "비우면 DodgeDirector의 폴백을 쓰고, 그것도 비면 이 종류는 기습을 하지 않는다.")]
+        [SerializeField] private PatternSpace.ClipAlignment[] ambushAttacks;
+
         [Header("Variation")]
         [Tooltip("스폰 시 적용할 스케일 편차(±비율). 같은 모델 반복이 티 나지 않게 한다.")]
         [Range(0f, 0.3f)][SerializeField] private float scaleJitter = 0.05f;
@@ -32,6 +39,9 @@ namespace EnemySpace
         public GameObject Prefab => prefab;
         public string DisplayName => string.IsNullOrEmpty(displayName) ? name : displayName;
         public SliceSpace.SliceSet DeathSliceSet => deathSliceSet;
+
+        /// <summary>기습 공격 클립 후보. 비어 있으면 디렉터의 폴백이 대신한다.</summary>
+        public PatternSpace.ClipAlignment[] AmbushAttacks => ambushAttacks;
         public float ScaleJitter => scaleJitter;
         public int InitialPoolSize => Mathf.Max(0, initialPoolSize);
         public int MaxPoolSize => Mathf.Max(1, maxPoolSize);

@@ -356,6 +356,18 @@ namespace EnemySpace
         /// </summary>
         public EnemyView CurrentOpponent => currentOpponent;
 
+        /// <summary>적 클립의 자동 배속 상한. 기습도 같은 상한을 써야 정렬 규율이 한 벌로 남는다.</summary>
+        public float MaxAttackSpeed => maxAttackSpeed;
+
+        /// <summary>지금 무대에 살아 있는 적들(읽기 전용). 구르기 방향처럼 "적이 없는 쪽"을 재는 연출이 쓴다.</summary>
+        public IReadOnlyList<EnemyView> Ring => ring;
+
+        /// <summary>무대 반경. 구르기가 무대 밖으로 나가지 않게 하는 데 쓴다.</summary>
+        public float StageRadius => stageRadius;
+
+        /// <summary>무대 중심(월드 고정).</summary>
+        public Vector3 ArenaCenter => Center;
+
         // ── 무리 상태 ────────────────────────────────────────────────────────
         // ring(전체 목록)은 그대로 두고 소속만 따로 든다. 무리를 통째로 옮기려면
         // 누가 그 무리인지 확정적으로 알아야 한다 — 위치로 추정하면 후퇴·결투로 흔들린다.
@@ -418,6 +430,65 @@ namespace EnemySpace
 
             return position => GeometryUtility.TestPlanesAABB(
                 frustumScratch, new Bounds(position + Vector3.up, size));
+        }
+
+        /// <summary>
+        /// 카메라 폴백까지 포함한 시야 판정 함수. 카메라가 없으면 null(= 판정 없음)을 돌려준다.
+        /// 기습 후보를 고르는 쪽(<c>DodgeDirector</c>)이 같은 도구를 쓰게 열어 둔다 — 판정을 두 벌로 만들지 않는다.
+        /// </summary>
+        public System.Func<Vector3, bool> BuildVisibilityTest()
+        {
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            return cam != null ? BuildVisibilityTest(cam) : null;
+        }
+
+        /// <summary>
+        /// 패턴 밖 공백에 기습할 <b>노는 적</b> 하나를 고른다. 없으면 null.
+        ///
+        /// <para>후보는 <b><c>activeCluster</c>로 묶는다</b>(§11-6, <see cref="TakeTargetForWindow"/>와 같은 근거) —
+        /// <c>staged</c>를 집으면 집결 중인 적이 이탈해 무리 모델이 깨진다.</para>
+        ///
+        /// <para><b>기습 클립이 없는 적은 여기서 걸러낸다.</b> 무연출 기습은 "회피할 대상이 없는 회피 프롬프트"라
+        /// 존재할 수 없다 — 다른 무연출 폴백들과 성질이 다르다.</para>
+        ///
+        /// <para><b>이동 시간은 보지 않는다.</b> 기습자는 사전 접근으로 이미 붙어 있고, 못 따라온 경우는
+        /// 발동 시점의 <see cref="EnemyView.IsIdle"/>가 거른다.</para>
+        /// </summary>
+        /// <param name="hasAmbushClip">이 적이 쓸 기습 클립이 있는가. 폴백 판단은 호출자가 안다.</param>
+        public EnemyView PickIdleAmbusher(System.Func<Vector3, bool> isVisible, System.Func<EnemyView, bool> hasAmbushClip)
+        {
+            candidateScratch.Clear();
+
+            foreach (var view in activeCluster)
+            {
+                if (view == null || view == currentOpponent) continue;
+                if (!view.IsIdle) continue;
+                if (isVisible != null && !isVisible(view.transform.position)) continue;
+                if (hasAmbushClip != null && !hasAmbushClip(view)) continue;
+
+                candidateScratch.Add(view);
+            }
+
+            if (candidateScratch.Count == 0) return null;
+
+            return candidateScratch[UnityEngine.Random.Range(0, candidateScratch.Count)];
+        }
+
+        /// <summary>
+        /// 기습이 끝난 적을 놓아준다 — <b>찌르고 물러난다</b>. 성패로 가르지 않는다(어느 쪽이든 한 번 찔렀다).
+        ///
+        /// <para>물러날 자리는 여기서 잡는다 — <b>무대 중심·반경을 아는 곳이 여기뿐</b>이기 때문이다
+        /// (뷰에서 <c>-forward × 거리</c>로 계산하면 가장자리에서 무대 밖으로 빠져나간다).</para>
+        /// </summary>
+        public void ReleaseAmbusher(EnemyView view)
+        {
+            if (view == null) return;
+
+            Vector3 retreatTarget = EnemyRing.PickRetreatTarget(
+                view.transform.position, -view.transform.forward, Center, stageRadius, failRetreatDistance);
+
+            // Attacker.Enemy로 넘긴다 — 이 사건에서 휘두른 쪽이 적이고, 그래서 '패링'이 아니라 물러남이다.
+            view.Resolve(false, Attacker.Enemy, failRetreatDistance, retreatDuration, retreatTarget);
         }
 
         private Vector3 ViewForward

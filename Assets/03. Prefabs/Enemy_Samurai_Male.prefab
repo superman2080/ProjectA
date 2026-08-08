@@ -2058,7 +2058,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 62cbe53ec0e8b004ab83d7b663b93274, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Hovl.HS_SwordMeshTrail
-  preset: {fileID: 11400000, guid: ee484555ac0de2d438f46d578b071b0a, type: 2}
+  preset: {fileID: 11400000, guid: d3db3200ec2e18745b6f69e1736207e1, type: 2}
   trailMaterial: {fileID: 0}
   dissolvePropertyName: _Dissolve
   maximumDissolve: 0
@@ -2082,11 +2082,11 @@ MonoBehaviour:
     - serializedVersion: 3
       time: 1
       value: 0
-      inSlope: 0
-      outSlope: 0
+      inSlope: -2.1787145
+      outSlope: -2.1787145
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0
+      inWeight: 0.09512192
       outWeight: 0
     m_PreInfinity: 2
     m_PostInfinity: 2
@@ -2107,7 +2107,7 @@ MonoBehaviour:
   receiveShadows: 0
   shadowCastingMode: 0
   presetPointAEffectInstances: []
-  appliedEffectPreset: {fileID: 11400000, guid: ee484555ac0de2d438f46d578b071b0a, type: 2}
+  appliedEffectPreset: {fileID: 11400000, guid: d3db3200ec2e18745b6f69e1736207e1, type: 2}
 --- !u!1 &6417377265762584954
 GameObject:
   m_ObjectHideFlags: 0
@@ -2578,6 +2578,17 @@ MonoBehaviour:
   idleStateName: Idle
   moveStateName: Run
   minMoveDistance: 0.3
+  walkStateName: Walk
+  moveXParam: MoveX
+  moveYParam: MoveY
+  walkSpeedParam: WalkSpeed
+  walkClipSpeed: 1.297
+  maxWalkSpeedScale: 1.8
+  wanderBlendDamp: 0.15
+  speedSmoothing: 0.12
+  walkEnterSpeed: 0.3
+  walkExitSpeed: 0.12
+  wanderArriveDistance: 0.02
   moveSpeed: 3
   reactionHoldDuration: 0.6
   gazeTurnSpeed: 360

@@ -330,6 +330,12 @@ namespace EnemySpace
         public bool Wandering => wandering;
 
         /// <summary>
+        /// 지금 아무것도 안 하고 있는가(= 다른 일을 시켜도 되는가). <b>배회 조건과 정확히 같다</b> —
+        /// 죽는 중도 아니고, 예약도 없고, 리액션도 끝났고, 이동 중도 아니다. 새 판정을 만들지 않는다.
+        /// </summary>
+        public bool IsIdle => CanWander();
+
+        /// <summary>
         /// 배회 목표를 준다. <b>매 프레임 불러도 된다</b> — 목표만 갈아끼운다.
         ///
         /// <para><b>⚠ <see cref="ScheduleMove"/>를 쓰지 않는 것이 핵심이다.</b> 그걸 쓰면 <c>moving</c>이 켜져
