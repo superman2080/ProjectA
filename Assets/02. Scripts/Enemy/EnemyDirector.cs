@@ -117,6 +117,11 @@ namespace EnemySpace
         [Tooltip("표적 선택의 최소 거리(m). 너무 가까운 적만 고르면 제자리 난타가 된다.")]
         [SerializeField] private float minTargetDistance = 2f;
 
+        [Tooltip("플레이어가 cruiseSpeed로 갈 수 있는 시간에 더해 주는 여유(초).\n" +
+                 "0이면 딱 cruiseSpeed로 달려 '천천히 다가가는 압박감'이 사라진다.\n" +
+                 "⚠ 상수여야 한다 — 창의 비율로 만들면 창이 길수록 느려지는 문제가 되돌아온다.")]
+        [SerializeField] private float playerArriveSlack = 0.15f;
+
         [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 물러난 그 자리에 선다 — 플레이어가 다시 찾아간다.\n" +
                  "⚠ 다음 패턴의 창이 감당할 때만 물러난다. 못 감당하면 제자리 패링이 된다.")]
         [SerializeField] private float failRetreatDistance = 1.5f;
@@ -475,21 +480,13 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 기습이 끝난 적을 놓아준다 — <b>찌르고 물러난다</b>. 성패로 가르지 않는다(어느 쪽이든 한 번 찔렀다).
+        /// 기습이 끝난 적을 놓아준다 — <b>제자리에 남아 배회로 돌아간다</b>. 성패로 가르지 않는다.
         ///
-        /// <para>물러날 자리는 여기서 잡는다 — <b>무대 중심·반경을 아는 곳이 여기뿐</b>이기 때문이다
-        /// (뷰에서 <c>-forward × 거리</c>로 계산하면 가장자리에서 무대 밖으로 빠져나간다).</para>
+        /// <para><b>⚠ 물러나지 않는다</b>(정정 8). 후퇴는 *"베이려다 피했다"*의 후속 동작이라 기습에는 붙지 않는다 —
+        /// 무리에서 하나가 튀어나와 찌르고, 그 자리에서 다시 무리로 섞이는 것이 이 사건의 전부다.
+        /// 그래서 무대 계산(<c>PickRetreatTarget</c>)도 이 경로에는 없다.</para>
         /// </summary>
-        public void ReleaseAmbusher(EnemyView view)
-        {
-            if (view == null) return;
-
-            Vector3 retreatTarget = EnemyRing.PickRetreatTarget(
-                view.transform.position, -view.transform.forward, Center, stageRadius, failRetreatDistance);
-
-            // Attacker.Enemy로 넘긴다 — 이 사건에서 휘두른 쪽이 적이고, 그래서 '패링'이 아니라 물러남이다.
-            view.Resolve(false, Attacker.Enemy, failRetreatDistance, retreatDuration, retreatTarget);
-        }
+        public void ReleaseAmbusher(EnemyView view) => view?.ReleaseAction();
 
         private Vector3 ViewForward
         {
@@ -995,7 +992,8 @@ namespace EnemySpace
 
             // 상대가 없으면(디버그 경로) 플레이어는 제자리, 적 자리만 앞에 잡아 준다.
             if (opponent == null)
-                return new DuelPlan(player, player + Vector3.forward * distance, arriveTime, playerArriveTime);
+                return new DuelPlan(player, player + Vector3.forward * distance, arriveTime,
+                                    ResolvePlayerArrival(playerArriveTime, 0f));
 
             // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴 등)
             // transform.position은 곧 떠날 위치다. 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
@@ -1006,7 +1004,33 @@ namespace EnemySpace
             Vector3 playerTarget = meet - dir * (distance * playerShare);
             playerTarget.y = player.y;
 
-            return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime, playerArriveTime);
+            // 도착 마감을 실제 거리로 조인다 — 여기서 한 번 조이면 PlayerCombatMover(이동 배속)와
+            // CharacterActionPlayer(convergeUntil)가 같은 값을 읽으므로 둘이 어긋날 수가 없다.
+            float travel = Vector3.ProjectOnPlane(playerTarget - player, Vector3.up).magnitude;
+
+            return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime,
+                                ResolvePlayerArrival(playerArriveTime, travel));
+        }
+
+        /// <summary>
+        /// 플레이어가 <b>실제로 도착할 수 있는 가장 이른 시각</b>. <c>EnemyView.EarliestArrival</c>의 플레이어 판이다.
+        ///
+        /// <para><b>왜 필요한가</b>: <c>PlayerCombatMover</c>는 이동을 마감까지 늘려 쓴다 — 거리가 0.3m든 8m든
+        /// 도착은 언제나 마감이다. 그러면 <c>convergeUntil</c>이 그 늦은 시각이 되어
+        /// <b>서 있는 구간(= 애니메이션 공백)이 통째로 사라진다</b>(docs/EnemyAmbushDodge 정정 6 A).</para>
+        ///
+        /// <para><b>예전에는 필요 없었다</b> — <see cref="TakeTargetForWindow"/>가 <c>cruiseSpeed × 창</c>으로
+        /// 거리를 잡아 속도가 이미 일정했기 때문이다. <b>§11-6 무리 배치가 그 전제를 깼다</b>:
+        /// 후보가 무리(반경 2m) 안으로 묶여 거리가 창에 비례하지 않으므로, 창이 길수록 오히려 느리게 걷는다.</para>
+        ///
+        /// <para><b>⚠ <see cref="playerArriveSlack"/>은 상수여야 한다.</b> 창의 비율로 만들면
+        /// "창에 반비례하는 속도"가 그대로 되돌아온다.</para>
+        /// </summary>
+        private float ResolvePlayerArrival(float latest, float distance)
+        {
+            if (cruiseSpeed <= 0f) return latest;
+
+            return Mathf.Min(latest, Time.time + distance / cruiseSpeed + Mathf.Max(playerArriveSlack, 0f));
         }
 
         /// <summary>

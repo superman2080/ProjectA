@@ -333,7 +333,22 @@ namespace EnemySpace
         /// 지금 아무것도 안 하고 있는가(= 다른 일을 시켜도 되는가). <b>배회 조건과 정확히 같다</b> —
         /// 죽는 중도 아니고, 예약도 없고, 리액션도 끝났고, 이동 중도 아니다. 새 판정을 만들지 않는다.
         /// </summary>
-        public bool IsIdle => CanWander();
+        public bool IsIdle => IsFreeBy(Time.time);
+
+        /// <summary>
+        /// <paramref name="t"/> 시점까지 지금의 이동·리액션이 끝나 <b>다른 일을 시킬 수 있는가</b>.
+        ///
+        /// <para><b>기습의 사전 접근이 이것을 요구한다.</b> 사전 접근은 창이 열리는 프레임에 이동을 걸고,
+        /// 그 창의 시작이 곧 플레이어 도착 시각(= 적 도착 시각)이다 — 그래서 <see cref="IsIdle"/>로 물으면
+        /// <b>자기가 켠 <c>moving</c>에 자기가 걸린다</b>(docs/EnemyAmbushDodge 정정 4).
+        /// 물어야 할 것은 "지금 노는가"가 아니라 "그때까지 끝나는가"다.</para>
+        ///
+        /// <para>사유까지 필요하면 <see cref="BusyReasonBy"/>를 쓴다 — 이건 그것의 bool 뷰다.</para>
+        /// </summary>
+        public bool ReadyBy(float t) => IsFreeBy(t);
+
+        /// <summary>진행 중인 이동이 끝나는 절대 시각. 이동이 없으면 −1. <b>진단용</b> — 어느 이동이 자격을 막는지 갈라 보려면 이 값이 필요하다.</summary>
+        public float MoveEndsAt => moving ? moveEnd : -1f;
 
         /// <summary>
         /// 배회 목표를 준다. <b>매 프레임 불러도 된다</b> — 목표만 갈아끼운다.
@@ -371,14 +386,30 @@ namespace EnemySpace
         }
 
         /// <summary>배회해도 되는 상태인가. <b>전부 뷰가 이미 들고 있는 값이라 디렉터가 알려 줄 필요가 없다.</b></summary>
-        private bool CanWander()
-        {
-            if (Current == Phase.Dying || dissolving) return false;
-            if (hasPendingAttack || hasPendingReaction) return false;
-            if (Time.time < reactionUntil) return false;
-            if (moving) return false;   // 진짜 이동(접근·후퇴·집결)이 언제나 우선한다
+        private bool CanWander() => IsIdle;
 
-            return true;
+        /// <summary>
+        /// <paramref name="t"/> 시점의 자유 여부. <b>배회 조건과 기습 조건이 같은 술어를 쓴다</b> —
+        /// 하나뿐이라 둘이 어긋날 수가 없다(<see cref="IsIdle"/>은 <c>t = 지금</c>인 특수해다).
+        /// </summary>
+        private bool IsFreeBy(float t) => BusyReasonBy(t) == null;
+
+        /// <summary>
+        /// <paramref name="t"/> 시점에 이 적이 <b>왜</b> 자유롭지 않은가. 자유로우면 null.
+        /// <see cref="IsFreeBy"/>가 이걸 그대로 쓰므로 <b>술어는 여전히 하나</b>다.
+        ///
+        /// <para><b>⚠ 문자열 보간을 쓰지 않는다</b> — <see cref="IsIdle"/>은 <c>TickWander</c>가 매 프레임 부른다.
+        /// 상수만 돌려주므로 할당이 없다.</para>
+        /// </summary>
+        public string BusyReasonBy(float t)
+        {
+            if (Current == Phase.Dying || dissolving) return "사망 중";
+            if (hasPendingAttack) return "공격 예약";
+            if (hasPendingReaction) return "리액션 예약";
+            if (reactionUntil > t) return "리액션 중";
+            if (moving && moveEnd > t) return "이동 중";   // ⚠ moving 자체가 아니라 '그때까지 안 끝나는가'
+
+            return null;
         }
 
         private void TickWander()
@@ -590,6 +621,17 @@ namespace EnemySpace
         /// <para>앞당기는 건 <b>언제나 안전하다</b> — "클립 시작 전에 도착해 있어야 한다"는 제약의 방향과 같다.
         /// 남는 시간에는 서서 <see cref="TickGaze"/>가 상대를 바라본다.</para>
         /// </summary>
+        /// <summary>
+        /// <paramref name="latest"/>까지 끌지 않고 자기 <c>moveSpeed</c>로 갈 수 있는 만큼 빨리 가서 선다
+        /// — <c>ApproachDuel</c>과 <b>같은 규율</b>을 밖에서도 쓸 수 있게 낸 진입점이다.
+        ///
+        /// <para><b>기습의 사전 접근이 이것을 요구한다.</b> 마감(<c>ScheduleMove</c>)만 쓰면 도착이 곧 임팩트가 되어
+        /// <b>서 있는 프레임이 없다</b> — 그러면 "임팩트 때 자유로운가"라는 자격 조건이 구조적으로 항상 실패한다
+        /// (docs/EnemyAmbushDodge 정정 6 B).</para>
+        /// </summary>
+        public void ScheduleApproach(Vector3 to, float latest)
+            => ScheduleMove(transform.position, to, Time.time, EarliestArrival(transform.position, to, latest));
+
         private float EarliestArrival(Vector3 from, Vector3 to, float latest)
         {
             if (moveSpeed <= 0f) return latest;
@@ -619,6 +661,30 @@ namespace EnemySpace
         /// 여기서 <c>-forward × 거리</c>로 계산하면 가장자리에서 무대 밖으로 빠져나간다.
         /// 무대 안에 온전한 자리가 없으면 디렉터가 <b>거리를 잘라</b> 주므로 이 값은 언제나 유효하다.
         /// </param>
+        /// <summary>
+        /// 걸어 둔 동작을 놓아주고 <b>제자리에 남는다</b> — 찌르고 끝나는 기습의 뒷정리다.
+        ///
+        /// <para><b>⚠ <see cref="Resolve"/>를 쓰면 안 된다.</b> 그쪽은 <c>playerSucceeded = false</c>를
+        /// *"베이려다 피했다"*로 읽어 <c>evadeStateName</c>(뒷구르기)을 크로스페이드하고, 이어서 물러난다 —
+        /// <b>기습에는 성패도 후퇴도 없다</b>(docs/EnemyAmbushDodge 정정 7·8).</para>
+        ///
+        /// <para><b>⚠ 이동을 예약하지 않는 것이 핵심이다.</b> <see cref="Resolve"/>가 거리 0에도
+        /// <see cref="ScheduleMove"/>를 부르는 이유(<c>retreatUntil</c>이 곧 이어지는 <see cref="AssignAttack"/>의
+        /// <see cref="ScheduleMoveAfter"/> 인수인계 시각)는 <b>결투 경로 전용</b>이다 —
+        /// 기습자는 상대가 아니라 뒤에 배정이 따라오지 않는다.</para>
+        ///
+        /// <para><c>moving</c>이 false로 남으므로 <c>CanWander</c>가 통과해 <b>다음 틱에 배회로 복귀</b>한다.</para>
+        /// </summary>
+        public void ReleaseAction()
+        {
+            hasPendingAttack = false;
+            hasPendingReaction = false;
+
+            if (Current == Phase.Dying) return;
+
+            Current = Phase.Recover;
+        }
+
         public void Resolve(bool playerSucceeded, Attacker attacker, float retreatDistance, float retreatDuration,
                             Vector3 retreatTarget, ClipAlignment reaction = null, float impactTime = 0f)
         {

@@ -56,16 +56,20 @@ namespace EnemySpace
                  "⚠ 실제 이동 시간은 창이 허락하는 만큼 늘어난다(최대 클립 길이 ÷ rollSpeed).\n" +
                  "그래야 코드 이동이 끝난 뒤 제자리에서 구르는 그림이 안 생긴다.")]
         [SerializeField] private float rollMoveDuration = 0.25f;
-        [Tooltip("링이 수축하는 시간(초). ⚠ 적 클립 길이와 무관하다 — 적 모션이 '온다'를, 링이 '지금'을 맡는다.\n" +
-                 "패턴 링과 같은 감각을 유지해야 학습한 속도가 깨지지 않는다.")]
-        [SerializeField] private float ringExposure = 0.4f;
+        [Tooltip("링을 띄우는 <b>최소</b> 시간(초). 이보다 짧으면 사람이 못 읽는다 — 후보 자격(RequiredLead)도 이 값을 쓴다.")]
+        [SerializeField] private float minRingExposure = 0.4f;
+        [Tooltip("링을 띄우는 <b>최대</b> 시간(초). 실제 노출은 clamp(리드, min, max)다.\n" +
+                 "⚠ 시작 크기는 상수다 — 노출이 길어지면 수축이 느려질 뿐이다. 크기를 키워 늘리면\n" +
+                 "'크기 = 남은 시간'이라는 학습이 깨진다. 이 상한이 그 속도 편차를 묶는 노브다.")]
+        [SerializeField] private float maxRingExposure = 0.8f;
         [Tooltip("회피 판정 창(±초). 패턴 goodWindow(0.10)보다 관대하다 — 노드는 손가락, 회피는 온몸이다.")]
         [SerializeField] private float dodgeWindow = 0.15f;
         [Tooltip("공백 끝과의 여유(초).")]
         [SerializeField] private float margin = 0.2f;
-        [Tooltip("이보다 짧은 공백에서는 아예 발동하지 않는다. 예산 계산과 별개인 하한선이다.\n" +
-                 "실측(Dreamer_Lv10): 빈 구간 p50 0.54s · ≥0.8s가 45% · ≥1.0s가 25%.")]
-        [SerializeField] private float minIdleWindow = 0.8f;
+        [Tooltip("서 있는 구간에 요구하는 최소 길이(초) = dodgeWindow + rollMoveDuration + margin.\n" +
+                 "⚠ 와인드업은 여기 안 들어간다 — 대시 구간에서 쓴다(정정 5).\n" +
+                 "실측(Dreamer_Lv10): ≥0.6s가 83% · ≥0.8s가 25%.")]
+        [SerializeField] private float minIdleWindow = 0.6f;
         [Tooltip("한 번 발동한 뒤 다음 발동까지의 최소 간격(초). 매 패턴 뜨면 그건 사건이 아니라 새 패턴이다.")]
         [SerializeField] private float cooldown = 6f;
 
@@ -95,6 +99,13 @@ namespace EnemySpace
         /// <summary>사전 접근으로 붙여 둔 후보. 발동 여부는 공백이 열려야 정해진다.</summary>
         private EnemyView stagedAmbusher;
 
+        /// <summary>
+        /// 플레이어가 <b>갈 자리</b>(<c>DuelPlan.PlayerPosition</c>). 시전을 도착 전으로 당겼으므로
+        /// 찌를 자리의 기준점을 현재 위치로 잡으면 <b>아직 출발도 안 한 자리를 찌른다</b>(정정 5 함정 1).
+        /// </summary>
+        private Vector3 stagedPlayerSpot;
+        private bool hasStagedPlayerSpot;
+
         private bool hasEvent;      // 이번 공백에 기습이 예약됐는가
         private bool fired;         // 적 클립을 걸었는가(텔레그래프 시작)
         private bool promptShown;   // 링이 떴는가 — 이 전의 입력은 무시한다
@@ -105,6 +116,12 @@ namespace EnemySpace
         private ClipAlignment lastClip;   // 같은 모션이 연달아 나오지 않게
         private float fireTime;
         private float impactTime;
+
+        /// <summary>
+        /// 이번 기습에서 링이 실제로 떠 있는 시간 = <c>clamp(리드, min, max)</c>.
+        /// <b>리드마다 다르다</b> — 상수로 두면 리드가 길어도 0.4초만 보인다(정정 7 문제 1).
+        /// </summary>
+        private float ringDuration;
         private float windowEnd;    // 다음 액션 클립이 시작되는 시각. 구르기 이동이 여기 전에 끝나야 한다.
         private float cooldownUntil;
         private float cameraClearAt;      // 구르기·피격이 끝나 기습자를 구도에서 뺄 시각
@@ -164,10 +181,17 @@ namespace EnemySpace
 
             if (stagedAmbusher == null) return;
 
+            // 시전이 도착 전에 시작되므로 '찌를 자리'의 기준점도 여기서 받아 둔다(정정 5 함정 1).
+            stagedPlayerSpot = plan.PlayerPosition;
+            hasStagedPlayerSpot = true;
+
             Vector3 target = PlaceAround(plan.PlayerPosition, stagedAmbusher.transform.position, stageDistance);
 
             stagedAmbusher.ScheduleFace(plan.PlayerPosition);
-            stagedAmbusher.ScheduleMove(stagedAmbusher.transform.position, target, Time.time, plan.PlayerArriveTime);
+
+            // ⚠ ScheduleMove가 아니라 ScheduleApproach다(정정 6 B) — 마감까지 끌면 moveEnd가 임팩트보다 뒤여서
+            // "임팩트 때 자유로운가"가 언제나 실패한다. 실제 도착은 적 자기 moveSpeed가 정한다.
+            stagedAmbusher.ScheduleApproach(target, plan.PlayerArriveTime);
         }
 
         /// <summary><paramref name="center"/> 주위, <paramref name="from"/> 쪽 방향으로 <paramref name="distance"/>만큼 떨어진 자리. 무대 안으로 자른다.</summary>
@@ -205,26 +229,40 @@ namespace EnemySpace
         {
             if (!dodgeEnabled || enemyDirector == null || prompt == null) return;
 
-            float from = Mathf.Max(start, Time.time);
-            float window = end - from;
+            // ⚠ 숫자를 둘로 나눠 든다(정정 5) — 요구가 둘이고 시계가 서로 다르다.
+            //  standing: 플레이어가 서 있는 구간. 판정과 구르기가 여기 들어가야 한다.
+            //  lead    : 지금부터 임팩트까지. 와인드업·링은 여기 들어가면 되고 대시 구간을 먹어도 된다.
+            float standing = end - Mathf.Max(start, Time.time);
+
+            // 구르기 <b>이동</b>이 창 안에 끝나도록 임팩트를 역산한다(클립 뒷부분은 끊겨도 된다).
+            // 후보 선별이 이 값을 쓰므로 먼저 계산한다.
+            float impact = end - (Mathf.Max(rollMoveDuration, 0f) + margin);
+            float lead = impact - Time.time;
+
+            // 뷰가 낸 사유. 후보가 없으면 물을 대상이 없으니 null이다.
+            string stagedBusy = stagedAmbusher != null ? stagedAmbusher.BusyReasonBy(impact) : null;
 
             string reason = null;
 
             if (hasEvent) reason = "진행 중";
             else if (Time.time < cooldownUntil) reason = "쿨다운";
-            else if (window < minIdleWindow) reason = "창 부족";
+            else if (standing < minIdleWindow) reason = "창 부족";
             else if (enemyDirector.CurrentAttacker == Attacker.Enemy) reason = "적이 공격자";
-            else if (stagedAmbusher == null || !stagedAmbusher.IsIdle) reason = "대기 후보 없음";
+            // ⚠ 기준 시각이 <b>임팩트</b>다 — 요구는 "지금 노는가"가 아니라 "칼이 닿을 때 서 있는가"다(정정 5 함정 2).
+            // 사전 접근 이동은 그보다 먼저 끝나므로 자기가 켠 moving에 자기가 걸리지 않는다(정정 4).
+            // 사유는 뷰가 직접 낸다 — 5개 항을 뭉치면 로그에서 병목이 안 보인다.
+            else if (stagedAmbusher == null) reason = "후보 없음";
+            else if (stagedBusy != null) reason = "후보 " + stagedBusy;
             else if (!IsVisible(stagedAmbusher)) reason = "화면 밖";
 
             ClipAlignment picked = null;
             if (reason == null)
             {
-                picked = PickClipWithin(stagedAmbusher, window);
+                picked = PickClipWithin(stagedAmbusher, lead);
                 if (picked == null) reason = "맞는 클립 없음";
             }
 
-            LogWindow(window, reason);
+            LogWindow(standing, lead, start, impact, reason);
 
             if (reason != null) return;
 
@@ -232,10 +270,16 @@ namespace EnemySpace
             ambushClip = picked;
             lastClip = picked;
 
-            // 구르기 <b>이동</b>이 창 안에 끝나도록 임팩트를 역산한다(클립 뒷부분은 끊겨도 된다).
-            // 적 클립은 자기 와인드업만큼 앞서 알아서 시작한다.
-            impactTime = end - (Mathf.Max(rollMoveDuration, 0f) + margin);
-            fireTime = from;
+            impactTime = impact;
+
+            // 링 노출을 리드에 맞춘다(정정 7). 짧은 리드는 통째로 덮고, 긴 리드는 상한에서 자른다 —
+            // ⚠ 크기가 아니라 시간만 늘린다. 시작 크기를 키우면 "크기 = 남은 시간"이라는 학습이 깨진다.
+            ringDuration = Mathf.Clamp(lead, Mathf.Max(minRingExposure, 0.01f), Mathf.Max(maxRingExposure, minRingExposure));
+
+            // ⚠ 즉시 발동이다(정정 5) — start를 기다리면 와인드업이 창 안으로 되돌아온다.
+            // 적 모션과 링은 플레이어가 대시 중이어도 성립한다(링은 ScreenSpaceOverlay라 이동과 무관하다).
+            // 서 있어야 하는 것은 판정과 구르기뿐이고, 그건 impact가 창 끝에 붙어 있어 구조적으로 보장된다.
+            fireTime = Time.time;
             windowEnd = end;
 
             hasEvent = true;
@@ -245,17 +289,17 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 남은 창 <paramref name="window"/>에 들어가는 클립 중 하나를 랜덤으로 고른다. 없으면 null.
+        /// 리드타임 <paramref name="lead"/>(지금 → 임팩트)에 들어가는 클립 중 하나를 랜덤으로 고른다. 없으면 null.
         /// 후보가 둘 이상이면 <b>직전에 쓴 클립은 제외</b>한다 — 같은 모션이 연달아 나오면 랜덤으로 안 읽힌다.
         /// </summary>
-        private ClipAlignment PickClipWithin(EnemyView view, float window)
+        private ClipAlignment PickClipWithin(EnemyView view, float lead)
         {
             clipScratch.Clear();
 
             foreach (var clip in ClipsFor(view))
             {
                 if (clip == null || !clip.IsUsable) continue;
-                if (RequiredTime(clip) > window) continue;
+                if (RequiredLead(clip) > lead) continue;
 
                 clipScratch.Add(clip);
             }
@@ -267,19 +311,17 @@ namespace EnemySpace
         }
 
         /// <summary>
-        /// 이 클립으로 기습하려면 공백이 얼마나 필요한가. <b>클립마다 다르다</b> — 상수로 굳히면 안 된다.
+        /// 이 클립으로 기습하려면 <b>임팩트까지 몇 초가 남아 있어야 하는가</b>. <b>클립마다 다르다</b> — 상수로 굳히면 안 된다.
         ///
-        /// <para><b>⚠ 와인드업과 <see cref="ringExposure"/> 중 <u>큰 쪽</u>이다.</b> 둘은 같은 구간을 공유하지만
-        /// 어느 쪽이 길지는 클립이 정한다 — 배속을 올려 와인드업이 링보다 짧아지면 <b>링이 적 모션보다 먼저 뜬다</b>.
-        /// 그러면 "모션이 온다를, 링이 지금을 맡는다"는 분리가 뒤집힌다.</para>
+        /// <para><b>⚠ 와인드업과 <see cref="minRingExposure"/> 중 <u>큰 쪽</u>이다.</b> 둘은 같은 구간을 공유하지만
+        /// 어느 쪽이 길지는 클립이 정한다 — 링은 최소 노출만큼은 떠 있어야 읽히고, 클립은 자기 와인드업만큼 필요하다.</para>
         ///
-        /// <para><b>⚠ 구르기 <i>클립</i>은 예산에 없다.</b> "피했다"는 임팩트에서 이미 성립하므로 뒷부분은
-        /// 다음 공격 크로스페이드에 끊겨도 된다. 창 안에 들어가야 하는 것은 <b>자리를 옮기는 시간</b>
-        /// (<see cref="rollMoveDuration"/>)뿐이다 — 그건 다음 스윙의 기하가 얼기 전에 끝나야 한다.</para>
+        /// <para><b>⚠ 판정·구르기·margin은 여기 없다</b>(정정 5). 그건 <b>서 있는 구간</b>에 걸리는 요구라
+        /// <c>minIdleWindow</c>가 따로 본다. 리드타임은 <b>지금부터</b> 재는 값이라 대시 구간을 먹어도 되고,
+        /// 임팩트가 창 끝에 붙어 있으므로 두 요구가 같은 시간을 두 번 세지 않는다.</para>
         /// </summary>
-        private float RequiredTime(ClipAlignment clip) =>
-            Mathf.Max(clip.ResolvedImpactSpan / clip.Speed, ringExposure)
-            + dodgeWindow + Mathf.Max(rollMoveDuration, 0f) + margin;
+        private float RequiredLead(ClipAlignment clip) =>
+            Mathf.Max(clip.ResolvedImpactSpan / clip.Speed, minRingExposure);
 
         /// <summary>이 적이 쓸 기습 클립 목록. <b>적 종류가 진짜 출처</b>이고, 비면 디렉터의 폴백이 대신한다.</summary>
         private ClipAlignment[] ClipsFor(EnemyView view)
@@ -324,7 +366,7 @@ namespace EnemySpace
             if (!fired && Time.time >= fireTime) Fire();
             if (!fired) return;
 
-            if (!promptShown && Time.time >= impactTime - ringExposure) ShowPrompt();
+            if (!promptShown && Time.time >= impactTime - ringDuration) ShowPrompt();
             if (!promptShown || resolved) return;
 
 #if UNITY_EDITOR
@@ -349,12 +391,32 @@ namespace EnemySpace
         /// </summary>
         private void Fire()
         {
+            // 사전 접근을 <b>못 따라올</b> 적은 여기서 걸러진다.
+            // ⚠ 기준 시각이 impactTime이다(정정 5 함정 2) — 시전을 도착 전으로 당겼으므로 지금 이동 중인 것은
+            // 정상이고, <b>임팩트 때</b> 아직 이동 중인 것이 비정상이다. IsIdle로 물으면 항상 실격된다.
+            // Abort는 fired == false라 ReleaseAmbusher도 쿨다운도 걸지 않는다 — 다음 공백이 곧바로 다시 시도한다.
+            string busy = ambusher.BusyReasonBy(impactTime);
+            if (busy != null)
+            {
+                LogResult("발동 취소 — 기습자가 임팩트까지 " + busy);
+                Abort();
+                return;
+            }
+
             fired = true;
 
-            Vector3 player = mover != null ? mover.transform.position : transform.position;
+            // ⚠ 플레이어의 <b>갈 자리</b>다(정정 5 함정 1). 시전이 도착 전에 시작되므로 현재 위치로 잡으면
+            // 아직 출발도 안 한 자리를 찌른다 — 정정 2 B와 같은 실수다.
+            Vector3 player = hasStagedPlayerSpot ? stagedPlayerSpot
+                           : mover != null ? mover.transform.position : transform.position;
             Vector3 lungeSpot = PlaceAround(player, ambusher.transform.position, lungeDistance);
 
             ambusher.AssignAttack(ambushClip, impactTime, lungeSpot, player, enemyDirector.MaxAttackSpeed);
+
+            // 텔레그래프가 실제로 링보다 먼저 보이는가(§4-2 A)를 로그로 확인할 수 있게 남긴다 —
+            // 와인드업 < 링 노출이면 링이 먼저 뜬다 — 정정 7 이후로는 실격이 아니라 기록만 한다
+            // (링이 전 구간을 덮으므로 타이밍 단서는 링이 전담한다).
+            LogFire();
 
             // "공격하는 적"이 확정된 순간이 여기다 — 사전 접근에서 담으면 발동 없이 끝날 후보까지 담겨
             // 매 패턴 화면이 넓어졌다 좁아졌다 한다.
@@ -365,7 +427,7 @@ namespace EnemySpace
         private void ShowPrompt()
         {
             promptShown = true;
-            prompt.Show(ambusher.transform, Vector3.up * promptHeight, ringExposure);
+            prompt.Show(ambusher.transform, Vector3.up * promptHeight, ringDuration);
         }
 
         /// <summary>
@@ -386,8 +448,17 @@ namespace EnemySpace
             prompt.Hide();
 
             RollAway();
+
+            // 원호가 실제로 원호인가(Step 7)를 로그로 본다 — 중심까지의 거리가 구르기 전후로 유지돼야 한다.
+            var center = enemyDirector.CurrentOpponent != null ? enemyDirector.CurrentOpponent : ambusher;
+            float radius = center != null && mover != null
+                ? Vector3.ProjectOnPlane(mover.transform.position - center.transform.position, Vector3.up).magnitude
+                : 0f;
+
             LogResult($"성공({source}) — 오차 {Time.time - impactTime:+0.000;-0.000}s · " +
-                      $"이동 {lastRollMove:0.00}s {(lastRollRight ? "오른쪽" : "왼쪽")}");
+                      $"이동 {lastRollMove:0.00}s {(lastRollRight ? "오른쪽" : "왼쪽")} {rollDegrees:0}° · " +
+                      $"중심 {(center != null ? center.name : "(없음)")} 반경 {radius:0.00}m · " +
+                      $"창 끝까지 {windowEnd - Time.time:0.00}s");
             Finish();
         }
 
@@ -489,6 +560,7 @@ namespace EnemySpace
             cooldownUntil = Time.time + cooldown;
 
             stagedAmbusher = null;
+            hasStagedPlayerSpot = false;   // 다음 결투 계획이 새로 준다 — 낡은 자리를 찌르지 않는다
             ambusher = null;
             ambushClip = null;
             hasEvent = false;
@@ -509,6 +581,7 @@ namespace EnemySpace
             if (fired && ambusher != null && enemyDirector != null) enemyDirector.ReleaseAmbusher(ambusher);
 
             stagedAmbusher = null;
+            hasStagedPlayerSpot = false;   // 다음 결투 계획이 새로 준다 — 낡은 자리를 찌르지 않는다
             ambusher = null;
             ambushClip = null;
             hasEvent = false;
@@ -518,13 +591,55 @@ namespace EnemySpace
             cameraClearAt = 0f;
         }
 
+        /// <summary>
+        /// 공백 접수 결과. <b>두 숫자를 같이 찍는다</b>(정정 5) — 서 있는 구간과 리드타임은 요구가 다르고 시계가 달라서
+        /// 하나만 보면 어느 쪽이 막았는지 추적이 안 된다.
+        /// </summary>
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        private void LogWindow(float window, string reason)
+        private void LogWindow(float standing, float lead, float start, float impact, string reason)
         {
 #if UNITY_EDITOR
             if (!logWindows) return;
 
-            Debug.Log($"[DodgeDirector] 공백 {window:0.00}s → {(reason == null ? "발동" : "무시(" + reason + ")")}", this);
+            // 후보의 이동 마감을 임팩트와 나란히 찍는다 — 사전 접근이 건 이동(마감 = 플레이어 도착)이라면
+            // 임팩트보다 앞이어야 한다. 뒤면 다른 이동(집결·링 복귀·후퇴)이 자격을 막고 있다는 뜻이다.
+            string who = "(후보 없음)";
+            if (stagedAmbusher != null)
+            {
+                float moveEnd = stagedAmbusher.MoveEndsAt;
+                who = moveEnd < 0f
+                    ? $"{stagedAmbusher.name} 정지"
+                    : $"{stagedAmbusher.name} 이동마감 {moveEnd - Time.time:+0.00;-0.00}s (임팩트 {impact - Time.time:+0.00;-0.00}s)";
+            }
+
+            Debug.Log($"[DodgeDirector] 공백 {standing:0.00}s (리드 {lead:0.00}s · 도착까지 {start - Time.time:+0.00;-0.00}s) → " +
+                      $"{(reason == null ? "발동" : "무시(" + reason + ")")} · {who}", this);
+#endif
+        }
+
+        /// <summary>
+        /// 기습 발동(적 클립을 건 순간). <b>같은 토글을 쓴다</b> — 공백·발동·결과 세 줄이 한 사건의 기록이라
+        /// 따로 켜지면 짝이 안 맞는다.
+        ///
+        /// <para>와인드업과 <b>실제 링 노출</b>을 나란히 찍는다 — 노출이 리드마다 다르므로(정정 7)
+        /// 로그에 없으면 "얼마나 보였나"를 사후에 알 수 없다.</para>
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void LogFire()
+        {
+#if UNITY_EDITOR
+            if (!logWindows) return;
+
+            // ⚠ 배속은 AssignAttack이 다시 역산한다(maxAttackSpeed 클램프 포함) — 예산이 쓴 authored 값이 아니라
+            // 실제로 재생될 값으로 찍어야 로그와 화면이 같은 얘기를 한다.
+            float speed = ambushClip.ResolvePlaySpeed(Time.time, impactTime, enemyDirector.MaxAttackSpeed, out bool clamped);
+            float windup = ambushClip.ResolvedImpactSpan / speed;
+            string order = windup >= ringDuration ? "모션 먼저" : "링이 먼저";
+
+            Debug.Log($"[DodgeDirector] 기습 발동 — 적 {ambusher.name} · 클립 {ambushClip.Clip?.name} " +
+                      $"(트림 {ambushClip.ResolvedDuration:0.00}s ×{speed:0.0}{(clamped ? " 클램프" : "")}) · " +
+                      $"와인드업 {windup:0.00}s vs 링 {ringDuration:0.00}s ({order}) · " +
+                      $"임팩트까지 {impactTime - Time.time:0.00}s · 창 끝까지 {windowEnd - Time.time:0.00}s", this);
 #endif
         }
 

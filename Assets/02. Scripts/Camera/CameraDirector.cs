@@ -135,6 +135,11 @@ public class CameraDirector : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] private float ambusherMaxWeight = 1f;
 
+    [Tooltip("기습자 칸 전용 가중치 시간상수(초). 상대 칸(weightDamping 0.35)보다 훨씬 짧아야 한다 —\n" +
+             "그 값은 '다음 패턴 내내 유지되는 상대'에 맞춘 것이라 승격 구간의 계단식 튐을 막지만,\n" +
+             "기습은 수명이 0.5~1.2초라 감쇠가 사건 전체와 같은 스케일이 되어 임팩트 때까지 다 못 붙는다.")]
+    [SerializeField] private float ambusherWeightDamping = 0.12f;
+
     [Tooltip("카메라 궤도가 플레이어 방향을 따라가는 시간상수(초). " +
              "PlayerCombatMover.turnDuration(0.15초)보다 충분히 길어야 한다 — " +
              "같으면 상대 교체 때 화면이 0.15초에 반 바퀴 돈다. 0 이하면 즉시 스냅.")]
@@ -722,8 +727,9 @@ public class CameraDirector : MonoBehaviour
     {
         if (!framingEnabled) return;
 
-        opponentWeight = Damp(opponentWeight, ResolveWeight(opponentTransform));
-        ambusherWeight = Damp(ambusherWeight, ResolveWeight(ambusherTransform) * ambusherMaxWeight);
+        // ⚠ 계산식(ResolveWeight)은 공유하고 <b>시간상수만</b> 갈린다 — 두 칸이 어긋날 수 없다는 §7-2 규율은 그대로다.
+        opponentWeight = Damp(opponentWeight, ResolveWeight(opponentTransform), weightDamping);
+        ambusherWeight = Damp(ambusherWeight, ResolveWeight(ambusherTransform) * ambusherMaxWeight, ambusherWeightDamping);
 
         // yaw만 가져온다. 플레이어는 지금 평면 회전만 하지만, 훗날 피격 리액션 등으로 기울면
         // 회전을 통째로 복사한 궤도가 지면을 뚫거나 하늘로 솟는다.
@@ -751,9 +757,9 @@ public class CameraDirector : MonoBehaviour
         return 1f - Mathf.Clamp01((distance - fullFrameDistance) / (dropoffDistance - fullFrameDistance));
     }
 
-    private float Damp(float current, float target) =>
-        weightDamping > 0f
-            ? Mathf.Lerp(current, target, 1f - Mathf.Exp(-Time.deltaTime / weightDamping))
+    private static float Damp(float current, float target, float damping) =>
+        damping > 0f
+            ? Mathf.Lerp(current, target, 1f - Mathf.Exp(-Time.deltaTime / damping))
             : target;
 
     /// <summary>
