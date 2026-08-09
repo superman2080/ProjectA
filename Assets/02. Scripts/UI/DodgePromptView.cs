@@ -29,6 +29,10 @@ public class DodgePromptView : MonoBehaviour, IPointerDownHandler
     [Tooltip("링 색. 패턴 링 팔레트와 구분되는 색이어야 '이건 다른 입력'이라고 읽힌다.")]
     [SerializeField] private Color ringColor = new Color(1f, 0.35f, 0.25f);
 
+    [Tooltip("월드→화면 투영에 쓸 카메라. 비우면 Camera.main.\n" +
+             "⚠ 캔버스의 worldCamera(Overlay면 null)와 다른 값이다 — 그걸 넘기면 투영이 통째로 생략된다.")]
+    [SerializeField] private Camera worldCamera;
+
     /// <summary>프롬프트가 눌린 순간. 판정은 <c>DodgeDirector</c>가 한다.</summary>
     public event Action OnPressed;
 
@@ -63,6 +67,7 @@ public class DodgePromptView : MonoBehaviour, IPointerDownHandler
         this.worldOffset = worldOffset;
 
         gameObject.SetActive(true);
+        SetVisible(true);   // 지난 대여가 카메라 뒤에서 끝났으면 스케일 0으로 남아 있다
         UpdatePosition();
 
         ReleaseRing();
@@ -93,14 +98,46 @@ public class DodgePromptView : MonoBehaviour, IPointerDownHandler
         UpdatePosition();
     }
 
+    /// <summary>
+    /// <b>⚠ 두 호출이 서로 다른 카메라를 쓴다.</b>
+    /// <list type="bullet">
+    /// <item>월드 → 화면: <see cref="worldCamera"/>(실제 렌더링 카메라). <b>null을 넘기면 Unity가 투영을 생략하고
+    /// <c>(world.x, world.y)</c>를 픽셀 좌표로 돌려줘 아이콘이 화면 좌하단에 박힌다</b>(정정 8).</item>
+    /// <item>화면 → 캔버스 로컬: <see cref="canvasCamera"/>. Overlay라 <b>null이 정상</b>이다.</item>
+    /// </list>
+    /// </summary>
     private void UpdatePosition()
     {
         if (follow == null || canvasRect == null) return;
 
-        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(canvasCamera, follow.position + worldOffset);
+        var cam = worldCamera != null ? worldCamera : Camera.main;
+        if (cam == null) return;
+
+        Vector3 world = follow.position + worldOffset;
+
+        // 카메라 뒤면 WorldToScreenPoint가 좌우 반전된 좌표를 준다 — 반대편에 유령 아이콘이 뜨는 것을 막는다.
+        if (cam.WorldToViewportPoint(world).z <= 0f)
+        {
+            SetVisible(false);
+            return;
+        }
+
+        SetVisible(true);
+
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(cam, world);
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect, screenPoint, canvasCamera, out Vector2 local))
             root.anchoredPosition = local;
+    }
+
+    /// <summary>
+    /// 화면 밖(카메라 뒤) 처리. <b>비활성화가 아니라 스케일 0이다</b> —
+    /// <c>SetActive(false)</c>면 <see cref="LateUpdate"/>가 멈춰 다시 앞으로 와도 안 돌아온다.
+    /// </summary>
+    private void SetVisible(bool visible)
+    {
+        Vector3 scale = visible ? Vector3.one : Vector3.zero;
+        if (root.localScale != scale) root.localScale = scale;
     }
 
     private void ReleaseRing()

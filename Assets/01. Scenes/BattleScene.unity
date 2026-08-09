@@ -975,6 +975,7 @@ MonoBehaviour:
   dropoffDistance: 6
   weightDamping: 0.15
   ambusherMaxWeight: 1
+  ambusherWeightDamping: 0.12
   cameraTurnDamping: 0.45
   chartPlayer: {fileID: 854156976}
   introCamera: {fileID: 1935771832}
@@ -4576,6 +4577,7 @@ MonoBehaviour:
   minFeintWindow: 0.35
   cruiseSpeed: 4.5
   minTargetDistance: 2
+  playerArriveSlack: 0.15
   failRetreatDistance: 4
   retreatDuration: 0.25
   retreatWindowMargin: 0.35
@@ -4635,10 +4637,11 @@ MonoBehaviour:
   rollDuration: 0.8
   rollSpeed: 1.6
   rollMoveDuration: 0.25
-  ringExposure: 0.4
+  minRingExposure: 0.4
+  maxRingExposure: 0.8
   dodgeWindow: 0.15
   margin: 0.2
-  minIdleWindow: 0.8
+  minIdleWindow: 0.6
   cooldown: 6
   stageDistance: 2.5
   lungeDistance: 1.5
