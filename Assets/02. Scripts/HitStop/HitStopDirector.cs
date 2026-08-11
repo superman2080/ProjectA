@@ -1,3 +1,4 @@
+﻿using System.Collections.Generic;
 using PatternSpace;
 using UnityEngine;
 
@@ -54,10 +55,37 @@ public class HitStopDirector : MonoBehaviour
              "적의 절단(시체 교체·폭발)도 이만큼 뒤로 밀린다.")]
     [SerializeField] private float hitStopDuration = 0.1f;
 
-    // 대기 중인 예약(최대 하나). 근거는 CameraDirector와 같다 —
-    // 패턴 완료는 순차적이고 A의 임팩트보다 B의 완료가 최소 0.4초 뒤라 동시에 둘이 뜨지 않는다.
-    private bool hasPending;
-    private float pendingFireTime;
+    [Tooltip("직전 정지로부터 이 시간(초) 안에 오는 추가 예약은 버린다. 0이면 hitStopDuration을 쓴다.\n" +
+             "⚠ 창을 '연장'하지 않는 이유 — 연장하면 연타가 여러 번 끊기는 느낌이 아니라\n" +
+             "한 번 길게 멈춘 것이 되어 다중 히트스톱의 목적과 정반대가 된다.")]
+    [SerializeField] private float minHitStopGap = 0f;
+
+    /// <summary>
+    /// 예약 큐. <b>예전에는 최대 하나였다</b> — 패턴 완료가 순차적이고 A의 임팩트보다 B의 완료가
+    /// 최소 0.4초 뒤라는 근거였다. 그 근거는 <b>지금도 참이지만 전제가 바뀌었다</b>:
+    /// 한 패턴이 여러 번 베면 스톱도 여러 번 난다(마지막 베기 이전의 칼질마다 하나씩).
+    ///
+    /// <para>각 항목은 "그 시각에 절단을 밀어야 하는가"를 함께 든다 — <b>마지막 베기만 true</b>다.</para>
+    /// </summary>
+    private readonly List<Reservation> pending = new List<Reservation>();
+
+    private struct Reservation
+    {
+        public float fireTime;
+        public bool isMainImpact;   // 절단을 밀고 적까지 얼릴지
+    }
+
+    /// <summary>직전에 실제로 발사한 시각. 너무 촘촘한 예약을 버리는 데 쓴다.</summary>
+    private float lastFireTime = float.NegativeInfinity;
+
+    /// <summary>
+    /// 한 번 멈추는 시간(초). <b>플레이어가 정지 예산을 잡는 데 이 값을 당겨 간다</b> —
+    /// 인스펙터에 두 번 적으면 언젠가 하나만 고쳐지기 때문이다(§6의 <c>CurrentAttacker</c>를 pull로 당기는 것과 같은 근거).
+    ///
+    /// <para><b>꺼져 있으면 0을 돌려준다.</b> 그래야 "예산만큼 일찍 시작했는데 실제로는 안 멈추는" 어긋남이
+    /// 원천적으로 안 생긴다.</para>
+    /// </summary>
+    public float HitStopDuration => hitStopEnabled ? hitStopDuration : 0f;
 
     void OnEnable()
     {
@@ -69,6 +97,10 @@ public class HitStopDirector : MonoBehaviour
 
         handler.OnPatternComplete += HandlePatternComplete;
         handler.OnAllPatternsCleared += HandleAllCleared;
+
+        // 마지막 베기 '이전'의 칼질은 판정에서 파생되지 않는다 — 그 시각을 아는 것은
+        // 자기 배속과 시작 시각을 든 배우뿐이다(§6). 여기서는 받아서 예약만 한다.
+        if (actionPlayer != null) actionPlayer.OnExtraImpact += HandleExtraImpact;
     }
 
     void OnDisable()
@@ -77,7 +109,8 @@ public class HitStopDirector : MonoBehaviour
 
         handler.OnPatternComplete -= HandlePatternComplete;
         handler.OnAllPatternsCleared -= HandleAllCleared;
-        hasPending = false;
+        if (actionPlayer != null) actionPlayer.OnExtraImpact -= HandleExtraImpact;
+        pending.Clear();
     }
 
     /// <summary>
@@ -91,27 +124,39 @@ public class HitStopDirector : MonoBehaviour
     {
         if (!hitStopEnabled || !info.AllCorrect) return;
 
-        float offset = info.Pattern != null ? info.Pattern.ImpactOffset : 0f;
-        float fireTime = info.LastNodeTime + handler.GoodWindow + offset;
+        Schedule(info.ImpactTime(), isMainImpact: true);
+    }
+
+    /// <summary>
+    /// 마지막 베기 <b>이전</b>의 칼질. 순수 타격감이므로 <b>절단을 밀지 않고 적도 얼리지 않는다</b>(§Step 5).
+    /// </summary>
+    private void HandleExtraImpact(float fireTime) => Schedule(fireTime, isMainImpact: false);
+
+    private void Schedule(float fireTime, bool isMainImpact)
+    {
+        if (!hitStopEnabled) return;
 
         if (Time.time >= fireTime)
         {
-            Fire();
+            Fire(isMainImpact);
             return;
         }
 
-        hasPending = true;
-        pendingFireTime = fireTime;
+        pending.Add(new Reservation { fireTime = fireTime, isMainImpact = isMainImpact });
     }
 
-    private void HandleAllCleared() => hasPending = false;
+    private void HandleAllCleared() => pending.Clear();
 
     void Update()
     {
-        if (!hasPending || Time.time < pendingFireTime) return;
+        for (int i = pending.Count - 1; i >= 0; i--)
+        {
+            if (Time.time < pending[i].fireTime) continue;
 
-        hasPending = false;
-        Fire();
+            bool main = pending[i].isMainImpact;
+            pending.RemoveAt(i);
+            Fire(main);
+        }
     }
 
     /// <summary>
@@ -122,13 +167,23 @@ public class HitStopDirector : MonoBehaviour
     ///
     /// <para><b>한쪽만 멈춰도 타격감은 성립한다.</b> 사망 클립이 없는 패턴은 적이 빠지고 플레이어만 멈춘다.</para>
     /// </summary>
-    private void Fire()
+    private void Fire(bool isMainImpact)
     {
+        // 너무 촘촘한 연타는 버린다(연장하지 않는다 — minHitStopGap 툴팁 참조).
+        // ⚠ 마지막 베기는 버리지 않는다. 그것만이 절단·적 정지를 책임진다.
+        float gap = minHitStopGap > 0f ? minHitStopGap : hitStopDuration;
+        if (!isMainImpact && Time.time - lastFireTime < gap) return;
+
+        lastFireTime = Time.time;
+
         if (actionPlayer != null)
             actionPlayer.ApplyHitStop(hitStopDuration);
 
-        if (enemyDirector != null)
-            enemyDirector.ApplyHitStop(hitStopDuration);
+        // ⚠ 추가 스톱은 적을 얼리지 않는다. 적의 공격·사망 클립도 같은 impactAlignTime에 정렬돼 있는데
+        // (§6·§11-3) 적에게는 예산도 따라잡기도 없다 — 함께 얼리면 적 쪽 정렬만 정지 시간만큼 밀린다.
+        // 마지막 베기에서는 이미 임팩트가 지나간 뒤라 예전처럼 전원 정지해도 안전하다.
+        if (isMainImpact && enemyDirector != null)
+            enemyDirector.ApplyHitStop(hitStopDuration, pushBurst: true);
 
         // 카메라도 같은 창만큼 얼린다 — 쉐이크를 끄고, 잠그고, 해제 뒤에 큐를 낸다.
         // 여기서 카메라를 직접 만지지는 않는다(Cinemachine 호출은 전부 CameraDirector 안에 남는다).

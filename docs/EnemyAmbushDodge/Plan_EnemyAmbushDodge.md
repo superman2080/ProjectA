@@ -246,9 +246,9 @@ Step 5 구현의 누락이다.
 
 ### 문제 1 — 기습이 화면에 늦게·짧게 나타난다
 
-**배선은 정상이다**(추측 배제): `DodgePrompt`는 `PatternHandler`의 **마지막 자식**(최상단),
+**배선은 정상이다**(추측 배제): `DodgePoint`는 `PatternHandler`의 **마지막 자식**(최상단),
 부모 pivot이 캔버스 중심이라 좌표계가 일치하고 마스크가 없다. `FocusRingView`는 자기 코루틴으로 선형 수축하며
-풀 대여 순서가 `initializer → OnSpawn`이라 파라미터가 안 섞인다. 프리팹 `endSize 90x90` = 프롬프트 아이콘 90x90.
+풀 대여 순서가 `initializer → OnSpawn`이라 파라미터가 안 섞인다. 프리팹 `endSize 90x90` = 닷지 포인트 아이콘 90x90.
 
 원인은 **시각 두 개가 다 늦다**는 것:
 
@@ -261,7 +261,7 @@ Step 5 구현의 누락이다.
 `RequiredLead`의 `max(와인드업, ringExposure)`는 이걸 못 막는다: 그건 "리드가 충분한가"만 보고
 **클립 시작 시각을 앞당기지 않는다**. 정정 3 D가 예고한 상황이 그대로 실현됐다.
 
-⚠ 오토퍼펙트 탓이 아니다. 임팩트 첫 프레임에 `Succeed → Hide()`라 프롬프트가 정확히 `ringExposure`만큼 보이지만,
+⚠ 오토퍼펙트 탓이 아니다. 임팩트 첫 프레임에 `Succeed → Hide()`라 닷지 포인트가 정확히 `ringExposure`만큼 보이지만,
 수동 입력이어도 최대 `+dodgeWindow`(0.15s) 늘 뿐이다.
 
 ### 문제 2 — 기습자 카메라 포커스가 즉각적이지 않다
@@ -327,12 +327,12 @@ maxRingExposure = 0.8   // 수축 속도 편차를 1.6배로 묶는다
 (`StopWander` + 예약 해제 + `Phase.Recover` + `ScheduleMove`). `ReleaseAmbusher`가 그것을 쓴다.
 구르기가 사라지고 물러남은 유지된다.
 
-## 정정 8 — 기습자는 물러나지 않는다 · 프롬프트 좌표 (6차 실측)
+## 정정 8 — 기습자는 물러나지 않는다 · 닷지 포인트 좌표 (6차 실측)
 
-### 문제 1 — 프롬프트가 화면 좌하단에 고정된다
+### 문제 1 — 닷지 포인트가 화면 좌하단에 고정된다
 
 ```csharp
-// DodgePromptView.cs
+// DodgePointView.cs
 canvasCamera = canvas.worldCamera;                                          // Overlay → null
 Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(canvasCamera, follow.position + worldOffset);
 ```
@@ -379,7 +379,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 실패   : 기존 피격 클립 + OnPlayerHit 재발행 (카메라 큐·체력이 공짜로 따라온다)
 ```
 
-**새로 만드는 것은 둘** — `DodgeDirector`(유일 관리 지점) · `DodgePromptView`(원형 UI).
+**새로 만드는 것은 둘** — `DodgeDirector`(유일 관리 지점) · `DodgePointView`(원형 UI).
 나머지는 전부 이미 있는 값을 밖에서 읽게 여는 수준이다. **새 애니메이터 스테이트·레이어 없음**(§11-4와 같은 규율).
 
 ---
@@ -436,7 +436,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
   - `public Func<Vector3,bool> BuildVisibilityTest()` 무인자 오버로드(카메라 폴백 포함).
   - `public EnemyView PickIdleAmbusher(Func<Vector3,bool> isVisible)` —
     `activeCluster` 중 `currentOpponent 아님 && IsIdle && 화면 안 && 기습 클립 있음`인 것 중 **랜덤 하나**(사용자 요구: 무리에서 랜덤).
-    ⚠ 클립 조건은 **후보 단계에서** 건다 — 무연출 기습은 "회피할 대상이 없는 프롬프트"라 존재할 수 없다
+    ⚠ 클립 조건은 **후보 단계에서** 건다 — 무연출 기습은 "회피할 대상이 없는 닷지 포인트"라 존재할 수 없다
     (다른 무연출 폴백들과 성질이 다르다). 판단은 "`Definition.AmbushAttacks`에 쓸 수 있는 게 하나라도 있는가,
     없으면 `fallbackAmbushClips`가 비지 않았는가".
     ⚠ 후보를 `activeCluster`로 묶는 이유는 §11-6과 같다 — `staged`를 집으면 집결 중인 적이 이탈해 무리가 깨진다.
@@ -476,14 +476,14 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
   - `rolling` 동안 `moving` 보간은 건너뛴다. **`HandleDuelScheduled`가 오면 구르기를 즉시 중단하고 이동에 양보한다** —
     결투 도착 시각은 칼이 맞는 시각이라 놓칠 수 없다.
 
-### - [x] Step 4 — `DodgePromptView` (원형 UI + 포커스 링 + 입력)
+### - [x] Step 4 — `DodgePointView` (원형 UI + 포커스 링 + 입력)
 
 씬의 `Canvas` 아래(형제: `FocusRingParent` 옆)에 **하나만** 둔다. 동시에 둘이 뜰 일이 없어 풀이 필요 없다.
 
 - 구성: `RectTransform` + 원형 `Image`(Point 노브와 **같은 스프라이트·같은 지름 90px** — 링 `endSize`와 어긋나면
   "딱 맞았다"가 거짓이 된다) + `IPointerDownHandler`.
 - `Show(Transform follow, Vector3 worldOffset, float duration)` — 활성화 + `Pool.Instance.Get<FocusRingView>(PoolKey.FocusRing, …)`을
-  **자기 자식**으로 붙인다(`targetLocalPos = (0,0)`) → 프롬프트만 움직이면 링이 따라온다.
+  **자기 자식**으로 붙인다(`targetLocalPos = (0,0)`) → 닷지 포인트만 움직이면 링이 따라온다.
   링의 `OnArrived`는 구독하지 않는다 — 판정 시각의 소유자는 `DodgeDirector`다(시계를 둘로 만들지 않는다).
 - `LateUpdate`에서 `follow.position + worldOffset` → 화면 → 캔버스 로컬.
   **`LateUpdate`인 이유**: 카메라 확정 뒤여야 한 프레임 안 밀린다(앵글 교체 중에는 매 프레임 카메라가 움직인다).
@@ -501,14 +501,14 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 | `rollSpeed` | 1.6 | 구르기 <b>클립</b> 배속. 클립은 예산에 안 들어간다(정정 3 B) |
 | `rollMoveDuration` | 0.25 | 원호로 <b>자리를 옮기는</b> 시간. 예산에 들어가는 건 이것뿐 |
 | `ringExposure` | 0.4 | **링 수축 시간만**. 적 클립 길이와 무관하다(§4-2 A) — 패턴 링과 같은 감각을 유지한다 |
-| `dodgeWindow` | 0.15 | 판정 창(±초). 패턴 `goodWindow`(0.10)보다 관대 — 노드는 손가락, 회피는 온몸 |
+| `dodgeWindow` | 0.15 | 임팩트 **이후**의 유예(초). 입력 창은 **링 등장 ~ `impactTime + dodgeWindow`가 통째로 하나**이고 그 안이면 언제 눌러도 성공 — ±정밀 판정 없음(노드는 손가락, 회피는 온몸). 링이 보이는데 안 먹히면 "이르다"가 아니라 "버그"로 읽힌다 |
 | `minIdleWindow` | 0.8 | 이보다 짧은 공백에서는 발동하지 않는다(실측 45% 지점) |
 | `margin` | 0.2 | 공백 끝과의 여유 |
 | `cooldown` | 6 | 연속 발동 방지 |
 | `stageDistance` | 2.5 | **사전 접근** 대기 거리. 결투 거리(≈1m)보다 확실히 커야 현재 상대로 안 보인다 |
 | `lungeDistance` | 1.5 | 기습 순간 마저 좁혀 멈춰 서는 거리 |
 | `rollDegrees` | 60 | 원호 각 |
-| `dodgeKey` | Space | 클릭 대신 키로도 |
+| `inputHandler` | (씬) | 회피 입력의 출처. 키는 `IngameInputs`의 `Player/Dodge`(`<Keyboard>/space`)가 소유한다 — 인스펙터 키 필드는 없다 |
 
 흐름:
 
@@ -542,13 +542,15 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
      **매 패턴 화면이 넓어졌다 좁아졌다** 한다. "공격하는 적"이 확정된 순간이 여기다.
    - UI: `impact − ringExposure`에 `prompt.Show(view.transform, Vector3.up * 1.7f, ringExposure)`.
      **링은 여기서 처음 뜬다** — 그 전 구간은 적 모션만 보인다.
-3. **입력** — `prompt.OnPressed` 또는 `dodgeKey`. `|Time.time − impact| <= dodgeWindow`면 성공.
-   **이른 입력은 무시한다**(실패로 치면 연타로 자멸한다). 늦은 것만 실패다.
-   ⚠ 링이 뜨기 전(텔레그래프 구간)의 입력도 무시다 — 그게 곧 "링이 타이밍의 유일한 단서"라는 계약이다.
+3. **입력** — `prompt.OnPressed` 또는 `InputHandler.OnDodgePressed`.
+   **링이 떠 있는 동안이면 언제 눌러도 성공이다** — 창은 `promptShown`부터 `impact + dodgeWindow`까지
+   **하나로 이어지고**, 그 안에 ±판정이 없다. 실패는 창을 넘기는 것 하나뿐이다(`Fail`).
+   ⚠ 링이 뜨기 전(텔레그래프 구간)의 입력은 여전히 무시다 — 그게 곧 "링이 유일한 단서"라는 계약이다.
+   이른 입력을 실패로 치지 않는 이유도 같다(연타로 자멸한다).
    - **오토퍼펙트**(§3-1): `#if UNITY_EDITOR` 안에서 `handler.DebugAutoPerfect`가 켜져 있으면
      `Time.time >= impact`가 되는 **첫 프레임에 성공 처리**한다(= delta ≈ 0, 곧 Perfect).
      기존 오토플레이가 `ExpectedTime`에 `DebugForceInput`을 거는 것과 **같은 규율**이다.
-     프롬프트·링은 그대로 띄운다 — 오토플레이는 연출을 보려고 켜는 것이다.
+     닷지 포인트·링은 그대로 띄운다 — 오토플레이는 연출을 보려고 켜는 것이다.
 4. **성공** — `prompt.Hide()` + 구르기
    - 중심 = `enemyDirector.CurrentOpponent ?? 기습한 적`. **반경이 보존돼 `duelAnchor`(ImpactAnchor)가 안 벗어난다**(Research §5).
    - 방향: `±rollDegrees` 두 후보 중 **구른 뒤 위치에서 가장 가까운 적까지의 거리**가 큰 쪽. 무대 밖이면 감점.
@@ -559,7 +561,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
    어느 쪽이든 적은 찌르고 물러난다 — 가를 이유가 없다.
    **`cameraDirector.SetAmbusher(null)`도 여기서**(구르기·피격이 끝나는 시점). 대상만 비우면
    가중치가 감쇠로 빠져 **컷이 안 생긴다** — 칸 자체는 계속 남아 있다(Step 2-b).
-7. **곡 정리** — `PatternHandler.OnAllPatternsCleared` 구독 → 진행 중이면 프롬프트·예약 회수(잔존물 규율).
+7. **곡 정리** — `PatternHandler.OnAllPatternsCleared` 구독 → 진행 중이면 닷지 포인트·예약 회수(잔존물 규율).
 
 ### - [x] Step 6 — 씬 배선  *(완료 — 기습 클립 저작 포함)*
 
@@ -569,7 +571,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 
 
 **완료된 배선**(BattleScene 저장됨)
-- `UI/Canvas/PatternHandler/DodgePrompt` 생성 — `Image`(Knob 스프라이트, 90x90, raycastTarget) + `DodgePromptView`,
+- `UI/Canvas/PatternHandler/DodgePoint` 생성 — `Image`(Knob 스프라이트, 90x90, raycastTarget) + `DodgePointView`,
   `FocusRingParent`와 같은 층. `ringStartScale`은 씬의 `focusRingStartScale`과 같은 **5**로 맞춤.
 - `EnemyDirector` 오브젝트에 `DodgeDirector` 추가 — actionPlayer·mover(플레이어) / enemyDirector / prompt / handler / cameraDirector 전부 배선.
 - 구르기 클립 `Dodge_Left.anim`·`Dodge_Right.anim` 배선.
@@ -578,7 +580,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 **지금은 후보 자격 미달로 한 번도 발동하지 않는다**(무연출 기습을 만들지 않기 위한 의도된 동작).
 클립 선택은 저작 판단이라 비워 뒀다 — `Stab_5` / `LightAttk1~4` / `SideKick` 같은 짧은 것을 2~3개, **길이를 섞어** 넣을 것.
 
-- `Canvas` 아래 `DodgePrompt`(Image + `DodgePromptView`), `FocusRingParent`와 같은 층.
+- `Canvas` 아래 `DodgePoint`(Image + `DodgePointView`), `FocusRingParent`와 같은 층.
 - `EnemyDirector` 오브젝트에 `DodgeDirector` 추가 → action / enemyDirector / mover / prompt / handler 배선.
 - **기습 클립은 `EnemyDefinition` 에셋마다 배선한다**(`AmbushAttacks` 배열, 종류당 2~3개 권장).
   기존 적 공격 클립을 `Tools/Animation Clip Trimmer`로 잘라 쓰면 새 클립 저작이 없다.
@@ -736,9 +738,9 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
   ⚠ 에셋 `AmbushAttacks`의 `speed: 2`는 이번에 안 건드린다 — 저작 판단이고, 링이 전 구간을 덮으면
   급한 문제가 아니다. 그래도 모션이 안 읽히면 그때 1로 낮춘다(노브 하나, 회귀 없음).
 
-### - [~] Step 12 — 제자리 기습 · 프롬프트 좌표 (정정 8)  *(12-1~12-3 완료 / 12-4는 플레이 필요)*
+### - [~] Step 12 — 제자리 기습 · 닷지 포인트 좌표 (정정 8)  *(12-1~12-3 완료 / 12-4는 플레이 필요)*
 
-- [x] **12-1. `DodgePromptView` — 투영 카메라를 분리한다**
+- [x] **12-1. `DodgePointView` — 투영 카메라를 분리한다**
   `[SerializeField] Camera worldCamera` + `Camera.main` 폴백. **첫 호출(월드→화면)에만** 쓰고,
   두 번째(화면→캔버스 로컬)는 Overlay라 계속 null이다.
   카메라 뒤(`WorldToViewportPoint().z <= 0`)면 아이콘을 감춘다 — 좌표가 뒤집혀 반대편에 찍히는 것을 막는다.
@@ -751,7 +753,7 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
   이 경로에서 전부 뺀다. 무대 계산이 필요 없어졌으므로 **메서드가 한 줄이 된다**.
   ⚠ `Resolve`와 실패 후퇴 경로는 그대로 둔다 — 그쪽 요구는 여전히 "물러난다"이다.
 
-- [ ] **12-4. 재실측** — ① 프롬프트가 기습자 머리 위에 붙는가(앵글 교체 중에도) ② 적이 찌른 뒤 제자리에 남는가
+- [ ] **12-4. 재실측** — ① 닷지 포인트가 기습자 머리 위에 붙는가(앵글 교체 중에도) ② 적이 찌른 뒤 제자리에 남는가
   ③ 남은 적이 다음 배회에 자연스럽게 섞이는가.
 
 ### - [ ] Step 7 — 검증
@@ -775,6 +777,6 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 - **`Attacker.Enemy` 패턴에서의 발동** — 적 칼이 이미 오는 구간이라 기하가 얼어 있어야 하고, 둘을 동시에 피하게 된다.
 - **회피 전용 애니메이터 스테이트·레이어** — 기존 듀얼 슬롯으로 충분하다(§11-4와 같은 판단).
 - **히트스톱·전용 카메라 큐** — 회피 성공은 "안 맞았다"라 멈출 임팩트가 없다. 실패는 기존 피격 큐를 그대로 탄다.
-- **동시 다중 기습** — 프롬프트가 둘이면 어느 링이 어느 적 것인지 읽을 수 없다.
+- **동시 다중 기습** — 닷지 포인트가 둘이면 어느 링이 어느 적 것인지 읽을 수 없다.
 - **회피 성공 보상(점수·게이지)** — 판정 시스템에 손대는 순간이라 별도 논의.
 </content>

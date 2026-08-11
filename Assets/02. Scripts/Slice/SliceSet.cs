@@ -72,9 +72,6 @@ namespace SliceSpace
         /// <summary>스킨드로 남아 래그돌할 조각 인덱스. 없으면 -1.</summary>
         public int RootPieceIndex => rootPieceIndex;
 
-        public AnimationClip BakedPoseClip => bakedPoseClip;
-        public float BakedPoseTime => bakedPoseTime;
-
         /// <summary>
         /// 런타임에 쓸 수 있는 상태인지. 무연출로 넘길지의 유일한 근거다.
         /// <b>스킨드와 정적은 검증 대상이 다르다</b> — 스킨드는 시체 프리팹 하나가 산출물이라 조각 배열을 보지 않는다.

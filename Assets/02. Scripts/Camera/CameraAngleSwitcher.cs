@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -44,9 +44,6 @@ public class CameraAngleSwitcher
     private int currentIndex = -1;
     private float lastSwitchTime;
     private bool armed;
-
-    /// <summary>지금 선택된 앵글(디버그·검증용).</summary>
-    public int CurrentIndex => currentIndex;
 
     private bool IsUsable => switchEnabled && cameras != null && cameras.Length >= 2;
 

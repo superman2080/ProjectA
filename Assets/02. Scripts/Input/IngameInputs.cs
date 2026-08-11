@@ -172,6 +172,15 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Dodge"",
+                    ""type"": ""Button"",
+                    ""id"": ""26b92069-3165-4bb7-aaed-40faa4cd70a7"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -370,6 +379,17 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Input9"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""416abd79-d2a5-4014-b5f5-0410d581a77e"",
+                    ""path"": ""<Keyboard>/space"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Dodge"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -905,6 +925,7 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         m_Player_Input7 = m_Player.FindAction("Input7", throwIfNotFound: true);
         m_Player_Input8 = m_Player.FindAction("Input8", throwIfNotFound: true);
         m_Player_Input9 = m_Player.FindAction("Input9", throwIfNotFound: true);
+        m_Player_Dodge = m_Player.FindAction("Dodge", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1007,6 +1028,7 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Input7;
     private readonly InputAction m_Player_Input8;
     private readonly InputAction m_Player_Input9;
+    private readonly InputAction m_Player_Dodge;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1054,6 +1076,10 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Input9".
         /// </summary>
         public InputAction @Input9 => m_Wrapper.m_Player_Input9;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Dodge".
+        /// </summary>
+        public InputAction @Dodge => m_Wrapper.m_Player_Dodge;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1107,6 +1133,9 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
             @Input9.started += instance.OnInput9;
             @Input9.performed += instance.OnInput9;
             @Input9.canceled += instance.OnInput9;
+            @Dodge.started += instance.OnDodge;
+            @Dodge.performed += instance.OnDodge;
+            @Dodge.canceled += instance.OnDodge;
         }
 
         /// <summary>
@@ -1145,6 +1174,9 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
             @Input9.started -= instance.OnInput9;
             @Input9.performed -= instance.OnInput9;
             @Input9.canceled -= instance.OnInput9;
+            @Dodge.started -= instance.OnDodge;
+            @Dodge.performed -= instance.OnDodge;
+            @Dodge.canceled -= instance.OnDodge;
         }
 
         /// <summary>
@@ -1443,6 +1475,13 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnInput9(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Dodge" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnDodge(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

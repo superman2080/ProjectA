@@ -12,9 +12,6 @@ namespace EnemySpace
         [Tooltip("적 프리팹. EnemyView가 런타임에 붙는다.")]
         [SerializeField] private GameObject prefab;
 
-        [Tooltip("에디터·로그 식별용 이름. 비우면 에셋 이름을 쓴다.")]
-        [SerializeField] private string displayName;
-
         [Tooltip("처치 시 갈라질 절단 프록시. 비우면 절단 없이 소멸한다.")]
         [SerializeField] private SliceSpace.SliceSet deathSliceSet;
 
@@ -37,7 +34,6 @@ namespace EnemySpace
         [SerializeField] private int maxPoolSize = 12;
 
         public GameObject Prefab => prefab;
-        public string DisplayName => string.IsNullOrEmpty(displayName) ? name : displayName;
         public SliceSpace.SliceSet DeathSliceSet => deathSliceSet;
 
         /// <summary>기습 공격 클립 후보. 비어 있으면 디렉터의 폴백이 대신한다.</summary>

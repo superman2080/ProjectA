@@ -1,5 +1,4 @@
-using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,12 +31,6 @@ public class PatternLineRenderer : MaskableGraphic
     private float currentAlpha = 1f;
     private Coroutine fadeRoutine;
 
-    /// <summary>확장 포인트: 새 좌표가 라인에 추가될 때(파티클 스폰 후보 지점) 발행.</summary>
-    public event Action<Vector2> OnSegmentPointAdded;
-    /// <summary>확장 포인트: 페이드아웃 시작/종료 시점.</summary>
-    public event Action OnFadeStarted;
-    public event Action OnFadeCompleted;
-
     protected override void Awake()
     {
         base.Awake();
@@ -60,9 +53,6 @@ public class PatternLineRenderer : MaskableGraphic
             points.AddRange(pts);
 
         SetVerticesDirty();
-
-        if (points.Count > 0)
-            OnSegmentPointAdded?.Invoke(points[^1]);
     }
 
     public void SetLiveEndPoint(Vector2 pt)
@@ -93,8 +83,6 @@ public class PatternLineRenderer : MaskableGraphic
 
     private IEnumerator FadeRoutine(float duration)
     {
-        OnFadeStarted?.Invoke();
-
         float startAlpha = currentAlpha;
         float t = 0f;
         while (t < duration)
@@ -112,7 +100,6 @@ public class PatternLineRenderer : MaskableGraphic
 
         currentAlpha = 1f;
         fadeRoutine = null;
-        OnFadeCompleted?.Invoke();
     }
 
     protected override void OnPopulateMesh(VertexHelper vh)

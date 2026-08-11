@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PatternSpace;
 using UnityEngine;
 
@@ -31,9 +31,8 @@ public class EffectManager : MonoBehaviour
 
     // 트리거 → 엔트리 조회
     private readonly Dictionary<EffectTrigger, EffectEntry> catalogByTrigger = new Dictionary<EffectTrigger, EffectEntry>();
-    // 프리팹 → 유휴 뷰 큐 / 보관 상한
-    private readonly Dictionary<GameObject, Queue<CanvasEffectView>> pools = new Dictionary<GameObject, Queue<CanvasEffectView>>();
-    private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
+    // 프리팹별 뷰 풀. PatternEffectDirector와 같은 구현을 공유한다.
+    private CanvasEffectPool pool;
 
     private readonly List<AmbientEffectController> ambients = new List<AmbientEffectController>();
 
@@ -45,6 +44,7 @@ public class EffectManager : MonoBehaviour
         canvas = GetComponentInParent<Canvas>();
         canvasCamera = canvas != null ? canvas.worldCamera : null;
 
+        pool = new CanvasEffectPool(overlayLayer);
         BuildPools();
         SpawnAmbients();
     }
@@ -89,56 +89,8 @@ public class EffectManager : MonoBehaviour
             if (entry.prefab == null) continue;
 
             catalogByTrigger[entry.trigger] = entry;
-            maxSizes[entry.prefab] = Mathf.Max(entry.maxSize, entry.initialSize);
-
-            if (!pools.TryGetValue(entry.prefab, out var queue))
-                pools[entry.prefab] = queue = new Queue<CanvasEffectView>();
-
-            for (int i = 0; i < entry.initialSize; i++)
-            {
-                var view = CreateView(entry.prefab);
-                view.OnDespawn(); // 비활성 상태로 대기
-                queue.Enqueue(view);
-            }
+            pool.Prewarm(entry.prefab, entry.initialSize, Mathf.Max(entry.maxSize, entry.initialSize));
         }
-    }
-
-    private CanvasEffectView CreateView(GameObject prefab)
-    {
-        var go = Instantiate(prefab, overlayLayer, false);
-        var view = go.GetComponent<CanvasEffectView>();
-        if (view == null)
-        {
-            Debug.LogError($"[EffectManager] 프리팹 '{prefab.name}'에 CanvasEffectView가 없습니다.", prefab);
-            view = go.AddComponent<CanvasEffectView>();
-        }
-        view.SourcePrefab = prefab;
-        return view;
-    }
-
-    private CanvasEffectView GetView(GameObject prefab)
-    {
-        if (!pools.TryGetValue(prefab, out var queue))
-            pools[prefab] = queue = new Queue<CanvasEffectView>();
-
-        return queue.Count > 0 ? queue.Dequeue() : CreateView(prefab);
-    }
-
-    private void ReturnView(CanvasEffectView view)
-    {
-        view.OnDespawn();
-
-        GameObject prefab = view.SourcePrefab;
-        if (prefab == null) { Destroy(view.gameObject); return; }
-
-        if (!pools.TryGetValue(prefab, out var queue))
-            pools[prefab] = queue = new Queue<CanvasEffectView>();
-
-        int cap = maxSizes.TryGetValue(prefab, out int m) ? m : int.MaxValue;
-        if (queue.Count < cap)
-            queue.Enqueue(view);
-        else
-            Destroy(view.gameObject); // 상한 초과분은 파기
     }
 
     // ─────────────────────────── 재생 ───────────────────────────
@@ -149,9 +101,9 @@ public class EffectManager : MonoBehaviour
         if (!catalogByTrigger.TryGetValue(trigger, out var entry) || entry.prefab == null)
             return;
 
-        var view = GetView(entry.prefab);
+        var view = pool.Rent(entry.prefab, Mathf.Max(entry.maxSize, entry.initialSize));
         view.SetLocalPosition(WorldToLocal(overlayLayer, worldPosition));
-        view.OnFinished += ReturnView;
+        view.OnFinished += pool.Return;
         view.OnSpawn();
     }
 

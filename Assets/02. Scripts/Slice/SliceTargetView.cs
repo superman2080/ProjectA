@@ -1,5 +1,4 @@
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace SliceSpace
@@ -158,7 +157,6 @@ namespace SliceSpace
             return original;
         }
 
-        public Vector3 ImpactPosition => impactPos;
         public float ImpactTime => impactTime;
     }
 }

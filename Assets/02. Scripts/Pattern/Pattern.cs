@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -60,12 +60,6 @@ namespace PatternSpace
         [Tooltip("이 패턴을 막아낸 적의 리액션(패링). 실패하고 물러나지 않을 때 재생된다.\n" +
                  "비우면 EnemyView의 parry 스테이트로 폴백한다. 회피(물러남)는 이 슬롯을 쓰지 않는다.")]
         [SerializeField] private ClipAlignment enemyParry = new ClipAlignment();
-
-        [Tooltip("이 패턴에서 등장할 베이는 표적. 비우면 표적 없음.")]
-        [SerializeField] private SliceSpace.SliceSet sliceTarget;
-
-        [Tooltip("임팩트 지점 기준 XY 배치. 칼 궤적 밖으로 벌리지 않는다.")]
-        [SerializeField] private Vector2 sliceTargetOffset;
 
         [Tooltip("판정 종료 시각(Deadline) 대비 ±초. 칼이 닿는 순간을 앞뒤로 민다.\n" +
                  "플레이어 칼 · 적 칼 · 시체 교체 · 투사체 · 카메라 큐가 전부 이 값 하나를 읽는다.")]
@@ -133,12 +127,6 @@ namespace PatternSpace
         /// <para>비어 있으면 <c>EnemyView</c>의 <c>parryStateName</c>으로 폴백한다(기존 동작).</para>
         /// </summary>
         public ClipAlignment EnemyParry => enemyParry;
-
-        /// <summary>이 패턴이 띄울 표적. <see cref="PlayerAttack"/>과 같은 '모양에 종속된 정적 데이터'다.</summary>
-        public SliceSpace.SliceSet SliceTarget => sliceTarget;
-
-        /// <summary>표적의 임팩트 지점 기준 XY 배치. 스폰·임팩트 양쪽에 똑같이 실린다.</summary>
-        public Vector2 SliceTargetOffset => sliceTargetOffset;
 
         /// <summary>
         /// 임팩트 시각을 Deadline 기준으로 미는 값(초). <b>모든 임팩트의 공통 앵커 보정이다</b> —

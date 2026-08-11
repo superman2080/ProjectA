@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PatternSpace;
 using UnityEngine;
 
@@ -89,18 +89,15 @@ namespace SliceSpace
         private readonly List<Reservation> reservations = new List<Reservation>();
         private readonly List<Reservation> active = new List<Reservation>();
 
-        // 프리팹별 자체 큐(EffectManager 선례). Pool(PoolKey 단일 매핑)은 표적 프리팹 수 증가에 맞지 않는다.
-        private readonly Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
-        private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
-
-        private Transform poolRoot;
+        // 프리팹별 인스턴스 풀. Pool(PoolKey 단일 매핑)은 표적 프리팹 수 증가에 맞지 않는다.
+        private PrefabPool pool;
 
         void Awake()
         {
             var rootGo = new GameObject("[SliceTargetPool]");
             rootGo.transform.SetParent(transform, false);
             rootGo.SetActive(false);
-            poolRoot = rootGo.transform;
+            pool = new PrefabPool(rootGo.transform);
         }
 
         void Start()
@@ -268,7 +265,7 @@ namespace SliceSpace
             viewGo.transform.SetParent(transform, false);
 
             var view = viewGo.AddComponent<SliceTargetView>();
-            var original = Rent(r.set.OriginalPrefab, r.set.MaxPoolSize);
+            var original = pool.Rent(r.set.OriginalPrefab, r.set.MaxPoolSize);
 
             view.Setup(r.set, original, r.spawnPos, r.impactPos, r.spawnTime, r.impactTime);
             r.view = view;
@@ -281,7 +278,7 @@ namespace SliceSpace
 
             for (int i = 0; i < set.PieceCount; i++)
             {
-                var go = Rent(set.PiecePrefabs[i], set.MaxPoolSize);
+                var go = pool.Rent(set.PiecePrefabs[i], set.MaxPoolSize);
                 if (go == null) continue;
 
                 var piece = go.GetComponent<SlicePiece>();
@@ -313,17 +310,17 @@ namespace SliceSpace
             {
                 if (piece == null) continue;
                 piece.ResetState();
-                Release(piece.gameObject);
+                pool.Release(piece.gameObject);
             }
 
             var original = r.view.DetachOriginal();
-            if (original != null) Release(original);
+            if (original != null) pool.Release(original);
 
             Destroy(r.view.gameObject);
             r.view = null;
         }
 
-        // ── 프리팹별 풀 ──────────────────────────────────────────────────────────
+        // ── 프리웜 ──────────────────────────────────────────────────────────────
 
         private void Prewarm()
         {
@@ -333,77 +330,11 @@ namespace SliceSpace
             {
                 if (set == null || !set.IsUsable) continue;
 
-                int count = set.InitialPoolSize;
-                for (int i = 0; i < count; i++)
-                {
-                    Release(CreateInstance(set.OriginalPrefab));
-                    foreach (var prefab in set.PiecePrefabs)
-                        Release(CreateInstance(prefab));
-                }
-
-                maxSizes[set.OriginalPrefab] = set.MaxPoolSize;
+                pool.Prewarm(set.OriginalPrefab, set.InitialPoolSize, set.MaxPoolSize);
                 foreach (var prefab in set.PiecePrefabs)
-                    maxSizes[prefab] = set.MaxPoolSize;
+                    pool.Prewarm(prefab, set.InitialPoolSize, set.MaxPoolSize);
             }
         }
-
-        private GameObject CreateInstance(GameObject prefab)
-        {
-            if (prefab == null) return null;
-            var go = Instantiate(prefab, poolRoot);
-            go.name = prefab.name;
-            var link = go.GetComponent<SlicePooledInstance>();
-            if (link == null) link = go.AddComponent<SlicePooledInstance>();
-            link.SourcePrefab = prefab;
-            return go;
-        }
-
-        private GameObject Rent(GameObject prefab, int maxSize)
-        {
-            if (prefab == null) return null;
-
-            maxSizes[prefab] = maxSize;
-
-            if (pools.TryGetValue(prefab, out var queue) && queue.Count > 0)
-            {
-                var pooled = queue.Dequeue();
-                pooled.SetActive(true);
-                return pooled;
-            }
-
-            var created = CreateInstance(prefab);
-            if (created != null) created.SetActive(true);
-            return created;
-        }
-
-        private void Release(GameObject instance)
-        {
-            if (instance == null) return;
-
-            var link = instance.GetComponent<SlicePooledInstance>();
-            if (link == null || link.SourcePrefab == null)
-            {
-                Destroy(instance);
-                return;
-            }
-
-            var prefab = link.SourcePrefab;
-            if (!pools.TryGetValue(prefab, out var queue))
-                pools[prefab] = queue = new Queue<GameObject>();
-
-            int cap = maxSizes.TryGetValue(prefab, out int m) ? m : int.MaxValue;
-            if (queue.Count >= cap)
-            {
-                Destroy(instance);
-                return;
-            }
-
-            instance.SetActive(false);
-            instance.transform.SetParent(poolRoot, false);
-            queue.Enqueue(instance);
-        }
-
-        // ── 기즈모 (에디터 전용) ─────────────────────────────────────────────────
 
 #if UNITY_EDITOR
         /// <summary>
@@ -473,9 +404,4 @@ namespace SliceSpace
 #endif
     }
 
-    /// <summary>풀 반납 시 어느 프리팹에서 나왔는지 되짚기 위한 표식.</summary>
-    public class SlicePooledInstance : MonoBehaviour
-    {
-        public GameObject SourcePrefab;
-    }
 }

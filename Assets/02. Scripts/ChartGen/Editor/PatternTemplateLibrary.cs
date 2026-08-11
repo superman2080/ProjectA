@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using PatternSpace;
 using UnityEditor;
@@ -38,9 +38,6 @@ namespace ChartGen
 
         /// <summary>라이브러리에 존재하는 노드 개수 목록 (오름차순 정렬).</summary>
         public IReadOnlyList<int> AvailableNodeCounts => availableNodeCounts;
-
-        /// <summary>라이브러리에서 가장 큰 노드 개수. 템플릿이 없으면 0.</summary>
-        public int MaxNodeCount => availableNodeCounts.Count > 0 ? availableNodeCounts[^1] : 0;
 
         public PatternTemplateLibrary()
         {

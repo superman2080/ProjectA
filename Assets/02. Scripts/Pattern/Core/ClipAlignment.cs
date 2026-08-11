@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace PatternSpace
@@ -41,10 +41,55 @@ namespace PatternSpace
         [Tooltip("기본 배속(하한). 입력 구간이 짧으면 소비자가 자동으로 더 배속한다.")]
         [SerializeField] private float speed = 1f;
 
+        [Tooltip("마지막 베기 '이전'의 칼질 프레임들(클립 절대 초). ImpactTime과 같은 좌표다.\n" +
+                 "ImpactTime은 언제나 마지막 베기에 찍는다 — 표적이 갈라지는 시각이 거기 정렬되기 때문.\n" +
+                 "여기 값들은 타격감(다중 히트스톱) 전용이며 절단·판정을 움직이지 않는다.")]
+        [SerializeField] private float[] extraImpactTimes;
+
         public AnimationClip Clip => clip;
         public float StartOffset => startOffset;
         public float ImpactTime => impactTime;
         public float Speed => Mathf.Max(speed, 0.01f);
+
+        /// <summary>
+        /// 마지막 베기 이전의 칼질들. <b>트림 시작 기준 상대 초</b>로 변환해 오름차순으로 돌려준다.
+        ///
+        /// <para>버리는 것 둘 — 트림 구간 밖, 그리고 <see cref="ResolvedImpactSpan"/> <b>이상</b>인 값.
+        /// 뒤쪽을 버리는 이유는 저작 모델이 "임팩트 이전"이기 때문이다. 남겨 두면 정지가 절단 뒤에 와서
+        /// <b>몸이 갈라진 뒤에 화면이 멈춘다</b>.</para>
+        ///
+        /// <para>호출마다 배열을 만든다 — 재생 시작에 한 번만 부르는 경로다(매 프레임 아님).</para>
+        /// </summary>
+        public float[] ResolvedExtraImpactSpans
+        {
+            get
+            {
+                if (extraImpactTimes == null || extraImpactTimes.Length == 0) return System.Array.Empty<float>();
+
+                float impactSpan = ResolvedImpactSpan;
+                var list = new System.Collections.Generic.List<float>(extraImpactTimes.Length);
+
+                for (int i = 0; i < extraImpactTimes.Length; i++)
+                {
+                    float span = extraImpactTimes[i] - startOffset;
+                    if (span <= 0f || span >= impactSpan) continue;
+                    list.Add(span);
+                }
+
+                list.Sort();
+                return list.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// 이 클립이 재생 중 소비할 <b>총 정지 시간</b>(초). 재생을 그만큼 일찍 시작하는 '예산'의 유일한 출처다.
+        /// <paramref name="perStop"/>이 0이면(히트스톱 꺼짐) 0 — 예산과 실제 정지가 자동으로 일치한다.
+        /// </summary>
+        public float TotalFreeze(float perStop)
+        {
+            if (perStop <= 0f) return 0f;
+            return ResolvedExtraImpactSpans.Length * perStop;
+        }
 
         /// <summary>배선된 클립이 있고 트림 길이가 양수인지. 아니면 무연출로 넘긴다.</summary>
         public bool IsUsable => clip != null && ResolvedDuration > 0f;
@@ -117,6 +162,19 @@ namespace PatternSpace
                 Debug.LogWarning(
                     $"[ClipAlignment] '{context.name}'의 {label} ImpactTime({impactTime:0.000}s)이 " +
                     $"트림 구간 [{startOffset:0.000}s, {trimEnd:0.000}s] 밖입니다. 트림 끝으로 폴백합니다.", context);
+            }
+
+            if (extraImpactTimes == null) return;
+
+            float impactSpan = ResolvedImpactSpan;
+            for (int i = 0; i < extraImpactTimes.Length; i++)
+            {
+                float span = extraImpactTimes[i] - startOffset;
+                if (span > 0f && span < impactSpan) continue;
+
+                Debug.LogWarning(
+                    $"[ClipAlignment] '{context.name}'의 {label} 추가 임팩트[{i}]({extraImpactTimes[i]:0.000}s)가 " +
+                    $"트림 시작~마지막 베기 구간 밖입니다. 무시됩니다 — 추가 스톱은 마지막 베기보다 앞이어야 합니다.", context);
             }
         }
 

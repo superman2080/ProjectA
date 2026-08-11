@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using PatternSpace;
 using Unity.Cinemachine;
@@ -382,8 +382,7 @@ public class CameraDirector : MonoBehaviour
     {
         var trigger = info.AllCorrect ? CameraTrigger.PatternSuccess : CameraTrigger.PatternFailure;
 
-        float offset = info.Pattern != null ? info.Pattern.ImpactOffset : 0f;
-        float fireTime = info.LastNodeTime + handler.GoodWindow + offset;
+        float fireTime = info.ImpactTime();
 
         if (Time.time >= fireTime)
         {
@@ -426,7 +425,7 @@ public class CameraDirector : MonoBehaviour
         if (info.Template == null || info.Template.AllData.Count < minNodeCount) return;
 
         // 임팩트 앵커는 §7-3·§11과 같은 식이다 — 칼날 임팩트 프레임·표적 절단·히트스톱과 한 시각.
-        ScheduleZoom(info.Deadline + info.Template.ImpactOffset);
+        ScheduleZoom(info.ImpactTime());
     }
 
     private void HandleAllCleared()

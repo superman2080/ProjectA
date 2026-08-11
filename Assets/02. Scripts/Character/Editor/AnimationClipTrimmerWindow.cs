@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PatternSpace;
 using UnityEditor;
 using UnityEngine;
@@ -45,6 +45,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
         public float clipEnd;
         public float speed = 1f;
 
+        /// <summary>마지막 베기 '이전'의 칼질들(클립 절대 초). 다중 히트스톱 전용이라 플레이어 슬롯에서만 의미가 있다.</summary>
+        public readonly List<float> extraImpacts = new List<float>();
+
         public GameObject prefab;    // 프리뷰용
         public GameObject instance;
         public GameObject cachedPrefab;
@@ -65,6 +68,15 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// <b>견제가 사망으로 넘어가는 지점이 정확히 여기다.</b>
     /// </summary>
     private const float HandoffLead = 0.1f;
+
+    /// <summary>정지 예산이 이 값(초)을 넘으면 경고한다. 실측: 엔트리 간 최소 입력 간격이 0.4초다.</summary>
+    private const float ExtraFreezeBudgetWarning = 0.3f;
+
+    /// <summary>
+    /// 한 번 멈추는 시간(초). <b>런타임 값은 씬의 <c>HitStopDirector</c>가 든다</b> — 이 창은 씬 없이도 돌아야 해서
+    /// 예산 <b>표시용 근사</b>만 둔다(굽기 툴의 <c>GoodWindowApprox</c>와 같은 규율). 저장값에는 관여하지 않는다.
+    /// </summary>
+    private float hitStopDurationHint = 0.1f;
 
     // 입력
     private Pattern targetPattern;
@@ -291,6 +303,14 @@ public class AnimationClipTrimmerWindow : EditorWindow
         // 미오서링(0 이하)이면 런타임 폴백과 같게 트림 끝에 세운다.
         float impact = so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
         actor.clipImpact = impact > 0f ? impact : actor.clipEnd;
+
+        actor.extraImpacts.Clear();
+        var extras = so.FindProperty($"{actor.slotPath}.extraImpactTimes");
+        if (extras != null && extras.isArray)
+        {
+            for (int i = 0; i < extras.arraySize; i++)
+                actor.extraImpacts.Add(extras.GetArrayElementAtIndex(i).floatValue);
+        }
     }
 
     // ─────────────────────────── 프리뷰 ───────────────────────────
@@ -544,7 +564,18 @@ public class AnimationClipTrimmerWindow : EditorWindow
             ? (bladeGap < 0f ? new Color(0.3f, 0.85f, 0.4f) : new Color(0.95f, 0.6f, 0.3f))
             : new Color(0.5f, 0.5f, 0.5f);
 
-        GUILayout.Box(atImpact ? $"✦ IMPACT   {gapText}" : gapText, style, GUILayout.Height(22f));
+        // 추가 칼질 위에 서 있으면 임팩트와 구분되는 배지를 낸다 — 둘 다 '칼이 지나가는 순간'이지만
+        // 절단이 붙는 것은 IMPACT 하나뿐이라 눈으로 갈려야 한다.
+        int extraHit = ExtraMarkAt(player, t);
+        if (!atImpact && extraHit >= 0)
+        {
+            GUI.backgroundColor = new Color(0.45f, 0.65f, 0.95f);
+            GUILayout.Box($"◆ {extraHit + 1}타 (히트스톱)   {gapText}", style, GUILayout.Height(22f));
+        }
+        else
+        {
+            GUILayout.Box(atImpact ? $"✦ IMPACT   {gapText}" : gapText, style, GUILayout.Height(22f));
+        }
         GUI.backgroundColor = prev;
     }
 
@@ -671,8 +702,82 @@ public class AnimationClipTrimmerWindow : EditorWindow
         if (actor.clipImpact < actor.clipStart || actor.clipImpact > actor.clipEnd)
             EditorGUILayout.HelpBox("Impact가 Start~End 밖입니다. 저장 시 구간 안으로 클램프됩니다.", MessageType.Warning);
 
+        DrawExtraImpacts(actor);
+
         EditorGUILayout.EndVertical();
     }
+
+    /// <summary>
+    /// 마지막 베기 <b>이전</b>의 칼질 마크들. 여러 번 베는 클립에서 칼질마다 히트스톱을 걸기 위한 저작이다.
+    ///
+    /// <para><b>예산 표시가 이 UI의 핵심이다</b> — 정지 N회 × 정지시간 = F만큼 재생을 일찍 시작해야 하고,
+    /// 그 여유는 앞 패턴과의 간격에서 나온다. 실측(엔트리 간 최소 0.4초 · 창 p50 1.30초) 기준으로
+    /// <b>F가 0.3초를 넘으면 대부분의 채보에서 창을 넘긴다</b> — 저작 단계에서 잡는 게 런타임 경고보다 싸다.</para>
+    /// </summary>
+    private void DrawExtraImpacts(Actor actor)
+    {
+        EditorGUILayout.Space(2f);
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.LabelField($"추가 칼질 ({actor.extraImpacts.Count})", EditorStyles.miniBoldLabel);
+            if (GUILayout.Button("+ Mark Extra", GUILayout.Width(110f)))
+            {
+                actor.extraImpacts.Add(CurrentClipTime(actor));
+                actor.extraImpacts.Sort();
+            }
+        }
+
+        for (int i = 0; i < actor.extraImpacts.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                actor.extraImpacts[i] = Mathf.Max(
+                    EditorGUILayout.FloatField($"  {i + 1}타 (clip s)", actor.extraImpacts[i]), 0f);
+
+                if (GUILayout.Button("→", GUILayout.Width(26f))) t = TimeOfClipMark(actor, actor.extraImpacts[i]);
+                if (GUILayout.Button("×", GUILayout.Width(26f)))
+                {
+                    actor.extraImpacts.RemoveAt(i);
+                    i--;
+                }
+            }
+        }
+
+        if (actor.extraImpacts.Count == 0) return;
+
+        int valid = 0;
+        foreach (float mark in actor.extraImpacts)
+            if (mark > actor.clipStart && mark < actor.clipImpact) valid++;
+
+        if (valid != actor.extraImpacts.Count)
+            EditorGUILayout.HelpBox(
+                $"{actor.extraImpacts.Count - valid}개가 Start~Impact 밖입니다 — 저장에서 제외됩니다.\n" +
+                "추가 칼질은 마지막 베기(Impact)보다 앞이어야 합니다. 정렬 앵커는 언제나 Impact 하나입니다.",
+                MessageType.Warning);
+
+        float freeze = valid * hitStopDurationHint;
+        EditorGUILayout.LabelField("정지 예산",
+            $"{valid}회 × {hitStopDurationHint:0.00}s = {freeze:0.00}s   (이만큼 클립을 일찍 시작한다)");
+
+        if (freeze > ExtraFreezeBudgetWarning)
+            EditorGUILayout.HelpBox(
+                $"예산 {freeze:0.00}s는 실측 채보 대부분의 여유(엔트리 간 0.4초)를 넘습니다 — " +
+                "런타임이 예산을 포기하고 배속으로 벌충하며, 상한에 걸리면 마지막 베기가 절단보다 늦습니다.",
+                MessageType.Warning);
+    }
+
+    /// <summary>지금 t가 어느 추가 칼질 위인지(없으면 -1). 한 프레임 폭(1/30초)을 허용 오차로 본다.</summary>
+    private static int ExtraMarkAt(Actor actor, float time)
+    {
+        for (int i = 0; i < actor.extraImpacts.Count; i++)
+            if (Mathf.Abs(TimeOfClipMark(actor, actor.extraImpacts[i]) - time) < 1f / 30f) return i;
+
+        return -1;
+    }
+
+    /// <summary>클립 시각 하나를 타임라인 t(임팩트 기준 상대시간)로 되돌린다. 마크로 점프하는 데 쓴다.</summary>
+    private static float TimeOfClipMark(Actor actor, float clipMark) =>
+        DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, clipMark);
 
     /// <summary>지금 t가 가리키는 이 배우의 클립 시각. 마킹의 유일한 변환 지점이다.</summary>
     private float CurrentClipTime(Actor actor) => DuetTimeline.ClipTimeOf(actor.clipImpact, actor.speed, t);
@@ -828,6 +933,28 @@ public class AnimationClipTrimmerWindow : EditorWindow
         offProp.floatValue = actor.clipStart;
         durProp.floatValue = actor.Duration;
         impProp.floatValue = actor.clipImpact;
+
+        // 추가 칼질 — 트림 시작~마지막 베기 '사이'만 남긴다. 밖의 값은 런타임이 어차피 버리므로
+        // 여기서 걸러야 "찍었는데 안 나온다"가 안 생긴다.
+        var extrasProp = so.FindProperty($"{actor.slotPath}.extraImpactTimes");
+        if (extrasProp != null && extrasProp.isArray)
+        {
+            var kept = new List<float>(actor.extraImpacts.Count);
+            foreach (float mark in actor.extraImpacts)
+                if (mark > actor.clipStart && mark < actor.clipImpact) kept.Add(mark);
+
+            kept.Sort();
+
+            int dropped = actor.extraImpacts.Count - kept.Count;
+            if (dropped > 0)
+                Debug.LogWarning(
+                    $"[PatternActionEditor] '{targetPattern.name}'의 {actor.label} 추가 칼질 {dropped}개가 " +
+                    "Start~Impact 구간 밖이라 저장에서 제외됐습니다.", targetPattern);
+
+            extrasProp.arraySize = kept.Count;
+            for (int i = 0; i < kept.Count; i++)
+                extrasProp.GetArrayElementAtIndex(i).floatValue = kept[i];
+        }
         return true;
     }
 
