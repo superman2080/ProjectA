@@ -2,11 +2,19 @@ using System;
 using UnityEngine;
 
 /// <summary>효과음이 재생되는 순간을 식별하는 트리거 키. 카탈로그 매핑의 키로 쓰인다.</summary>
+/// <remarks>
+/// <b>⚠ 정수를 명시한다.</b> 이 값이 씬의 카탈로그 리스트에 직렬화되므로 순서가 바뀌면
+/// 기존 배선이 조용히 밀린다(<c>EffectTrigger</c>와 같은 규율).
+/// </remarks>
 public enum SfxTrigger
 {
-    Perfect,
-    Good,
-    Miss,
+    Perfect = 0,
+    Good = 1,
+    Miss = 2,
+    /// <summary>적이 기습을 시작한 순간(칼을 드는 소리). 링보다 먼저 온다.</summary>
+    AmbushTelegraph = 3,
+    DodgeSuccess = 4,
+    DodgeFail = 5,
 }
 
 /// <summary>

@@ -38,6 +38,7 @@ Assets/
 │   │   ├── PatternHandler.cs        # 패턴인풋 전체 관리(판정·큐·노드 스폰의 중심 허브)
 │   │   ├── PatternLineRenderer.cs   # 입력 라인 / 가이드 캡슐 렌더러
 │   │   ├── FocusRingView.cs         # 포커스 링 뷰 — Point 자리에서 줄어든다(IPoolable)
+│   │   ├── DodgePointView.cs        # 기습 회피 입력 지점 — 화면 우하단 고정(§11-8)
 │   │   └── Editor/
 │   │       └── PatternHandlerEditor.cs # 디버그 입력 커스텀 인스펙터(에디터 전용)
 │   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
@@ -49,7 +50,6 @@ Assets/
 │   ├── Character/
 │   │   ├── CharacterActionPlayer.cs # 베기/피격 애니메이션 + 수렴 로코모션
 │   │   ├── PlayerCombatMover.cs     # 결투 이동·회전(OnDuelScheduled 구독)
-│   │   ├── WeaponTrailController.cs # 스윙 구간에만 칼날 트레일 on/off
 │   │   └── Editor/                  # AnimationClipTrimmerWindow(짝 저작 툴)
 │   ├── Slice/                       # 베이는 표적(연출 전용)
 │   │   ├── SliceSet.cs              # ScriptableObject - 굽기 산출물(원본+조각 프리팹 N개+절단 평면)
@@ -67,6 +67,7 @@ Assets/
 │   │   ├── EnemyView.cs             # 적 하나의 이동/클립/사망
 │   │   ├── EnemyDefinition.cs       # 적 종류(프리팹 + DeathSliceSet)
 │   │   ├── EnemyCue.cs              # Attacker enum + 채보 엔트리의 전투 지시
+│   │   ├── DodgeDirector.cs         # 기습·회피의 유일 관리 지점(§11-8)
 │   │   ├── Core/EnemyRing.cs        # 무대 배치·표적 선택의 순수 계산(asmdef)
 │   │   └── Tests/                   # 배치·선택 유닛테스트(asmdef)
 │   ├── Effect/                      # Canvas 이펙트 시스템
@@ -74,7 +75,6 @@ Assets/
 │   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
 │   │   ├── CanvasEffectView.cs      # 개별 이펙트 뷰
 │   │   └── AmbientEffectController.cs # 배경 앰비언트 강도 조절
-│   ├── Statemachine/                # 범용 FSM/HFSM (StateMachine<T>, StateBase, Composite)
 │   ├── Pool/
 │   │   ├── Pool.cs                  # PoolKey 기반 오브젝트 풀(Singleton)
 │   │   └── IPoolable.cs             # OnSpawn/OnDespawn 인터페이스
@@ -169,7 +169,7 @@ Assets/
 - `FocusRingView`(IPoolable): `Pool`(PoolKey.FocusRing)로 재사용. **입력해야 할 Point 자리에 고정된 채 크기만 줄어든다** — 링이 노브와 정확히 같은 크기가 되는 순간이 입력 타이밍이고, 그때 `OnArrived`를 발행한다.
 - 크기: `focusRingStartScale`배에서 시작해 `endSize`(90x90, **노브 `Visual`과 같은 값이어야 한다** — 이게 어긋나면 "딱 맞았다"는 단서 자체가 거짓이 된다)로 수축. **보간은 선형이다** — 등속이어야 남은 시간이 크기로 정직하게 읽힌다. 이징을 넣으면 타이밍 판단이 왜곡된다.
 - `PatternHandler`가 스폰을 스케줄링(`scheduledSpawns`)하고 활성 링(`activeFocusRings`)을 소유자별로 추적한다.
-- **링은 이동하지 않으므로 화면 기하가 개입하지 않는다.** `ComputeFallDuration`은 `exposureDuration`을 그대로 돌려주며, 행마다 속도가 갈리지 않는다. (예전 낙하 노드는 생성 Y·화면 경계로 행별 낙하시간을 역산했고, 포인트 간격을 700으로 넓히자 행 간 배수가 2.39~7.53으로 벌어져 깨졌다. 이 메서드는 굽기 툴 `PatternChartWindow`가 호출하므로 **시그니처만 유지**한 채 본문을 비웠다.)
+- **링은 이동하지 않으므로 화면 기하가 개입하지 않는다.** 스폰 리드타임 = `exposureDuration` 그대로이고, 행마다 속도가 갈리지 않는다. (예전 낙하 노드는 생성 Y·화면 경계로 행별 낙하시간을 역산했고, 포인트 간격을 700으로 넓히자 행 간 배수가 2.39~7.53으로 벌어져 깨졌다. 그 역산을 감싸던 `PatternHandler.ComputeFallDuration`은 본문이 인자를 그대로 돌려주는 한 줄만 남아 제거했다 — **그래서 굽기 툴이 씬 `PatternHandler`를 요구하지 않는다**.)
 - 그 결과 `exposureDuration`이 **정확히 링이 보이는 시간**이 되고, 스폰 리드타임도 정확히 그 값이다.
 - 판정된 링은 즉시 회수, 미입력으로 수축을 끝낸 링은 `OnFocusRingMissedArrival` 발행 후 회수.
 - **같은 Point에 링이 둘 겹칠 수 있다(정상).** 한 패턴 안에서는 불가능하지만(`Pattern.OnValidate`가 중복 인덱스를 막는다), **이전 패턴의 마지막 노드와 다음 패턴의 첫 노드가 같은 Point**면 겹친다. 겹침 길이는 `exposureDuration`(0.5) − 엔트리 간 최소 입력 간격(0.4) = **최대 0.1초**이며, 실측상 채보당 7~28쌍. 크기(72 vs 120)와 색이 달라 구분되지만 **인덱스 숫자는 완전히 겹쳐 두꺼워 보이므로 `IndexLabel`은 비활성**이다.
@@ -195,12 +195,12 @@ Assets/
 - **겹침 방지 배속**: 다음 패턴까지의 여유(`NextLastNodeTime`)보다 클립이 길면 `AttackSpeed`로 압축하되 `maxAttackSpeed`(기본 2.5) 상한. 상한으로도 안 담기면 다음 액션 CrossFade가 현재 액션을 끊는다(의도된 동작). 상세: `docs/CharacterAction/`
 - **공격 종료 후 복귀**: 트림 끝(`actionEndTime`)은 재생 끝이 아니라 **복귀 시작점**이다(클립은 계속 재생되며 마무리 동작이 이어진다). 여기서 `AttackSpeed`를 1로 되돌리고, `recoveryHoldDuration` 동안 마무리 동작을 노출한 뒤(공통) **세 경로**로 갈린다 — ① 다음 공격이 `comboLinkWindow`(1.0초) 안이면서 `minRunExposure`(0.35초)보다 촘촘히 붙으면 **웨이트 1을 유지**한 채 바로 잇고(Run·Release 생략, 깜빡임 방지), ② `comboLinkWindow` 안이되 간격에 여유가 있으면 웨이트를 0으로 내려 **그 사이 Sprint(`Sprint_HS`)를 노출**한 뒤 다음 공격에서 다시 올리며(Release 생략, 실측상 주 경로 ≈95%), ③ `comboLinkWindow` 밖(곡 공백)이면 **Release를 압축 완주**시킨 뒤 Run으로 페이드한다. **Release 진입은 코드가 유일하게 통제한다** — 애니메이터의 Attack→Release ExitTime 전이는 제거했다(과거 이 전이가 연계 중에도 Release를 새어나오게 한 버그의 원인). **base 로코모션 클립은 경로에 따라 갈린다** — 경로 ②는 Sprint, 경로 ③은 Run으로 코드가 base `Running Layer`를 CrossFade(`SwitchBaseState`). ⚠ **경로 ②의 Sprint는 '수렴 중일 때만' 참이다** — `SwitchBaseStateUnlessConverging`는 수렴 중에는 물러나므로, 이미 도착해 서 있으면(사슬처럼 이동이 0인 구간) Idle로 떨어진다. 안 그러면 제자리에서 다리만 젓는다. 상세: `docs/ReleaseRecovery/`
 - **확장 포인트**: `OnSwingBegan` / `OnSwingEnded` — 스윙(베기) 트림 구간의 시작·끝. **성공 베기에서만** 발행되고(피격 클립은 제외), 트림 끝뿐 아니라 **인터럽트(연계·미스)에서도 종료가 나온다**. '칼을 휘두르는 동안'에만 붙는 연출은 이 이벤트만 구독한다.
-- **`WeaponTrailController`**: 칼날 트레일(`Tiny.Trail`, 외부 에셋 — 수정하지 않는다)의 유일한 관리 지점. 위 두 이벤트만 구독해 스윙 구간에만 트레일을 enable한다. **배선 주의** — 칼날은 같은 이름 노드가 2단이고 `Trail`은 **안쪽(메쉬) 노드**에 있다(`root/add_weapon_r/Weapon_Katana_01_Blade/Weapon_Katana_01_Blade`). 켤 때는 `Tiny.Trail`이 정점을 현재 위치로 접어 넣어 잔상이 없지만, **끌 때는 페이드 없이 즉시 사라진다**(그 API가 없다). 상세: `docs/WeaponTrail/`
+- **칼날 트레일은 애니메이션 클립 이벤트가 켜고 끈다** — 코드가 관여하지 않는다. 이벤트를 구독해 제어하던 `WeaponTrailController`는 그 방식으로 갈아탄 뒤 어디에도 배선돼 있지 않아 삭제했다. ⚠ 그래서 지금 `OnSwingBegan`/`OnSwingEnded`는 **구독자가 없는 확장 포인트**다(발행은 계속된다 — `swingActive` 플래그가 히트스톱 가드로 쓰이므로 발행 경로 자체를 지우면 안 된다). 옛 설계: `docs/WeaponTrail/`
 
 ### 7-1. 카메라 연출 (Camera)
 - **`CameraDirector`**: 카메라 연출의 유일 관리 지점. `PatternHandler`의 기존 이벤트만 구독하는 **순수 연출**(판정에 개입하지 않음). `EffectManager`와 같은 위치·같은 카탈로그 관례 — **연출 추가 = 카탈로그에 한 줄**.
 - **`CameraCueCatalog`**: `CameraTrigger` enum(PatternSuccess/PatternMiss/PatternFailure) + `CameraCueEntry`(진폭·지속). 감쇠 곡선은 공식 `(1-t)²`, 주파수는 director 공용 값 하나 — 큐마다 나눌 만한 차이가 안 난다.
-- **큐 시각은 화면에서 사건이 일어나는 순간에 맞춘다**: 성공/실패(표적 파괴)는 **`Deadline`**(= `LastNodeTime + PatternHandler.GoodWindow` + `Pattern.ImpactOffset`, §6·§11과 동일한 식), 피격은 `CharacterActionPlayer.OnPlayerHit`(= **적 칼이 닿는 `impactTime`**). **실패는 사건이 둘이라 큐도 둘이다.** ⚠ 단 `Attacker.Player` 실패는 안 맞으므로 `PatternFailure` 하나만 난다.
+- **큐 시각은 화면에서 사건이 일어나는 순간에 맞춘다**: 성공/실패(표적 파괴)는 **`info.ImpactTime()`**(= `Deadline + Pattern.ImpactOffset`, §6·§11과 **같은 확장 메서드**), 피격은 `CharacterActionPlayer.OnPlayerHit`(= **적 칼이 닿는 `impactTime`**). **실패는 사건이 둘이라 큐도 둘이다.** ⚠ 단 `Attacker.Player` 실패는 안 맞으므로 `PatternFailure` 하나만 난다.
 - **예약은 최대 하나**다 — 패턴 완료가 순차적이고 A의 Deadline(A 마지막노드 +0.1초)보다 B의 완료가 최소 0.4초 뒤라, 리스트가 필요 없다.
 - **Perlin은 채널이 하나라 겹침이 합성되지 않는다.** 마지막 노드 미스면 두 큐가 0.1초 간격으로 확실히 붙으므로, 새 쉐이크는 타이머를 재시작하되 **진폭은 큰 쪽을 취한다**(덮어쓰면 세기가 뚝 떨어짐). **휴지값은 0이 아니라 씬의 현재 값**(`AmplitudeGain` 0.1)이라 `Awake`에서 캐시해 그리로 복귀한다.
 - 상세: `docs/CameraDirection/`
@@ -246,6 +246,19 @@ Assets/
 - **⚠ 남은 이음매**: `SlicePiece`(표적 조각)는 닫힌 식이라 안 멈춘다. 표적 절단이 임팩트 바로 그 순간이라 캐릭터가 멈춘 동안 조각만 날아간다. 0.08초라 안 보인다고 보고 뺐다 — 보이면 그때 붙인다. 적 사망 폭발(`burstTime`)은 정지 창 **끝**으로 밀리므로 조각이 정지 중에 날아갈 일은 없다.
 - 상세: `docs/HitStop/`
 
+### 7-3-1. 한 클립 안의 다중 히트스톱 (MultiHitStop)
+- **여러 번 베는 클립은 칼질마다 멈춘다.** 저작 모델은 하나다 — **`ClipAlignment.ImpactTime`은 언제나 '마지막 베기'**에 찍고(그게 절단·사망·카메라의 정렬 앵커), 그 **이전**의 칼질들을 `extraImpactTimes`(클립 절대 초)에 찍는다. 마지막 베기 이후의 마크는 런타임·툴 양쪽에서 버린다 — 남기면 **몸이 갈라진 뒤에 화면이 멈춘다**.
+- **⚠ 정지 시간은 어디선가 나와야 한다.** 정지 N회 × `hitStopDuration` = **F** 동안 클립이 안 흐르는데 마지막 베기는 여전히 `Deadline + ImpactOffset`에 도착해야 한다. 방법 둘을 **같이** 쓴다:
+  - **예산(주 경로)** — 재생을 **F만큼 일찍 시작**한다(`pendingScheduleStart`·시작 배속 양쪽에서 뺀다). 배속을 안 건드려 모션이 안 뭉개진다.
+  - **따라잡기(보정)** — 정지 해제마다 `남은 임팩트 스팬 ÷ 남은 실시간`으로 배속 재계산. 스톱이 버려지거나 창이 모자라도 **자기 수정**된다.
+- **⚠ 임팩트 이전 정지는 복귀 스케줄을 밀지 않는다.** §7-3의 '밀기'는 임팩트가 이미 지나갔을 때만 옳다 — 이전에 밀면 마지막 베기가 절단보다 늦는다. `CharacterActionPlayer.IsBeforeImpact()`가 두 경로를 가른다.
+- **⚠ 추가 스톱은 적을 얼리지 않는다.** 적의 공격·사망 클립도 **같은 `impactAlignTime`에 정렬**돼 있는데(§6·§11-3) 적에게는 예산도 따라잡기도 없다 — 함께 얼리면 적 쪽 정렬만 밀린다. 마지막 베기(메인)에서는 예전처럼 전원 정지한다. **카메라·파티클은 추가 스톱에서도 얼린다**(정렬을 안 들고 있고, 캐릭터만 멈추면 "렉"으로 읽힌다).
+- **⚠ 절단을 미는 것은 메인 하나뿐이다** — `EnemyView.ApplyHitStop(..., pushBurst)`. 스톱마다 밀면 3회에 0.3초, **몸이 갈라지는 순간이 마지막 칼질보다 한참 뒤**가 된다.
+- **칼질 시각을 아는 것은 배우뿐이다.** 클립 초를 월드 시각으로 바꾸려면 그때의 실제 배속이 필요하다 → `CharacterActionPlayer.OnExtraImpact(float)`가 알리고 `HitStopDirector`가 예약한다. **한 번에 하나씩** 발행한다 — 미리 다 발행하면 첫 정지 시간만큼 나머지가 이르게 터진다. "얼마나 · 누구를 멈출까"는 여전히 디렉터 하나가 정한다.
+- **`HitStopDirector.HitStopDuration`은 꺼져 있으면 0을 돌려준다** — 그래야 "예산만큼 일찍 시작했는데 안 멈추는" 어긋남이 원천 소멸한다. 예약은 이제 **리스트**다(한 패턴이 스톱을 N개 낸다 — "최대 하나"의 전제가 바뀌었다). 너무 촘촘한 예약은 `minHitStopGap`으로 **버린다**(연장하면 "여러 번 끊김"이 아니라 "한 번 길게 멈춤"이 되어 목적과 반대다).
+- 저작: `Tools/Animation Clip Trimmer`의 `+ Mark Extra` · 타임라인 `◆ N타` 배지 · **정지 예산 표시**(F > 0.3초면 경고 — 엔트리 간 최소 간격이 0.4초라 그 위로는 대부분의 채보에서 창을 넘긴다).
+- 상세: `docs/MultiHitStop/`
+
 ### 7-4. 패턴별 월드 이펙트 (PatternEffect)
 - **`Pattern.effectCues`(리스트)가 소유한다.** 큐 하나가 "**언제 · 어디에 · 어떤 조건에서** 무엇을 재생할지"를 스스로 든다(`PatternEffectCue`, `Pattern/Core`). **슬롯이 아니라 리스트인 이유**: 개수와 시점이 코드가 아니라 저장 단계에서 정해진다 — `ClipAlignment` 슬롯들과 성질이 다르다(클립은 배우당 하나씩 재생되지만 이펙트는 동시에 여럿 뜬다).
 - **조건은 판정 결과가 아니라 적의 반응 클립을 따라간다**(`Always`/`Success`/`Parry`/`Evade`). 막는 모션이면 스파크가 튀고 뒷구르기면 아무것도 안 튄다 — **칼이 만났느냐**가 화면에 남는 사실이기 때문. **네 값이 다섯 경우를 덮는다**: `attacker`가 패턴의 성질이라 같은 값이 역할에 따라 다른 의미를 가져도 한 에셋 안에서 섞이지 않는다(`Attacker.Player`의 `Success`는 베는 이펙트, `Attacker.Enemy`의 그것은 받아친 스파크, `Evade`는 피격).
@@ -254,7 +267,7 @@ Assets/
 - **시각 기준점 다섯**(`PatternStart`/`FirstNode`/`Node[i]`/`LastNode`/`Impact`) ± `timeOffset`. 전부 `PatternQueuedInfo`에서 나오며(`NodeTimes` 포함) **새 시계를 만들지 않는다**. 그래서 `PatternEffectDirector`는 **`OnPatternQueued` 하나만 구독해 예약을 다 만들고**, 조건만 나중에 채운다(성패는 마지막 노드에서, 반응은 그 직후에 정해지므로 **예약 시점과 조건 확정 시점이 구조적으로 다르다**).
 - **⚠ `HitStopDirector`의 "예약 최대 하나"를 쓸 수 없다** — 그 근거는 시각이 임팩트 고정이라는 것인데, 큐는 `PatternStart`까지 앞당겨져 **앞 패턴의 임팩트 큐와 다음 패턴의 시작 큐가 겹친다**(리드타임 0.5 > 간격 0.4).
 - **⚠ 결과 조건 큐는 `LastNode`보다 이른 시각에 걸 수 없다**(미래를 앞당겨 보여 주는 셈). 런타임은 조용히 폐기하고 `OnValidate`·툴 타임라인이 잡는다.
-- **앵커 넷**(`ImpactAnchor`/`Player`/`PlayerWeapon`/`Opponent`) + `follow`(자식으로 붙어 따라감). `Opponent`는 **발사 순간에** 조회한다(§11-1 — 큐 시점엔 미배정). **`PlayerWeapon`은 안쪽 칼날 노드**를 배선한다(동명 2단, `WeaponTrailController`와 같은 함정).
+- **앵커 넷**(`ImpactAnchor`/`Player`/`PlayerWeapon`/`Opponent`) + `follow`(자식으로 붙어 따라감). `Opponent`는 **발사 순간에** 조회한다(§11-1 — 큐 시점엔 미배정). **`PlayerWeapon`은 안쪽 칼날 노드**를 배선한다(동명 2단 — 트레일 클립 이벤트가 붙은 그 노드다).
 - **칼날은 점이 아니라 선분이다** — `bladeT`(0=손잡이, 1=칼끝)로 비율로 집는다. **축은 추측하지 않고 유도한다**: `BladePath`가 칼 렌더러 `localBounds`의 **최장 축 = 날 길이** 규칙을 쓰며(`MeshSliceBakerWindow.SampleWeapon`과 동일), 런타임과 저장 툴이 **같은 클래스**를 공유한다. 계산은 스폰 때 한 번이고 이후 추종은 부모 관계가 공짜로 한다.
 - **⚠ 패턴인풋 노드(Point) 자리는 앵커가 아니다** — 루트 Canvas가 `ScreenSpaceOverlay`라 그 좌표는 월드가 아니다(§7-5). 노드 자리 이펙트는 기존 `EffectManager` 관할이며 이 시스템은 침범하지 않는다.
 - **⚠ `NodeTimes`는 '예정'이지 '실제'가 아니다.** 늦게 눌러도 안 밀린다. 입력 순간에 정확히 붙는 연출은 판정 이벤트를 쓴다.
@@ -278,6 +291,10 @@ Assets/
 - **`EffectCatalog`**: `EffectTrigger` enum(Perfect/Good/Miss/PatternCompleteFull/PatternComplete/NodeConnected) + `EffectEntry`(트리거→프리팹+풀 크기). **이펙트 추가 = 카탈로그에 한 줄 추가**(코드 수정 없음). 프리팹 비면 무연출.
 - 프리팹별 자체 풀 큐로 관리. 배경 앰비언트는 상시 루프 인스턴스로 배치하고 `SetIntensity`로 강도 조절. 상세: `docs/CanvasEffect/`
 
+### 7-6. 목숨 (PlayerHealth)
+- **`PlayerHealth`**(플레이어 프리팹): `CharacterActionPlayer.OnPlayerHit`만 구독한다. 그 이벤트가 **적 칼이 실제로 닿는 시각**에만, 그것도 `Attacker.Enemy` 패턴에서만 나오므로 "적 공격을 못 막았을 때만 깎인다"는 규칙이 이벤트 하나로 이미 표현돼 있다(§6).
+- **⚠ `OnDepleted`는 아직 구독자가 없다** — 목숨이 0이 돼도 화면에서 아무 일도 일어나지 않는다. 버그가 아니라 **사망 연출이 미구현**인 것이며, 그 연출이 붙을 진입점이 이 이벤트다. `OnDamaged`(남은 수치)도 UI가 붙기 전까지 같은 상태다.
+
 ### 8. 디버그 입력 (에디터 전용)
 - `PatternHandler`의 `#if UNITY_EDITOR` 블록 + `PatternHandlerEditor` 커스텀 인스펙터. **빌드에는 포함되지 않는다.**
 - **수동 강제 입력**: F1/F2/F3(인스펙터에서 변경 가능) 또는 Force 버튼으로 판정 대상의 다음 노드를 Perfect/Good/Miss로 강제 입력. `DebugForceInput(result)`가 `ExpectedPointIndex`에 `ForceDown()` → 기존 입력 파이프라인 재사용, `AddPattern`은 `result = debugForcedResult ?? Judge(delta)`로만 분기.
@@ -291,13 +308,14 @@ Assets/
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
 - **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
-- **`StateMachine<T>`**(범용 FSM/HFSM): Enum 키/인스턴스로 전환, 조건 기반 자동 전환(`RegisterCondition`), AnyState 전환, HFSM용 `CompositeStateBase`. *현재 게임플레이 루프에 직접 배선돼 있진 않은 범용 유틸.*
+- **`PrefabPool`**(`Util/`, 순수 C#): 프리팹별 인스턴스 풀. `EnemyDirector`·`SliceTargetDirector`가 필드로 하나씩 든다. 반납 시 원본을 되짚는 표식은 런타임에 붙는 `PooledInstance`다. **`Pool`(PoolKey)과 역할이 다르다** — 저쪽은 키가 고정된 소수의 `IPoolable`, 이쪽은 에셋이 데이터로 지정하는 임의 개수의 프리팹.
+- **`CanvasEffectPool`**(`Effect/`, 순수 C#): `CanvasEffectView` 전용 풀. `EffectManager`(Canvas)와 `PatternEffectDirector`(월드)가 공유한다. 반납 훅(`OnDespawn`)과 `SourcePrefab` 규약 때문에 `PrefabPool`과 나뉜다.
 
 ### 11. 베이는 표적 (Slice)
 - 패턴 성공 시 표적이 **미리 구운 조각으로 갈라지고**, 실패하면 충돌·소멸하는 **연출 전용** 시스템. 판정/점수에 개입하지 않는다.
 - **`MeshSliceBaker`**(`Slice/Core`, asmdef): 메쉬를 평면 여러 장으로 절단하는 순수 기하 로직. 다중 평면 교차는 "이미 잘린 조각을 다시 자른다"는 **순차 적용**만으로 성립한다(가로+세로 = `┼` → 4조각). 앞 평면이 만든 **캡도 일반 지오메트리로 취급**해 다음 평면이 자르고(안 그러면 교차부가 뚫림), 캡은 몇 번을 잘라도 **서브메쉬 하나(인덱스 M)에 병합**한다(머티리얼 슬롯 `M+1` 규칙). 결과는 **연결 요소별로 분해**되므로 조각 수는 2개가 아니라 N개다.
 - **`MeshSliceBakerWindow`**(`Tools/Mesh Slice Baker`): 씬 뷰에서 **직선 획을 그어** 평면을 만든다(획 길이는 무시 — 무한 평면). 재굽기는 에셋을 **제자리 수정해 GUID를 유지**한다. 카탈로그가 없어 이것이 배선을 지키는 유일한 장치다.
-- **`SliceSet`**(SO): 굽기 산출물(원본·조각 프리팹 N개·오프셋·흩뿌림 방향·`bakedPlanes`·풀 크기). **`Pattern.sliceTarget`이 이 에셋을 직접 참조한다** — enum 키 카탈로그를 두지 않는다(`PlayerAttack`과 같은 성격). **표적은 패턴당 하나**이며, 배치는 같은 패턴의 `sliceTargetOffset`(임팩트 기준 XY, 스폰·임팩트 양쪽에 동일 적용)·`impactOffset`(Deadline 대비 ±초 — 플레이어 칼·적 칼·시체 교체·투사체·카메라 큐가 전부 읽는 공통 앵커 보정)이 정한다.
+- **`SliceSet`**(SO): 굽기 산출물(원본·조각 프리팹 N개·오프셋·흩뿌림 방향·`bakedPlanes`·풀 크기). **참조 주체는 채보의 `EnemyCue.projectile`이다** — enum 키 카탈로그를 두지 않는다(`PlayerAttack`과 같은 성격). ⚠ 예전에는 `Pattern.sliceTarget`이 직접 참조했지만 그 경로는 죽어 있어 필드째 제거했다(부활 레시피: `docs/SliceTarget/Guide_RevivePatternTarget.md`). 발사 지점은 `Reserve`의 `spawnOverride`(쏘는 적의 위치)가, 도착 시각 보정은 패턴의 `impactOffset`(Deadline 대비 ±초 — 플레이어 칼·적 칼·시체 교체·투사체·카메라 큐가 전부 읽는 공통 앵커 보정)이 정한다.
 - **`SliceTargetDirector`**: 표적의 유일한 관리 지점. **임팩트 시각 = `Deadline`**(판정 종료 시점)이라 표적이 닿는 순간 성패가 이미 확정돼 있다(`LastNodeTime`에 맞추면 정상적인 늦은 Good이 실패로 연출됨). **캐릭터 베기 애니메이션이 이 시각에 자신의 임팩트 프레임을 맞춘다**(§6) — 정렬 식이 양쪽에서 동일하므로 칼날이 지나가는 순간과 절단 순간이 구조적으로 일치한다. 접근시간은 `min(approachDuration, impactTime − StartTime)`으로 **클램프**된다 — 표적은 첫 노드보다 먼저 나타날 수 없기 때문. **등장 위치를 authoring하고 속도는 파생시킨다** — 도착 시각이 Deadline으로 고정이라 '거리 = 속도 × 시간'에서 하나만 정할 수 있고, `spawnAnchor`(씬 Transform, 비면 임팩트에서 +Z로 `fallbackSpawnDistance`)로 거리를 잡아 화면 구도를 일정하게 유지한다. 그 결과 **패턴이 짧을수록 표적이 빨리 날아온다**(의도된 결과). 씬 뷰 기즈모(`drawGizmos`)가 스폰·임팩트 지점과 파생 속도를 표시하고, 플레이 중에는 활성 표적의 실제 경로와 성패 확정 상태(노랑/초록/빨강)까지 그린다.
 - **물리를 쓰지 않는다.** 조각은 콜라이더·Rigidbody 없이 `SlicePiece`가 경과 시간 t로 위치·회전을 **닫힌 식**으로 계산한다. 조각이 표적의 자식이라 −Z 진행 속도는 구조적으로 승계된다.
 - 가이드: `docs/!Guides/Guide_MeshSliceBaker.md` / 상세: `docs/SliceTarget/`
@@ -332,7 +350,11 @@ Assets/
 - **⚠ 무리를 통째로 옮기지 않는다.** 창이 바뀔 때마다 `staged` 전원을 재배치하던 방식(`RestageStaged`)은 **플레이 결과 적들이 우르르 몰려다니는 그림**이 되어 폐기했다. 지금은 **집결지가 고정**이고 적이 하나씩 걸어와 합류한다.
 - **사망 1 : 스폰 1.** 적이 죽으면 그 자리에서 한 명이 태어나 집결지로 걸어간다. `RingCapacity`는 `clusterSize × 2`가 아니라 **`clusterSize`**다 — `active` 잔여 + `staged` 집결 인원의 합이 언제나 그 값으로 불변이라, 무리가 차는 순간과 `active`가 비는 순간이 구조적으로 일치한다.
 - **집결지는 무리가 빌 때 한 번만 지정한다**(`DesignateStagedCenter`, 승격 직후). 거리를 음악에 맞추는 일은 그 한 번이 하고, 이후로는 아무도 안 움직인다. 사망 시점에는 창을 모르므로 `BindReservation`이 지나가며 남긴 `lastDesiredDistance`를 쓴다.
-- **⚠ `KillOpponent`의 순서가 걷어내기 → 보충 → 승격이다.** 승격을 먼저 하면 방금 태운 적이 승격에 휩쓸려 `active`로 넘어간다.
+  - **⚠ 그 거리에는 상한이 있다**(`stagedMaxDistance`, 8m). 창에 비례시키면 5.5~8m가 나오는데, 적 `moveSpeed`가 3m/s라 **2.0~2.7초**가 걸린다 — 기습 리드가 1.1초라 그 무리는 후보로 쓸 수 없다. **상한은 여기에만 걸고 `TakeTargetForWindow`는 안 건드린다** — 무리 '안'의 교전 거리와 속도감은 그대로 두고 무리와 무리 '사이'만 좁힌다. ⚠ `minPlayerDistance`(5)가 실질 하한이라 그보다 줄이려면 그 값도 같이 내려야 한다.
+- **⚠ `KillOpponent`의 순서가 걷어내기 → 보충 → 승격 → 재보충이다.** 승격을 먼저 하면 방금 태운 적이 승격에 휩쓸려 `active`로 넘어간다.
+- **`active`가 현재 상대 하나만 남으면 `staged`에서 한 명을 부른다**(`ReinforceActiveIfThin`). 근거는 실측이다 — 기습 후보는 `active − 현재 상대`인데 `active`는 4→3→2→1로 마르고 **1에 도달하면 그 1명이 상대**라 후보가 0이 된다(한 곡에서 "후보 없음" 19건 중 17건이 `active 1 · staged 3`이었다. **인원은 있는데 다른 목록에 있었다**). 목록만 옮기므로 **위의 합 불변식은 안 깨진다.**
+  - **⚠ 무리 세대당 한 번만 부른다.** 계속 채우면 `active`가 0에 도달하지 못해 **승격이 영영 안 일어나고**, 다음 무리로 대시하는 이 절의 리듬이 통째로 사라진다. 한 번이면 교전이 하나 늘 뿐이다.
+  - 부르는 대상은 **현재 무리에서 가장 가까운** 적이다 — 이동이 짧을수록 빨리 후보가 되고 다음 무리 대형도 덜 흐트러진다.
 - **곡 시작에는 무리 하나만 세운다.** 둘 다 미리 세우면 시작부터 두 덩어리가 보여 원래 문제(정신없음)로 되돌아간다.
 - **재배치는 카메라를 안 본다.** 이동은 보여도 되는 동작이다. **절두체 판정은 스폰에만 남는다**(`PickSpawnNearCluster`) — 실패 양상이 다르기 때문이다. 보이는 이동은 아무 일도 아니고, **보이는 팝인은 즉시 티가 난다.**
 - **스폰은 자기 자리에서 가장 가까운 화면 밖 지점**이다. 무대 가장자리에서 걸어오게 하면 첫 이동만 무대 횡단(최대 16m)이 되어 재배치 예산으로 감당할 수 없다. 자리가 이미 화면 밖이면 **오프셋 0 = 이동 없음**이 정상 경로다. 등장 연출은 `SpawnAt` 하나로 격리돼 있어 **후속 파티클 등장은 그 메서드만 갈아끼우면 된다.**
@@ -340,6 +362,35 @@ Assets/
 - **무리 안에서는 플레이어 이동이 0에 가깝다**(반경 2m). 즉 `clusterSize`가 4면 **3패턴 연속 제자리 난타 뒤 한 번 대시**다 — §11-5 사슬과 같은 현상이고, 그 리듬 자체가 의도다. 조이려면 `clusterSize`를 줄이거나 `clusterRadius`를 키운다(후자는 이산화 완화와 같은 노브).
 - `clusterEnabled`를 끄면 전부 예전 경로(`PickStagePosition`) — 회귀 없음.
 - 상세: `docs/EnemyCluster/`
+
+### 11-7. 배회 상하체 분리 (EnemyUpperBody)
+- **배회 중에는 상체를 클립 하나가 덮는다.** `Walk` 블렌드 트리의 `WalkForward`는 칼을 **한 손**으로, 나머지 `_HS` 셋은 **두 손**으로 잡는데, 블렌드는 본 회전을 가중 평균하므로 대각선 이동에서 **두 파지 사이의 어중간한 포즈**가 나왔다. 배회는 궤도 슬롯 추적이라 대각선 성분이 상시 존재해 그 구간 대부분이 그 상태였다.
+- **해결은 마스크 레이어 하나다** — `EnemyAnimator`의 `[1] Upper Body Layer`(Override, weight 0, `EnemyUpperBodyMask`) + `UpperIdle` 스테이트. 하체는 블렌드 트리가, 상체는 Idle 클립 하나가 소유하므로 **파지가 섞일 수가 없다**. 방향 클립이 몇 개로 늘어도 안 깨진다.
+- **마스크는 body-part 토글만 쓴다**(현재 `LeftArm`·`RightArm`·`LeftFingers`·`RightFingers`). ⚠ 적(`Spine`/`Bip001…`)과 플레이어(`root/pelvis/spine_01…`)는 **본 이름 체계가 완전히 달라** transform path 마스크는 리그에 묶인다 — 둘 다 Humanoid라 body-part 마스크만이 양쪽에 붙는다(`PlayerAvatarMask`는 path 기반이라 재사용 불가하며 현재 미사용).
+- **켜는 조건은 `walkingNow` 하나**다. 이미 히스테리시스를 통과한 "지금 배회 걷는 중인가"의 진실의 원천이라 새 판정을 만들면 그것과 어긋난다. **`Run`(결투 접근)은 단일 클립이라 켜지 않는다** — 켜면 오히려 달리기 상체가 죽는다.
+- **⚠ 공격·사망·리액션에서는 반드시 내린다.** 그 클립들은 상체가 전부라 마스크가 덮으면 **칼을 휘두르지 않는 그림**이 된다. 조건은 `ApplyLocomotion`과 같은 식(`Windup || Dying || reactionUntil`)이며, 해제는 **두 곳**이다 — 진입 요청을 꺾는 `SetUpperBody`와, 이미 켜진 뒤 공격이 시작된 경우를 잡는 `TickUpperBody`.
+- **⚠ 웨이트 보간은 `Update`에 있다(`TickWander` 안이 아니다).** 배회가 끝나면 `TickWander`가 즉시 return하므로 거기 두면 **웨이트가 1에 굳는다.**
+- 상체 클립은 `Samurai_Idle`/`Samurai_BlockIdle` 중 **배회 진입마다** 하나를 뽑는다(직전 것 회피). 매 프레임 뽑으면 떨리고, 스폰 때 한 번만 뽑으면 그 적은 곡 내내 같은 자세다. 교체는 기존 `AnimatorOverrideController` placeholder 방식 그대로다.
+- 풀 반납(`ResetState`)에서 웨이트·목표·직전 인덱스를 되돌린다 — 안 하면 **다음 대여가 상체가 굳은 채 나온다**.
+- 상세: `docs/EnemyUpperBody/`
+
+### 11-8. 기습과 회피 (EnemyAmbushDodge · AmbushVisibility)
+- **`DodgeDirector`**: 플레이어 애니메이션 **공백**에 적 하나가 끼어들어 찌르고, 플레이어가 회피 키(Space)로 피하는 사건의 유일 관리 지점. 자리는 `CharacterActionPlayer.OnIdleWindow`가 준다(도착 뒤 ~ 다음 액션 클립 시작 전). **판정 파이프라인에 개입하지 않는다** — `PatternHandler`는 패턴 판정의 단일 소유자로 남고 회피는 자기 시계로 판정한다.
+- **⚠ 경고 시간은 상수다**(`minRingExposure` = `maxRingExposure` = **1.0초**). "언제나 같은 시간"이 이 기능의 요구다.
+  - **자격 검사가 안전장치다** — `RequiredLead = max(와인드업, minRingExposure)`이고 `PickClipWithin`이 그보다 리드가 짧은 클립을 거르므로, **발동한 기습은 반드시 리드 ≥ 노출**이다. 약속보다 짧게 보이는 경우가 구조적으로 안 생긴다.
+  - **⚠ `lead`는 창 길이가 아니다** — `start`가 아니라 `now`부터 재므로 **대시 구간을 포함한다.** 링·적 클립은 플레이어가 이동 중이어도 성립한다(링이 `ScreenSpaceOverlay`라 이동과 무관). 공백에 요구되는 것은 **구르기뿐**이다(`minIdleWindow` = `dodgeWindow + rollMoveDuration + margin`).
+  - 그래서 **노출을 늘려도 빈도가 안 깎이는 게 아니라 깎인다** — 그 대가는 후보 선정(§11-6의 `ReinforceActiveIfThin` 등)이 되찾는다. 지금 빈도를 붙잡는 유일한 장치는 `cooldown`(3초)이다.
+- **후보 선정은 두 번 시도한다** — 사전 접근(`OnDuelScheduled`, 한 패턴 앞)과 늦은 선정(`HandleIdleWindow`). 한 번만 하면 그 순간 조건을 만족하는 적이 없을 때 창이 통째로 날아간다.
+  - **`staged` 무리도 후보다**(`PickIdleAmbusher(includeStaged)`). `active`만 보면 후보가 구조적으로 자주 0이다(§11-6). **`active`가 빈손일 때만** `staged`를 본다 — 가까운 적이 있으면 그쪽이 언제나 낫다.
+  - **⚠ 묻는 것은 "먼가"가 아니라 "제때 닿는가"다**(`canReach` → `EnemyView.TravelTime`). 집결지 거리는 창에 비례해 3~8m로 변하므로 거리로 뭉뚱그려 막으면 **가까울 때까지 버린다.** 마감은 임팩트가 아니라 **클립 시작**(`impact − lateStageWindup`)이다 — 와인드업 동안에는 이미 서 있어야 칼이 어긋나지 않는다.
+  - **`staged`에서 빌려온 기습자는 집결지로 돌려보낸다**(`ReleaseAmbusher`). `active`에서 온 기습자는 제자리에 남는다 — 무리에서 하나가 나와 찌르고 다시 섞이는 것이 그 사건의 전부다.
+- **닷지 포인트는 화면 우하단에 고정된다**(`DodgePointView`). 예전에는 적을 따라다녔고 그래서 **적이 화면 밖이면 단서가 사라지고 중앙에 오면 패턴 링과 겹쳤다.** 자리를 고정하면 둘 다 존재하지 않는 문제가 되고, 그 클래스는 카메라를 아예 모르게 된다(월드→화면 투영·`LateUpdate` 규율이 통째로 사라졌다).
+  - ⚠ **패턴인풋 밖이어야 한다** — Point_3이 (700,−700)이다. 씬에서 `Canvas` **직속**이어야 하며, `PatternHandler`(1400x1400)의 자식으로 두면 그 rect 기준 앵커가 되어 캔버스 좌표로는 패턴 영역 한가운데에 온다.
+- **역할이 갈린다 — 아웃라인 = 누가·어디서 / 닷지 포인트 = 지금.** 링이 자리를 못 말하게 된 대신 기습자에게 아웃라인을 켠다(`EnemyView.SetHighlight`). 배선은 `Fire()`(= 텔레그래프 시작 = 카메라·소리와 같은 순간)이고 끄는 곳은 `Finish()`·`Abort()` **양쪽**이며 `ResetState`도 끈다(안 끄면 **다음 대여가 빛나는 적으로 나온다**).
+  - 구현은 **레이어 스왑 하나**다 — URP `RenderObjects` 피처(`AmbushOutline` 레이어 → `AmbushOutlineMaterial`)가 그 레이어만 한 번 더 그린다. 프리팹·머티리얼·셰이더를 안 건드리고 튜닝은 머티리얼 한 곳(`_OutlineColor`·`_OutlineWidth`)에 모인다.
+  - **⚠ 깊이 상태를 건드리면 안 된다.** `CelOutline`은 메쉬를 부풀려 **뒷면만**(`Cull Front`) 그리는 셸 방식이라 **깊이 테스트가 겹치는 부분을 잘라내야 테두리만 남는다.** `depthCompareFunction = Always`로 열면 셸이 앞면 위에 그려져 **적 표면 전체가 칠해진다.**
+- **소리는 `SfxManager.Play(SfxTrigger)`만 부른다**(`AmbushTelegraph`/`DodgeSuccess`/`DodgeFail` — 각각 `Fire()`·`Succeed()`·`Fail()`). `DodgeDirector`가 오디오를 직접 만지지 않는다(카탈로그 조회·풀은 매니저 관할). ⚠ **클립이 아직 카탈로그에 미배선이라 지금은 무음**이다 — 버그가 아니라 에셋이 안 꽂힌 상태이며, 넣으면 코드 변경 없이 난다.
+- 상세: `docs/EnemyAmbushDodge/` · `docs/AmbushVisibility/` · 측정 기록과 폐기된 대안(예보·슬롯 저작): `docs/AmbushSlot/` · `docs/AmbushLookahead/`
 
 ### 11-4. 견제 — 표적이 된 순간부터 임팩트까지 (EnemyFeint)
 - **`Attacker.Player` 패턴에서 적은 휘두르지 않는다** → 그 구간에 클립이 없어 **표적이 된 순간부터 베이는 순간까지 가만히 서 있었다.** `Pattern.EnemyFeint`(`ClipAlignment` 슬롯)가 그 구간을 채운다.
@@ -383,7 +434,7 @@ Assets/
 ## 이벤트 확장 포인트 (`PatternHandler`)
 새 연출/시스템은 아래 이벤트만 구독해 붙인다(PatternHandler 본체 수정 없이 확장).
 - `OnJudged(JudgementResult, int index)` — 판정 발생.
-- `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (EffectManager, CameraDirector가 구독) **`Deadline`은 페이로드에 없다** — `LastNodeTime + PatternHandler.GoodWindow`로 만든다.
+- `OnPatternComplete(PatternCompletionInfo)` — 패턴 완료(완주/만료). 성공/실패·타이밍·다음 패턴 정보 포함. (EffectManager, CameraDirector가 구독) **`Deadline`을 페이로드가 직접 든다**. 임팩트 시각은 세 페이로드 공통 확장 메서드 `info.ImpactTime()`(= `Deadline + Pattern.ImpactOffset`)으로 얻는다 — 식을 손으로 다시 조립하지 않는다.
 - `OnPatternQueued(PatternQueuedInfo)` — 패턴이 **큐에 투입되는 순간**(판정 대상이 되기 훨씬 전). 등장에 시간이 걸리는 연출이 구독한다. `StartTime`(첫 노드 낙하 시작)과 `Deadline`(판정 종료)을 함께 준다. (SliceTargetDirector가 구독) ⚠ **이 시점에 "이 패턴의 적"을 정하면 안 된다** — §11-1 참조.
 - `OnAllPatternsCleared` — `ClearAllPatterns()`로 전부 정리된 순간(곡 중단 등). 외부 연출의 잔존물 회수용.
 - `OnNodeConnected(int index, Vector3 world)` — 노드가 라인에 연결.

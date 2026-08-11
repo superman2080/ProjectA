@@ -1025,6 +1025,7 @@ MonoBehaviour:
   patternEffectDirector: {fileID: 330585551}
   hitStopEnabled: 1
   hitStopDuration: 0.1
+  minHitStopGap: 0
 --- !u!114 &330585551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1403,6 +1404,7 @@ RectTransform:
   - {fileID: 1565592729}
   - {fileID: 1140130039}
   - {fileID: 334348851}
+  - {fileID: 1402213981}
   m_Father: {fileID: 169021406}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -3630,7 +3632,7 @@ GameObject:
   - component: {fileID: 1402213979}
   - component: {fileID: 1402213978}
   m_Layer: 0
-  m_Name: DodgePrompt
+  m_Name: DodgePoint
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3647,9 +3649,11 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 374f0c0c240c7a948939fb82acfeafe2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DodgePromptView
-  root: {fileID: 0}
+  m_EditorClassIdentifier: Assembly-CSharp::DodgePointView
+  root: {fileID: 1402213981}
   ringStartScale: 5
+  promptScale: 1.8
+  promptMargin: {x: 320, y: 320}
   ringColor: {r: 1, g: 0.35, b: 0.25, a: 1}
 --- !u!114 &1402213979
 MonoBehaviour:
@@ -3701,11 +3705,11 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1565592729}
+  m_Father: {fileID: 392694030}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -320, y: 320}
   m_SizeDelta: {x: 90, y: 90}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1406144273
@@ -3979,7 +3983,6 @@ RectTransform:
   - {fileID: 1406144274}
   - {fileID: 1707306252}
   - {fileID: 1144124593}
-  - {fileID: 1402213981}
   m_Father: {fileID: 392694030}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -4630,6 +4633,7 @@ MonoBehaviour:
   prompt: {fileID: 1402213978}
   handler: {fileID: 1565592730}
   cameraDirector: {fileID: 330585549}
+  inputHandler: {fileID: 1565592733}
   dodgeEnabled: 1
   fallbackAmbushClips: []
   dodgeClipLeft: {fileID: 7400000, guid: e53fcf39dc8400f4abee0d0d0670b9d7, type: 2}
@@ -4637,17 +4641,15 @@ MonoBehaviour:
   rollDuration: 0.8
   rollSpeed: 1.6
   rollMoveDuration: 0.25
-  minRingExposure: 0.4
-  maxRingExposure: 0.8
+  minRingExposure: 1
+  maxRingExposure: 1
   dodgeWindow: 0.15
   margin: 0.2
   minIdleWindow: 0.6
-  cooldown: 6
+  cooldown: 3
   stageDistance: 2.5
   lungeDistance: 1.5
-  promptHeight: 1.7
   rollDegrees: 60
-  dodgeKey: 1
   logWindows: 1
 --- !u!1 &1840902469
 GameObject:
@@ -5062,6 +5064,10 @@ PrefabInstance:
       propertyPath: enemyDirector
       value: 
       objectReference: {fileID: 1729954864}
+    - target: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: hitStopDirector
+      value: 
+      objectReference: {fileID: 330585550}
     - target: {fileID: 3187604648233032263, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: sprintSpeedRange.x
       value: 1.2
