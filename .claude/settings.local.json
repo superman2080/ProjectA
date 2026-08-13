@@ -133,7 +133,11 @@
       "Bash(awk '/^--- !u!224 &392694030/,/m_Father/' \"Assets/01. Scenes/BattleScene.unity\")",
       "Bash(awk '/^--- !u!224 &1402213981/,/m_Pivot/' \"Assets/01. Scenes/BattleScene.unity\")",
       "Bash(git mv *)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --version)",
+      "mcp__blender__get_scene_info",
+      "mcp__blender__execute_blender_code",
+      "mcp__blender__get_viewport_screenshot"
     ]
   }
 }
