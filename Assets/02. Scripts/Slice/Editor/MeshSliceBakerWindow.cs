@@ -68,11 +68,12 @@ namespace SliceSpace.EditorTools
         [SerializeField] private float duelBaseDistance = 1f;
 
         /// <summary>
-        /// 실제 배치 거리 = 기준선 + 패턴 보정. <b>런타임·합주 프리뷰와 같은 식이어야 한다</b> —
-        /// 여기가 어긋나면 유도된 절단 평면 자체가 틀린다.
+        /// 실제 배치 거리 = 임팩트 순간(t = 0)의 간격. <b>런타임·합주 프리뷰와 같은 함수를 부른다</b> —
+        /// 여기가 어긋나면 유도된 절단 평면 자체가 틀린다. 굽는 포즈가 임팩트 순간이므로 t = 0이 옳다
+        /// (거리 커브가 있으면 그 시점 값, 없으면 기준선 + 패턴 보정).
         /// </summary>
         private float DuelDistance =>
-            duelBaseDistance + (targetPattern != null ? targetPattern.DuelDistanceOffset : 0f);
+            targetPattern != null ? targetPattern.DuelGapAt(0f, duelBaseDistance) : duelBaseDistance;
 
         // 프리뷰
         private PreviewRenderUtility previewUtil;

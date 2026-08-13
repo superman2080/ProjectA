@@ -73,6 +73,12 @@ MonoBehaviour:
     extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   effectCues:
   - label: Slash Fire VFX
     prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}

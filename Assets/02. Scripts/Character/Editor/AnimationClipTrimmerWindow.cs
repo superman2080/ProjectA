@@ -134,7 +134,25 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
     private float bladeGap = float.NaN;
 
-    private float DuelDistance => duelBaseDistance + duelDistanceOffset;
+    /// <summary>패턴이 커브를 저작하는 중인지. 창의 커브가 진실의 원천이다(에셋 저장 전 상태를 프리뷰에 반영).</summary>
+    private AnimationCurve duelDistanceCurve = new AnimationCurve();
+
+    /// <summary>기준 거리를 씬 앵커에서 읽었는가. 못 읽으면 수동 입력이 그대로 산다.</summary>
+    private bool duelBaseFromScene;
+
+    private bool HasCurve => duelDistanceCurve != null && duelDistanceCurve.length > 0;
+
+    /// <summary>임팩트 시점(t = 0)의 간격. 적 배치와 카메라 폴백이 이 값을 쓴다.</summary>
+    private float DuelDistance => GapAt(0f);
+
+    /// <summary>
+    /// <paramref name="time"/>(임팩트 기준 상대초)에서의 간격(m).
+    /// <b>런타임 <see cref="Pattern.DuelGapAt"/>과 같은 식</b>이며, 커브만 창의 것을 쓴다 —
+    /// 저장 전에도 프리뷰가 지금 편집 중인 값을 보여 줘야 하기 때문이다.
+    /// </summary>
+    private float GapAt(float time) => HasCurve
+        ? duelDistanceCurve.Evaluate(time)
+        : Mathf.Max(duelBaseDistance + duelDistanceOffset, 0.1f);
 
     private void OnEnable()
     {
@@ -246,13 +264,112 @@ public class AnimationClipTrimmerWindow : EditorWindow
             duelDistanceOffset);
         EditorGUILayout.EndHorizontal();
 
-        EditorGUILayout.LabelField(" ", $"실제 배치 거리 {DuelDistance:0.00}m", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField(" ",
+            duelBaseFromScene
+                ? $"기준 {duelBaseDistance:0.00}m — 씬 결투 앵커에서 읽음"
+                : $"기준 {duelBaseDistance:0.00}m — 수동 입력 (씬에 EnemyDirector가 없습니다)",
+            EditorStyles.miniLabel);
+
+        DrawDuelCurve();
 
         lockRootPosition = EditorGUILayout.Toggle(
             new GUIContent("루트 위치 고정", "루트 모션이 배우를 밀어내면 프레임마다 거리가 변해 배치 확인이 무의미해진다."),
             lockRootPosition);
 
         EditorGUILayout.Space();
+    }
+
+    /// <summary>
+    /// 결투 거리 커브 저작 줄. <b>지점 찍기·끌기·탄젠트는 Unity 커브 에디터가 전부 처리한다</b> —
+    /// 여기서는 필드 하나와 현재 <c>t</c>의 간격만 보여 준다.
+    /// </summary>
+    private void DrawDuelCurve()
+    {
+        EditorGUI.BeginChangeCheck();
+        duelDistanceCurve = EditorGUILayout.CurveField(
+            new GUIContent("결투 거리 커브",
+                "키 시간 = 임팩트 기준 상대초(0 = 임팩트), 값 = 절대 간격(m).\n" +
+                "음수면 플레이어가 적을 지나쳐 뒤로 간다. 비우면 위의 상수 거리를 쓴다.\n" +
+                "구동 구간은 플레이어 클립 재생 구간이며, 그 밖은 끝 키 값으로 홀드된다."),
+            duelDistanceCurve);
+        if (EditorGUI.EndChangeCheck()) Repaint();
+
+        if (!HasCurve)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(" ", $"커브 없음 — 상수 {DuelDistance:0.00}m", EditorStyles.miniLabel);
+
+            if (GUILayout.Button("+ 커브 만들기", GUILayout.Width(110f)))
+            {
+                float gap = Mathf.Max(duelBaseDistance + duelDistanceOffset, 0.1f);
+
+                // 지금 상수와 같은 직선으로 시작한다 — 만들자마자 그림이 바뀌면 무엇이 바뀐 건지 알 수 없다.
+                duelDistanceCurve = AnimationCurve.Linear(CurveDriveStart, gap, 0f, gap);
+            }
+            EditorGUILayout.EndHorizontal();
+            return;
+        }
+
+        EditorGUILayout.LabelField(" ",
+            $"간격 t={t:+0.00;-0.00;0.00}s : {GapAt(t):0.00}m" +
+            (GapAt(t) < 0f ? "  (지나침)" : string.Empty) +
+            $"   ·   구동 시작 t={CurveDriveStart:0.00}s (플레이어 클립 시작)",
+            EditorStyles.miniLabel);
+
+        WarnCurveOutsideDriveWindow();
+    }
+
+    /// <summary>
+    /// 커브 구동이 시작되는 시각(임팩트 기준 상대초) = <b>플레이어 클립이 재생되기 시작하는 t</b>.
+    /// 그보다 이른 키는 화면에 나타날 수 없다 — 그 구간에는 아직 수렴 이동이 진행 중이다.
+    /// </summary>
+    private float CurveDriveStart => player.HasClip
+        ? -DuetTimeline.LeadOf(player.clipStart, player.clipImpact, player.speed)
+        : -0.5f;
+
+    /// <summary>
+    /// 키가 구동 구간 밖에 있으면 알린다. <b>이 창에서 가장 흔한 실수가 여기다</b> —
+    /// 빈 커브 필드를 직접 누르면 Unity가 <c>0 → 1</c> 기본 램프를 주는데,
+    /// 이 축은 <b>음수가 과거</b>라 그 키들은 전부 임팩트 <b>이후</b>다.
+    /// 결과는 "시작 거리만 멀어지고 아무 일도 안 일어남"(첫 키 값이 계속 홀드된다).
+    /// </summary>
+    private void WarnCurveOutsideDriveWindow()
+    {
+        float start = CurveDriveStart;
+        bool allAfterImpact = true;
+        bool anyBeforeStart = false;
+
+        for (int i = 0; i < duelDistanceCurve.length; i++)
+        {
+            float key = duelDistanceCurve[i].time;
+            if (key < -1e-3f) allAfterImpact = false;
+            if (key < start - 1e-3f) anyBeforeStart = true;
+        }
+
+        if (allAfterImpact)
+            EditorGUILayout.HelpBox(
+                $"키가 전부 임팩트 이후(t ≥ 0)입니다 — 클립이 재생되는 구간은 t = {start:0.00}s ~ 0s입니다.\n" +
+                "그 구간에는 키가 없어 첫 키 값이 그대로 홀드되므로 화면에서는 '시작 거리만 멀어지고 안 움직임'이 됩니다.\n" +
+                "지나가며 베려면 임팩트 앞 구간에 키를 찍고, t = 0의 값이 칼이 닿는 간격이 되게 하세요.",
+                MessageType.Warning);
+        else if (anyBeforeStart)
+            EditorGUILayout.HelpBox(
+                $"클립 시작(t = {start:0.00}s)보다 이른 키가 있습니다 — 그 구간은 아직 수렴 이동 중이라 커브가 안 보입니다.",
+                MessageType.Info);
+    }
+
+    /// <summary>
+    /// 씬에 <c>EnemyDirector</c>가 있으면 기준 거리를 거기서 읽는다 — <b>런타임과 같은 함수</b>
+    /// (<c>EnemyDirector.DuelBaseDistance</c>)를 부르므로 손으로 맞출 값이 하나 사라진다.
+    /// 씬이 없어도 툴은 그대로 돌아간다(수동 입력 유지).
+    /// </summary>
+    private void PullDuelBaseFromScene()
+    {
+        var director = Object.FindObjectOfType<EnemySpace.EnemyDirector>();
+        if (director == null) { duelBaseFromScene = false; return; }
+
+        duelBaseDistance = director.DuelBaseDistance();
+        duelBaseFromScene = true;
     }
 
     /// <summary>패턴의 역할이 짝을 정한다. 두 슬롯을 <b>동시에</b> 읽는다.</summary>
@@ -278,6 +395,8 @@ public class AnimationClipTrimmerWindow : EditorWindow
         LoadActor(so, feint);
 
         duelDistanceOffset = so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f;
+        duelDistanceCurve = so.FindProperty("duelDistanceCurve")?.animationCurveValue ?? new AnimationCurve();
+        PullDuelBaseFromScene();
         t = 0f;
     }
 
@@ -364,12 +483,20 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// <summary>이 배우가 지금 화면의 적을 맡고 있는가(배우 블록 강조용).</summary>
     private bool IsActiveEnemy(Actor actor) => ReferenceEquals(ActiveEnemyActor(), actor);
 
-    /// <summary>플레이어는 원점에서 +Z, 적은 결투 거리 앞에서 마주 본다(슬라이서와 같은 규약).</summary>
+    /// <summary>
+    /// 적은 임팩트 시점 자리에 <b>고정</b>하고 <b>플레이어가 움직인다</b> — 런타임과 같은 모델이다
+    /// (적 고정 · 플레이어가 축 위에서 간격을 그림). <c>t = 0</c>에서 플레이어가 원점이라 기존 구도가 그대로다.
+    ///
+    /// <para>간격이 음수인 구간에서는 플레이어가 적을 지나쳐 뒤로 나간다 — 화면이 런타임과 같아지고
+    /// 칼날 경로도 실제 궤적이 된다. 회전은 건드리지 않는다(지나쳐도 등을 돌리지 않는 규칙과 같다).</para>
+    /// </summary>
     private void PlaceActors()
     {
-        player.placement = Vector3.zero;
+        float impactGap = DuelDistance;
+
+        player.placement = Vector3.forward * (impactGap - GapAt(t));
         player.facing = Quaternion.identity;
-        enemy.placement = Vector3.forward * DuelDistance;
+        enemy.placement = Vector3.forward * impactGap;
         enemy.facing = Quaternion.Euler(0f, 180f, 0f);
     }
 
@@ -591,11 +718,22 @@ public class AnimationClipTrimmerWindow : EditorWindow
             player.clipStart, player.clipImpact, player.clipEnd, player.speed,
             enemy.clipStart, enemy.clipImpact, enemy.clipEnd, enemy.speed);
 
-        if (!feint.HasClip) return (min, max);
+        if (feint.HasClip)
+        {
+            min = Mathf.Min(min, -DuetTimeline.LeadOf(feint.clipStart, feint.clipImpact, feint.speed));
+            max = Mathf.Max(max, DuetTimeline.TailOf(feint.clipImpact, feint.clipEnd, feint.speed));
+        }
 
-        return (
-            Mathf.Min(min, -DuetTimeline.LeadOf(feint.clipStart, feint.clipImpact, feint.speed)),
-            Mathf.Max(max, DuetTimeline.TailOf(feint.clipImpact, feint.clipEnd, feint.speed)));
+        // 거리 커브는 트림 끝보다 뒤까지 뻗을 수 있다(지나쳐 나가는 구간은 임팩트 '이후'다).
+        // 범위에 안 넣으면 정작 그 연출을 스크럽할 수 없다 — 클립은 트림이 끝나도 계속 재생되므로
+        // 런타임에는 그 구간이 실제로 존재한다.
+        if (HasCurve)
+        {
+            min = Mathf.Min(min, duelDistanceCurve[0].time);
+            max = Mathf.Max(max, duelDistanceCurve[duelDistanceCurve.length - 1].time);
+        }
+
+        return (min, max);
     }
 
     private void DrawTimeline()
@@ -841,7 +979,8 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
         bool canApply = (player.HasClip && player.Duration > 0f)
                         || (enemy.HasClip && enemy.Duration > 0f)
-                        || (feint.HasClip && feint.Duration > 0f);
+                        || (feint.HasClip && feint.Duration > 0f)
+                        || HasCurve; // 클립 없이 거리 커브만 저작하는 경우도 저장할 수 있어야 한다
 
         using (new EditorGUI.DisabledScope(!canApply))
         {
@@ -860,11 +999,30 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         var so = new SerializedObject(targetPattern);
         bool synced = ActorSynced(so, player) && ActorSynced(so, enemy) && ActorSynced(so, feint)
-                      && Mathf.Approximately(so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f, duelDistanceOffset);
+                      && Mathf.Approximately(so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f, duelDistanceOffset)
+                      && CurveSynced(so);
 
         EditorGUILayout.LabelField(" ",
             synced ? "✔ 저장됨 (창과 에셋이 일치)" : "● 저장 전 — 창의 값이 에셋과 다릅니다",
             EditorStyles.miniLabel);
+    }
+
+    /// <summary>창의 커브와 에셋의 커브가 같은가. 키 개수·시각·값만 본다(탄젠트는 값이 같으면 같은 그림이다).</summary>
+    private bool CurveSynced(SerializedObject so)
+    {
+        var stored = so.FindProperty("duelDistanceCurve")?.animationCurveValue;
+        int storedLength = stored?.length ?? 0;
+        int windowLength = duelDistanceCurve?.length ?? 0;
+
+        if (storedLength != windowLength) return false;
+
+        for (int i = 0; i < storedLength; i++)
+        {
+            if (!Mathf.Approximately(stored[i].time, duelDistanceCurve[i].time)) return false;
+            if (!Mathf.Approximately(stored[i].value, duelDistanceCurve[i].value)) return false;
+        }
+
+        return true;
     }
 
     private static bool ActorSynced(SerializedObject so, Actor actor)
@@ -896,6 +1054,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
         var offsetProp = so.FindProperty("duelDistanceOffset");
         if (offsetProp != null) offsetProp.floatValue = duelDistanceOffset;
 
+        var curveProp = so.FindProperty("duelDistanceCurve");
+        if (curveProp != null) curveProp.animationCurveValue = duelDistanceCurve ?? new AnimationCurve();
+
         so.ApplyModifiedProperties();
         EditorUtility.SetDirty(targetPattern);
         AssetDatabase.SaveAssetIfDirty(targetPattern);
@@ -904,7 +1065,8 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
         Debug.Log(
             $"[PatternActionEditor] '{targetPattern.name}' 저장 — " +
-            $"{Describe(player)} / {Describe(feint)} / {Describe(enemy)} / 거리보정 {duelDistanceOffset:+0.00;-0.00;0.00}m",
+            $"{Describe(player)} / {Describe(feint)} / {Describe(enemy)} / 거리보정 {duelDistanceOffset:+0.00;-0.00;0.00}m" +
+            (HasCurve ? $" / 거리커브 키 {duelDistanceCurve.length}개" : string.Empty),
             targetPattern);
     }
 

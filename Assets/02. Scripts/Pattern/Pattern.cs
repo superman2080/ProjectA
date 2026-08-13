@@ -70,6 +70,11 @@ namespace PatternSpace
                  "런타임 배치 · 합주 프리뷰 · 슬라이서 칼 평면 유도가 전부 이 값을 읽는다.")]
         [SerializeField] private float duelDistanceOffset;
 
+        [Tooltip("패턴 진행 중 결투 간격(m). 키 시간 = 임팩트 기준 상대초(0 = 임팩트), 값 = 절대 간격.\n" +
+                 "음수면 플레이어가 적을 지나쳐 뒤로 간다. 비우면 duelDistanceOffset 상수 경로 그대로.\n" +
+                 "저작은 Tools/Animation Clip Trimmer. 구동 구간은 플레이어 클립 재생 구간이다.")]
+        [SerializeField] private AnimationCurve duelDistanceCurve = new AnimationCurve();
+
         [Header("World Effects")]
         [Tooltip("이 패턴이 재생할 월드 이펙트들. 큐 하나가 '언제·어디에·어떤 조건에서'를 스스로 든다.\n" +
                  "개수 제한이 없으므로 칼날·플레이어·적·임팩트 지점에 각각 붙일 수 있다.\n" +
@@ -141,6 +146,41 @@ namespace PatternSpace
         /// 그래서 씬 튜닝과 패턴 저작이 서로를 깨뜨리지 않는다.
         /// </summary>
         public float DuelDistanceOffset => duelDistanceOffset;
+
+        /// <summary>
+        /// 패턴 진행 중 간격을 그리는 커브. 키 시간은 <b>임팩트 기준 상대초</b>(저작 배속 단위)이고
+        /// 값은 <b>절대 간격(m)</b>이다. 비어 있으면 상수 경로(<see cref="DuelDistanceOffset"/>)를 쓴다.
+        /// </summary>
+        public AnimationCurve DuelDistanceCurve => duelDistanceCurve;
+
+        /// <summary>이 패턴이 시간 함수로 간격을 그리는가. 비면 예전 상수 경로다.</summary>
+        public bool HasDuelDistanceCurve => DuelGap.Has(duelDistanceCurve);
+
+        /// <summary>
+        /// 커브의 첫 키 시각(임팩트 기준 상대초). 커브가 없으면 0.
+        /// <b>결투 배치의 기준 시각</b>이다 — 그 시각의 값으로 자리를 잡고 그 시각까지 도착한다.
+        /// </summary>
+        public float DuelCurveStartTime => DuelGap.StartTime(duelDistanceCurve);
+
+        /// <summary>
+        /// 커브의 마지막 키 시각(임팩트 기준 상대초). 커브가 없으면 0.
+        ///
+        /// <para><b>이 값이 곧 "이 패턴이 위치를 언제까지 소유하는가"다.</b> 임팩트 이후 키를 찍으면
+        /// 다음 패턴의 결투 계획이 그 구간 <b>안에</b> 도착하므로(계획은 임팩트보다 먼저 온다),
+        /// <c>PlayerCombatMover</c>가 이 값까지 인수인계를 미룬다 — 안 미루면 임팩트 이후 키가
+        /// <b>한 번도 재생되지 않는 죽은 데이터</b>가 된다.</para>
+        /// </summary>
+        public float DuelCurveEndTime => DuelGap.EndTime(duelDistanceCurve);
+
+        /// <summary>
+        /// 이 패턴의 <paramref name="relTime"/>(임팩트 기준 상대초)에서 둘이 유지할 간격(m).
+        /// <b>런타임과 툴 프리뷰가 같은 함수를 부른다</b> — 두 그림이 어긋날 코드가 존재하지 않는다.
+        ///
+        /// <para>커브 경로에는 하한 클램프가 없다 — <b>음수(적을 지나침)가 이 기능의 목적</b>이기 때문이다.
+        /// 구간 밖은 <see cref="AnimationCurve.Evaluate"/>의 기본 Clamp가 끝 키 값으로 홀드한다.</para>
+        /// </summary>
+        public float DuelGapAt(float relTime, float baseDistance) =>
+            DuelGap.At(duelDistanceCurve, relTime, baseDistance, duelDistanceOffset);
 
         /// <summary>
         /// 이 패턴이 재생할 월드 이펙트 큐들. <b>슬롯이 아니라 리스트인 이유</b>는

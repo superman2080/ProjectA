@@ -228,12 +228,25 @@ namespace EnemySpace
             /// </summary>
             public readonly float PlayerArriveTime;
 
-            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime)
+            /// <summary>플레이어 → 적 방향의 단위벡터(평면). 거리 커브가 이 축 위에서 플레이어를 민다.</summary>
+            public readonly Vector3 Axis;
+
+            /// <summary>이번 패턴에서 칼이 닿는 절대 시각. 거리 커브의 시간 원점(t = 0)이다.</summary>
+            public readonly float ImpactTime;
+
+            /// <summary>이번 패턴의 템플릿. 거리 커브를 들고 있는 주체다(널일 수 있다 — 디버그 경로).</summary>
+            public readonly Pattern Template;
+
+            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime,
+                            Vector3 axis, float impactTime, Pattern template)
             {
                 PlayerPosition = player;
                 EnemyPosition = enemy;
                 ArriveTime = arriveTime;
                 PlayerArriveTime = playerArriveTime;
+                Axis = axis;
+                ImpactTime = impactTime;
+                Template = template;
             }
         }
 
@@ -268,6 +281,13 @@ namespace EnemySpace
 
         /// <summary>기즈모용 — 지금 살아 있는 계획. 숫자로는 안 보이는 문제라 씬 뷰에 그린다.</summary>
         private DuelPlan? lastPlan;
+
+        /// <summary>
+        /// 이번 교전의 축(플레이어 → 적)과 그 주인. <b>상대와 수명을 같이한다</b> —
+        /// 사슬 내내 유지되고 상대가 바뀌면 그 자리에서 새로 잡힌다(<see cref="DuelGap.ResolveAxis"/>).
+        /// </summary>
+        private Vector3 duelAxis;
+        private EnemyView duelAxisOwner;
 
         /// <summary>
         /// 지금 판정 대상 패턴에서 누가 휘두르는가. 예약이 없으면 Player(적 무방비)로 본다.
@@ -431,8 +451,22 @@ namespace EnemySpace
         /// </summary>
         private Vector3 Center => arenaCenter != null ? arenaCenter.position : transform.position;
 
-        /// <summary>플레이어 위치. 배치·표적 선택이 "플레이어에게서 얼마나 먼가"를 재는 데 쓴다.</summary>
-        private Vector3 PlayerPosition => duelAnchor != null ? duelAnchor.position : Center;
+        /// <summary>
+        /// 플레이어 위치. 배치·표적 선택·결투 배치가 "플레이어에게서 얼마나 먼가"를 재는 데 쓴다.
+        ///
+        /// <para><b>⚠ 앵커가 아니라 앵커의 부모(플레이어 루트)다.</b> 앵커의 역할은
+        /// <see cref="DuelBaseDistance"/>가 읽는 <b>기준 간격을 정하는 것</b>이지 플레이어의 자리가 아니다.
+        /// 앵커를 위치로 쓰면 그 자리가 <b>플레이어보다 기준 간격만큼 앞</b>(적 쪽)이라,
+        /// <b>현재 간격이 그 값보다 좁아지는 순간 <c>BuildDuelPlan</c>의 <c>toEnemy</c>가 부호를 뒤집어</b>
+        /// 목표 자리가 적 <b>반대편</b>에 잡힌다 — 물러나야 할 때 적을 관통해 건너가는 그림이 된다.</para>
+        ///
+        /// <para>예전에는 결투 간격이 앵커 거리와 같아 간격이 그보다 좁아질 일이 없었고(경계값에 딱 붙어 있었다),
+        /// 그래서 증상이 안 났다. <b>거리 커브가 그 전제를 깼다</b> — 임팩트 간격을 0.4m 같은 값으로
+        /// 저작하면 매 패턴 그 구간에 들어간다. 정의를 하나로 두면 이 부류가 원천 소멸한다.</para>
+        /// </summary>
+        private Vector3 PlayerPosition => duelAnchor != null
+            ? (duelAnchor.parent != null ? duelAnchor.parent.position : duelAnchor.position)
+            : Center;
 
         // 절두체 평면 6장. 스폰마다 배열을 새로 만들지 않도록 재사용한다.
         private readonly Plane[] frustumScratch = new Plane[6];
@@ -1132,16 +1166,25 @@ namespace EnemySpace
         /// 앵커는 플레이어 자식이므로 플레이어까지의 평면 거리가 곧 기본 간격이고, 패턴이 리치만큼 보정한다.
         /// 툴(<c>짝 에디터</c>·<c>슬라이서</c>)의 `기준 결투 거리`에 같은 값을 넣어야 그림이 일치한다.
         /// </summary>
-        private float DuelDistanceOf(Pattern template)
+        private float DuelDistanceOf(Pattern template, float relTime)
         {
-            // 앵커가 없으면 툴 기본값과 같은 1m로 본다 — 두 곳이 다르면 프리뷰와 게임이 어긋난다.
+            float baseDistance = DuelBaseDistance();
+
+            return template != null ? template.DuelGapAt(relTime, baseDistance) : baseDistance;
+        }
+
+        /// <summary>
+        /// 앵커가 정하는 기준 간격(m). <b>기준 거리의 단일 출처</b>이며 툴(<c>짝 에디터</c>)이
+        /// 씬에서 같은 식으로 읽어 간다 — 두 곳이 다르면 프리뷰와 게임이 어긋난다.
+        /// </summary>
+        public float DuelBaseDistance()
+        {
+            // 앵커가 없으면 툴 기본값과 같은 1m로 본다.
             float baseDistance = duelAnchor != null && duelAnchor.parent != null
                 ? Vector3.ProjectOnPlane(duelAnchor.position - duelAnchor.parent.position, Vector3.up).magnitude
                 : 1f;
 
-            if (baseDistance < 0.1f) baseDistance = 1f;
-
-            return Mathf.Max(baseDistance + (template != null ? template.DuelDistanceOffset : 0f), 0.1f);
+            return baseDistance < 0.1f ? 1f : baseDistance;
         }
 
         /// <summary>
@@ -1155,20 +1198,42 @@ namespace EnemySpace
         /// 한 걸음이라도 마중 나와야 교전으로 보인다. 그 몫이 창 전체로 늘어져 기어가는 문제는
         /// <c>EnemyView.EarliestArrival</c>이 막는다(빨리 가서 서고 플레이어를 바라본다).</para>
         /// </summary>
-        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime)
+        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime,
+                                       float impactTime)
         {
             Vector3 player = PlayerPosition;
-            float distance = DuelDistanceOf(template);
+
+            // 배치의 기준 시각. 커브가 있으면 <b>커브가 열리는 시각</b>이다 — 그 시점 값으로 자리를 잡고
+            // 그 시각까지 도착해야 이음매가 연속이다. 도착 시각(= 클립 시작/임팩트)으로 재면
+            // 접근이 끝난 자리와 커브 첫 키가 달라 커브가 열리는 순간 그 차이만큼 순간이동한다.
+            float baseRelTime = template != null && template.HasDuelDistanceCurve
+                ? template.DuelCurveStartTime
+                : arriveTime - impactTime;
+
+            float distance = DuelDistanceOf(template, baseRelTime);
+
+            // 커브가 열리기 전에 도착을 끝낸다. 앞당기는 것은 언제나 안전하다(EarliestArrival과 같은 규율).
+            if (template != null && template.HasDuelDistanceCurve)
+                playerArriveTime = Mathf.Min(playerArriveTime, impactTime + baseRelTime);
 
             // 상대가 없으면(디버그 경로) 플레이어는 제자리, 적 자리만 앞에 잡아 준다.
             if (opponent == null)
+            {
+                duelAxisOwner = null;
                 return new DuelPlan(player, player + Vector3.forward * distance, arriveTime,
-                                    ResolvePlayerArrival(playerArriveTime, 0f));
+                                    ResolvePlayerArrival(playerArriveTime, 0f),
+                                    Vector3.forward, impactTime, template);
+            }
 
             // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴 등)
             // transform.position은 곧 떠날 위치다. 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
             Vector3 toEnemy = Vector3.ProjectOnPlane(opponent.Destination - player, Vector3.up);
-            Vector3 dir = toEnemy.sqrMagnitude < 1e-6f ? Vector3.forward : toEnemy.normalized;
+
+            // ⚠ 축은 순간 위치에서 파생시키지 않는다 — 커브가 관통(음수 간격)시켜 놓으면
+            // 그 자리에서 잰 toEnemy가 180° 뒤집혀 다음 패턴부터 커브 전체가 거울로 돈다(DuelGap.ResolveAxis).
+            Vector3 dir = DuelGap.ResolveAxis(toEnemy, opponent == duelAxisOwner ? duelAxis : Vector3.zero);
+            duelAxis = dir;
+            duelAxisOwner = opponent;
 
             Vector3 meet = player + toEnemy * playerShare;
             Vector3 playerTarget = meet - dir * (distance * playerShare);
@@ -1179,7 +1244,8 @@ namespace EnemySpace
             float travel = Vector3.ProjectOnPlane(playerTarget - player, Vector3.up).magnitude;
 
             return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime,
-                                ResolvePlayerArrival(playerArriveTime, travel));
+                                ResolvePlayerArrival(playerArriveTime, travel),
+                                dir, impactTime, template);
         }
 
         /// <summary>
@@ -1316,7 +1382,9 @@ namespace EnemySpace
                 ? r.attack.ResolveScheduleStart(r.impactTime, Time.time)
                 : r.impactTime;
 
-            float duelDistance = DuelDistanceOf(r.template);
+            // 표적 선택도 '도착 시각의 간격'을 쓴다 — 커브가 그 뒤 간격을 바꿔도
+            // 어느 적을 고를지는 붙는 순간의 거리로 정해야 창과 속도감이 맞는다(§11-2).
+            float duelDistance = DuelDistanceOf(r.template, arriveTime - r.impactTime);
 
             // 상대가 남아 있다 = 직전 교전이 처치로 끝나지 않았다 = 같은 적에게 다시 다가간다.
             // 이 경로만 거리가 창에 안 맞춰지므로 여기서만 이동 시간을 줄인다.
@@ -1338,7 +1406,8 @@ namespace EnemySpace
             var opponent = currentOpponent;
             r.opponent = opponent;
 
-            var plan = BuildDuelPlan(opponent, r.template, arriveTime, ResolvePlayerArriveTime(arriveTime, reapproach));
+            var plan = BuildDuelPlan(opponent, r.template, arriveTime,
+                                     ResolvePlayerArriveTime(arriveTime, reapproach), r.impactTime);
             lastPlan = plan;
             OnDuelScheduled?.Invoke(plan);
 

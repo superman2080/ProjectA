@@ -82,9 +82,31 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("곡 시작 전 스플라인 인트로.")]
     [SerializeField] private bool introEnabled = true;
 
+    // ── 플레이어 옵션 ────────────────────────────────────────────────────────
+    // ⚠ 위의 Toggles와 성격이 다르다. 저쪽은 개발용("그 층이 배선됐나")이고 이쪽은 접근성
+    // ("플레이어가 원하나")이다. 둘을 AND로 묶으므로 어느 쪽이든 끄면 그 층만 죽는다.
+    // 옵션창은 아직 없다 — 생기면 이 셋에 값을 쓰기만 하면 되고, 코드는 이미 읽고 있다.
+    // 루트 Canvas가 ScreenSpaceOverlay라 카메라 연출을 전부 꺼도 게임이 온전하다(옵션 비용이 0인 근거).
+    [Header("Player Options")]
+    [Tooltip("화면 흔들림 + FOV 펀치. 멀미 감수성이 큰 층이라 하나로 묶는다.")]
+    [SerializeField] private bool optionScreenShake = true;
+
+    [Tooltip("앵글 랜덤 교체. 끄면 시작 카메라(0번) 구도가 곡 내내 유지된다.")]
+    [SerializeField] private bool optionAngleSwitch = true;
+
+    [Tooltip("임팩트 줌 + 카메라 궤도의 플레이어 방향 추종. 끄면 카메라가 돌지 않는다(고정 카메라에 가깝다).")]
+    [SerializeField] private bool optionCameraMotion = true;
+
     [Header("Angle Switch")]
     [Tooltip("앵글 vcam 랜덤 교체. 0번이 곡 시작 카메라이며, 2대 미만이면 조용히 비활성된다.")]
     [SerializeField] private CameraAngleSwitcher angleSwitcher = new CameraAngleSwitcher();
+
+    [Tooltip("카메라 전환에 걸리는 시간(초). vcam이 바뀔 때 화면이 새 구도로 옮겨가는 속도다 — 작을수록 컷에 가깝다.\n" +
+             "0 이하면 씬의 Brain 값을 그대로 쓴다(예전 동작).\n\n" +
+             "⚠ 값은 Awake에서 Brain.DefaultBlend에 써 넣는다. Brain이 런타임 진실의 원천이라는 규율은 그대로다 —\n" +
+             "인트로 마무리 블렌드도 같은 값을 읽으므로 둘이 어긋날 수 없다.\n" +
+             "⚠ Brain의 블렌드 Style이 Cut이면 시간은 무시된다(그쪽이 이긴다).")]
+    [SerializeField] private float angleBlendDuration = 0.4f;
 
     [Header("Cue Catalog")]
     [Tooltip("트리거별 쉐이크 설정. 연출 추가 = 여기에 한 줄.")]
@@ -144,6 +166,15 @@ public class CameraDirector : MonoBehaviour
              "PlayerCombatMover.turnDuration(0.15초)보다 충분히 길어야 한다 — " +
              "같으면 상대 교체 때 화면이 0.15초에 반 바퀴 돈다. 0 이하면 즉시 스냅.")]
     [SerializeField] private float cameraTurnDamping = 0.45f;
+
+    [Tooltip("남은 회전각이 이 값(도)을 넘으면 뒤따르지 않고 그 자리에서 끊는다(컷). 0 이하면 언제나 감쇠(예전 동작).\n" +
+             "감쇠는 빠른 회전을 '조금 느린 회전'으로 바꿀 뿐이라, 상대가 무대 반대편으로 바뀌는 반 바퀴 회전은\n" +
+             "느리게 해도 눈이 못 따라간다. 컷은 받아들여진다 — 대신 다른 앵글로 착지시켜 '샷 전환'으로 읽히게 한다.")]
+    [SerializeField] private float yawCutThreshold = 90f;
+
+    [Tooltip("프레이밍 가중치의 목표를 이진값 + 히스테리시스로 만든다(두 임계 사이는 현재 상태 유지).\n" +
+             "끄면 예전 연속식. 감쇠는 어느 쪽이든 그대로라 전환은 여전히 부드럽다.")]
+    [SerializeField] private bool framingHysteresis = true;
 
     [Header("Intro")]
     [Tooltip("카운트다운 시각원. 비우면 인트로 기능만 꺼진다.")]
@@ -235,6 +266,10 @@ public class CameraDirector : MonoBehaviour
     private Transform ambusherTransform;
     private float ambusherWeight;
 
+    // 히스테리시스 상태(칸별). 값이 아니라 <b>목표</b>를 들고 있다 — 감쇠가 그 목표를 향해 값을 옮긴다.
+    private float opponentTarget;
+    private float ambusherTarget;
+
     // 카메라 궤도의 방향. 플레이어 yaw를 목표로 뒤따르며, SmoothDampAngle이 속도를 들고 있어
     // 목표가 감쇠 도중에 또 바뀌어도(상대 연속 교체) 이어진다.
     private float cameraYaw;
@@ -252,6 +287,7 @@ public class CameraDirector : MonoBehaviour
         foreach (var entry in catalog)
             catalogByTrigger[entry.trigger] = entry;
 
+        ApplyBlendDuration();
         SetupFraming();
         SetupIntro();
 
@@ -297,6 +333,24 @@ public class CameraDirector : MonoBehaviour
         cameraYawVelocity = 0f;
 
         framingEnabled = true;
+    }
+
+    /// <summary>
+    /// 전환 속도를 <b>Brain에 써 넣는다</b>(읽는 게 아니라). 튜닝은 인스펙터 한 곳에서 하고 싶고,
+    /// 런타임 진실의 원천은 여전히 <c>Brain.DefaultBlend</c> 하나여야 한다 — 두 값을 나란히 두면
+    /// <b>인트로 마무리(그 값을 읽는다, §7-2)와 앵글 전환이 서로 다른 시간으로 돈다.</b>
+    /// 그래서 여기서 한 번 밀어 넣고, 이후로는 아무도 이 필드를 안 읽는다.
+    ///
+    /// <para>0 이하면 씬 값을 존중한다(예전 동작). Style은 건드리지 않는다 —
+    /// <c>Cut</c>이면 시간이 무시되는 것도 씬의 저작 의도다.</para>
+    /// </summary>
+    private void ApplyBlendDuration()
+    {
+        if (angleBlendDuration <= 0f || brain == null) return;
+
+        var blend = brain.DefaultBlend;
+        blend.Time = angleBlendDuration;
+        brain.DefaultBlend = blend;
     }
 
     private void SetupIntro()
@@ -417,9 +471,9 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void HandleJudgeTargetBegan(JudgeTargetInfo info)
     {
-        angleSwitcher.OnPatternBoundary();
+        if (optionAngleSwitch) angleSwitcher.OnPatternBoundary();
 
-        if (!zoomEnabled) return;
+        if (!zoomEnabled || !optionCameraMotion) return;
 
         // 노트가 적은 패턴은 조일 구간 자체가 없다. 진행 중인 줌은 자기 시각대로 마저 끝난다.
         if (info.Template == null || info.Template.AllData.Count < minNodeCount) return;
@@ -436,7 +490,17 @@ public class CameraDirector : MonoBehaviour
         angleSwitcher.Reset();
     }
 
-    private void HandleOpponentChanged(EnemySpace.EnemyView previous, EnemySpace.EnemyView current) => SetOpponent(current);
+    /// <summary>
+    /// 상대 교체 = <b>플레이어가 무대를 가로지르는 패턴</b>(§11-2·§11-6). 이미 화면이 움직이는 구간이라
+    /// 앵글 교체를 여기에 묶으면 큰 움직임 둘이 하나로 합쳐지고, 사슬 난타 구간은 앵글이 고정돼 쉬는 구간이 생긴다.
+    /// (예전엔 자격이 6초 타이머뿐이라 오히려 난타 한복판에서 갈릴 확률이 더 높았다.)
+    /// </summary>
+    private void HandleOpponentChanged(EnemySpace.EnemyView previous, EnemySpace.EnemyView current)
+    {
+        SetOpponent(current);
+
+        if (optionAngleSwitch) angleSwitcher.OnOpponentChanged();
+    }
 
     /// <summary>
     /// 슬롯 1의 대상을 갈아끼운다. <b>가중치를 같은 순간에 0으로 떨어뜨린다.</b>
@@ -459,6 +523,7 @@ public class CameraDirector : MonoBehaviour
 
         opponentTransform = next;
         opponentWeight = 0f;
+        opponentTarget = 0f;
     }
 
     /// <summary>
@@ -478,6 +543,7 @@ public class CameraDirector : MonoBehaviour
 
         ambusherTransform = next;
         ambusherWeight = 0f;
+        ambusherTarget = 0f;
     }
 
     private void HandleCountdownStarted(float duration)
@@ -513,7 +579,7 @@ public class CameraDirector : MonoBehaviour
         UpdateFraming();
 
         // 예약된 앵글 교체는 큐가 전부 끝난 뒤에야 발사된다 — 블렌드가 임팩트·쉐이크를 덮지 않게.
-        angleSwitcher.Tick(IsCuePlaying);
+        if (optionAngleSwitch) angleSwitcher.Tick(IsCuePlaying);
     }
 
     // ── 히트스톱 락 ──────────────────────────────────────────────────────────
@@ -727,16 +793,33 @@ public class CameraDirector : MonoBehaviour
         if (!framingEnabled) return;
 
         // ⚠ 계산식(ResolveWeight)은 공유하고 <b>시간상수만</b> 갈린다 — 두 칸이 어긋날 수 없다는 §7-2 규율은 그대로다.
-        opponentWeight = Damp(opponentWeight, ResolveWeight(opponentTransform), weightDamping);
-        ambusherWeight = Damp(ambusherWeight, ResolveWeight(ambusherTransform) * ambusherMaxWeight, ambusherWeightDamping);
+        opponentTarget = ResolveWeight(opponentTransform, opponentTarget);
+        ambusherTarget = ResolveWeight(ambusherTransform, ambusherTarget);
+
+        opponentWeight = Damp(opponentWeight, opponentTarget, weightDamping);
+        ambusherWeight = Damp(ambusherWeight, ambusherTarget * ambusherMaxWeight, ambusherWeightDamping);
 
         // yaw만 가져온다. 플레이어는 지금 평면 회전만 하지만, 훗날 피격 리액션 등으로 기울면
         // 회전을 통째로 복사한 궤도가 지면을 뚫거나 하늘로 솟는다.
-        float targetYaw = actionPlayer.transform.eulerAngles.y;
+        // 옵션으로 궤도 추종을 끄면 카메라는 시작 방향에 선 채 프레이밍만 한다(고정 카메라에 가깝다).
+        bool follow = optionCameraMotion;
+        float targetYaw = follow ? actionPlayer.transform.eulerAngles.y : cameraYaw;
 
-        cameraYaw = cameraTurnDamping > 0f
-            ? Mathf.SmoothDampAngle(cameraYaw, targetYaw, ref cameraYawVelocity, cameraTurnDamping)
-            : targetYaw;
+        // ⚠ 큰 회전은 감쇠로 못 구한다 — 느린 반 바퀴도 눈은 못 따라간다. 끊고 다른 앵글로 착지시킨다.
+        if (follow && yawCutThreshold > 0f && Mathf.Abs(Mathf.DeltaAngle(cameraYaw, targetYaw)) > yawCutThreshold)
+        {
+            cameraYaw = targetYaw;
+            cameraYawVelocity = 0f;
+
+            // 컷 자체를 샷 전환으로 읽히게 한다. 발사는 여느 때처럼 카메라 큐가 끝난 뒤다.
+            if (optionAngleSwitch) angleSwitcher.Arm();
+        }
+        else
+        {
+            cameraYaw = cameraTurnDamping > 0f
+                ? Mathf.SmoothDampAngle(cameraYaw, targetYaw, ref cameraYawVelocity, cameraTurnDamping)
+                : targetYaw;
+        }
 
         ApplyFraming(opponentTransform, opponentWeight, ambusherTransform, ambusherWeight, cameraYaw);
     }
@@ -744,8 +827,13 @@ public class CameraDirector : MonoBehaviour
     /// <summary>
     /// 대상 하나를 <b>얼마나 담을지</b>. 상대 칸과 기습자 칸이 <b>같은 식</b>을 쓴다 —
     /// 계산이 하나라 두 칸이 어긋날 수가 없다. 대상이 없거나 꺼져 있으면 0(= 바운드에서 빠진다).
+    ///
+    /// <para><b>기본은 이진값 + 히스테리시스</b>(<see cref="framingHysteresis"/>): 임계 사이에서는
+    /// <paramref name="current"/>를 그대로 돌려준다. 연속식이면 3~6m가 전부 중간값이라
+    /// 매 패턴 <c>GroupFraming</c>이 돌리를 다시 계산했다 — 어지러움의 상시 성분이 거기서 나온다.
+    /// 승격 순간의 계단식 튐(연속식을 쓴 원래 근거)은 <b>감쇠가 그대로 흡수</b>한다: 목표만 이진이고 값은 연속이다.</para>
     /// </summary>
-    private float ResolveWeight(Transform target)
+    private float ResolveWeight(Transform target, float current)
     {
         if (target == null || !target.gameObject.activeInHierarchy) return 0f;
 
@@ -753,7 +841,13 @@ public class CameraDirector : MonoBehaviour
         float distance = Vector3.ProjectOnPlane(
             target.position - actionPlayer.transform.position, Vector3.up).magnitude;
 
-        return 1f - Mathf.Clamp01((distance - fullFrameDistance) / (dropoffDistance - fullFrameDistance));
+        if (!framingHysteresis)
+            return 1f - Mathf.Clamp01((distance - fullFrameDistance) / (dropoffDistance - fullFrameDistance));
+
+        if (distance <= fullFrameDistance) return 1f;
+        if (distance >= dropoffDistance) return 0f;
+
+        return current; // 두 임계 사이 = 지금 상태 유지
     }
 
     private static float Damp(float current, float target, float damping) =>
@@ -827,7 +921,7 @@ public class CameraDirector : MonoBehaviour
         lastCueTrigger = trigger;
         PlayPunch(cue);
 
-        if (!shakeEnabled) return;
+        if (!shakeEnabled || !optionScreenShake) return;
         if (cue.shakeDuration <= 0f) return;
 
         // 겹침: 진행 중인 쉐이크의 남은 진폭과 비교해 큰 쪽을 취한다(세기 낙차 방지).
@@ -849,7 +943,7 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void PlayPunch(CameraCueEntry cue)
     {
-        if (!punchEnabled) return;
+        if (!punchEnabled || !optionScreenShake) return;
         if (cue.punchDuration <= 0f || cue.punchFovDelta == 0f) return;
 
         float remaining = 0f;

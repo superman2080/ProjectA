@@ -586,7 +586,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineGroupFraming
   FramingMode: 2
   FramingSize: 0.6
-  CenterOffset: {x: 0, y: -1}
+  CenterOffset: {x: 0, y: -0.75}
   Damping: 1
   SizeAdjustment: 1
   LateralAdjustment: 0
@@ -653,11 +653,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineFollow
   TrackerSettings:
     BindingMode: 3
-    PositionDamping: {x: 1, y: 1, z: 1}
+    PositionDamping: {x: 0.8, y: 0.4, z: 2}
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: -2.5, y: 0.9, z: -2.5}
+  FollowOffset: {x: -7, y: 2, z: -7}
 --- !u!114 &250229442
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -709,8 +709,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 250229437}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.07756253, y: 0.38133246, z: 0.032127455, w: 0.920618}
-  m_LocalPosition: {x: -2.5, y: 0.9, z: -2.5}
+  m_LocalRotation: {x: 0.0233091, y: 0.38256165, z: -0.009654946, w: 0.9235855}
+  m_LocalPosition: {x: -7, y: 2, z: -7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -806,8 +806,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.09998542, y: -0.34496912, z: 0.036987018, w: 0.93254024}
-  m_LocalPosition: {x: 3.3694103, y: 3.2653804, z: -3.9309788}
+  m_LocalRotation: {x: -0.038080286, y: 0.91929406, z: -0.09193396, w: -0.380784}
+  m_LocalPosition: {x: 3.994436, y: 2.8399363, z: 3.994437}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -909,8 +909,11 @@ MonoBehaviour:
   punchEnabled: 1
   framingEnabledOption: 1
   introEnabled: 1
+  optionScreenShake: 1
+  optionAngleSwitch: 1
+  optionCameraMotion: 1
   angleSwitcher:
-    switchEnabled: 1
+    switchEnabled: 0
     cameras:
     - {fileID: 690579359}
     - {fileID: 464872070}
@@ -919,6 +922,10 @@ MonoBehaviour:
     activePriority: 10
     restingPriority: 0
     switchInterval: 10
+    armOnOpponentChange: 1
+    minSwitchAngle: 30
+    maxSwitchAngle: 120
+  angleBlendDuration: 2
   catalog:
   - trigger: 0
     shakeAmplitude: 1.2
@@ -977,6 +984,8 @@ MonoBehaviour:
   ambusherMaxWeight: 1
   ambusherWeightDamping: 0.12
   cameraTurnDamping: 0.45
+  yawCutThreshold: 90
+  framingHysteresis: 1
   chartPlayer: {fileID: 854156976}
   introCamera: {fileID: 1935771832}
   introDolly: {fileID: 1935771831}
@@ -1671,7 +1680,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineGroupFraming
   FramingMode: 2
   FramingSize: 0.6
-  CenterOffset: {x: 0, y: -1}
+  CenterOffset: {x: 0, y: -0.75}
   Damping: 1
   SizeAdjustment: 1
   LateralAdjustment: 0
@@ -1717,7 +1726,7 @@ MonoBehaviour:
       Size: {x: 0.3, y: 0.3}
       Offset: {x: 0, y: 0}
   CenterOnActivate: 1
-  TargetOffset: {x: 0, y: 1.5, z: 0}
+  TargetOffset: {x: 0, y: 0, z: 0}
   Damping: {x: 0.5, y: 0.5}
   Lookahead:
     Enabled: 0
@@ -1738,11 +1747,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineFollow
   TrackerSettings:
     BindingMode: 3
-    PositionDamping: {x: 1, y: 1, z: 1}
+    PositionDamping: {x: 0.8, y: 0.4, z: 2}
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: 4, y: 0.7, z: -4}
+  FollowOffset: {x: 7, y: 2, z: 7}
 --- !u!114 &464872070
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1794,8 +1803,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 464872065}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.06484442, y: -0.38173968, z: -0.026859438, w: 0.9216011}
-  m_LocalPosition: {x: 4, y: 0.7, z: -4}
+  m_LocalRotation: {x: -0.038080294, y: 0.91929406, z: -0.091933966, w: -0.38078406}
+  m_LocalPosition: {x: 7, y: 2, z: 7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1907,7 +1916,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5eb80d8e62d9d145bb50fb783c0f731, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineTargetGroup
-  PositionMode: 0
+  PositionMode: 1
   RotationMode: 0
   UpdateMethod: 2
   Targets: []
@@ -2087,8 +2096,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690579358}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07088902, y: 0.000000013242109, z: 2.3849436e-10, w: 0.9974842}
-  m_LocalPosition: {x: 0, y: 2.5, z: -7}
+  m_LocalRotation: {x: 0.12218326, y: -0.000000014789513, z: 0.0000000018206722, w: 0.9925076}
+  m_LocalPosition: {x: 0, y: 5, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2133,7 +2142,7 @@ MonoBehaviour:
       Size: {x: 0.3, y: 0.3}
       Offset: {x: 0, y: 0}
   CenterOnActivate: 1
-  TargetOffset: {x: 0, y: 1.5, z: 0}
+  TargetOffset: {x: 0, y: 2.5, z: 0}
   Damping: {x: 0.5, y: 0.5}
   Lookahead:
     Enabled: 0
@@ -2154,11 +2163,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineFollow
   TrackerSettings:
     BindingMode: 3
-    PositionDamping: {x: 1, y: 1, z: 1}
+    PositionDamping: {x: 0.8, y: 0.4, z: 2}
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: 0, y: 2.5, z: -7}
+  FollowOffset: {x: 0, y: 5, z: -10}
 --- !u!114 &690579364
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2173,7 +2182,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineGroupFraming
   FramingMode: 2
   FramingSize: 0.6
-  CenterOffset: {x: 0, y: -1}
+  CenterOffset: {x: 0, y: -0.75}
   Damping: 1
   SizeAdjustment: 1
   LateralAdjustment: 0
@@ -2804,7 +2813,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineGroupFraming
   FramingMode: 2
   FramingSize: 0.6
-  CenterOffset: {x: 0, y: -1}
+  CenterOffset: {x: 0, y: -0.75}
   Damping: 1
   SizeAdjustment: 1
   LateralAdjustment: 0
@@ -2871,7 +2880,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineFollow
   TrackerSettings:
     BindingMode: 3
-    PositionDamping: {x: 1, y: 1, z: 1}
+    PositionDamping: {x: 0.8, y: 0.4, z: 2}
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
@@ -3652,8 +3661,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DodgePointView
   root: {fileID: 1402213981}
   ringStartScale: 5
-  promptScale: 1.8
-  promptMargin: {x: 320, y: 320}
+  pointScale: 1.8
+  pointMargin: {x: 320, y: 320}
   ringColor: {r: 1, g: 0.35, b: 0.25, a: 1}
 --- !u!114 &1402213979
 MonoBehaviour:
@@ -4566,6 +4575,8 @@ MonoBehaviour:
   clusterRadius: 2
   clusterMoveSpeed: 3
   spawnStagger: 0.15
+  stagedReturnDuration: 3
+  stagedMaxDistance: 8
   spawnMaxOffset: 6
   wanderEnabled: 1
   standoffDistance: 3.5
@@ -4630,7 +4641,7 @@ MonoBehaviour:
   actionPlayer: {fileID: 6328205791487977059}
   enemyDirector: {fileID: 1729954864}
   mover: {fileID: 6328205791487977061}
-  prompt: {fileID: 1402213978}
+  dodgePoint: {fileID: 1402213978}
   handler: {fileID: 1565592730}
   cameraDirector: {fileID: 330585549}
   inputHandler: {fileID: 1565592733}
@@ -4647,6 +4658,7 @@ MonoBehaviour:
   margin: 0.2
   minIdleWindow: 0.6
   cooldown: 3
+  lateStageWindup: 0.3
   stageDistance: 2.5
   lungeDistance: 1.5
   rollDegrees: 60
@@ -5123,6 +5135,10 @@ PrefabInstance:
     - target: {fileID: 6747666843837031429, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8730576839184429808, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
+      propertyPath: logDuelCurve
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8730576839184429808, guid: a7b5e91c642e6a848b5148c32c226255, type: 3}
       propertyPath: enemyDirector

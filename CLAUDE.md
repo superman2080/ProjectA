@@ -342,6 +342,9 @@ Assets/
 - **⚠ 적은 도착 시각까지 끌지 않고 `moveSpeed`(3 m/s)로 빨리 가서 선다**(`EnemyView.EarliestArrival`). 안 그러면 **도착하는 순간이 곧 베이는 순간**이라 서 있는 구간이 아예 없다 — `ScheduleMove`가 선형 보간이라 1m를 1.3초에 펴면 초속 0.77m로 기어가고, 화면에는 *"제자리에 선 것 같은데 Run이 계속 도는"* 그림이 된다(`moving`이 true인 동안 로코모션이 유지되므로). **앞당기는 건 언제나 안전하다** — "클립 시작 전에 도착"이라는 제약과 방향이 같다.
   - 다만 이건 **결투 접근(`ApproachDuel`)에만** 건다. 후퇴·등장은 "이만큼 걸리는 동작"이라 저작된 지속시간을 그대로 쓴다(후퇴를 속도로 자르면 회피의 날카로움이 죽는다).
 - **플레이어 로코모션은 창으로 갈린다**(거리가 아니다): `창 > 대시클립 길이 → Sprint`(루프, 이동속도에 맞춰 배속) / `이하 → Quickshift`(단발, 창 안에 완주하도록 배속, **상한 없음**). 거리로 가르면 평균 창(1.48초) > Quickshift 클립(1초)이라 **클립이 먼저 끝나고 나머지는 미끄러진다.**
+- **뒤로 빠질 때는 클립만 갈아 끼운다**(`Quickshift_B`). 예전에는 부호를 아무도 안 봐서 전진 클립으로 뒷걸음질했다. 판정은 `dot(목표−현재, 적−목표) < 0` 하나이고, 교체는 이미 있는 `AnimatorOverrideController`가 한다 — **새 스테이트가 없다**. ⚠ **뒤로 갈 때 Sprint 분기는 막는다**(달리기 루프로 뒤로 미끄러지면 그림이 통째로 깨진다). 배선(`quickshiftBackClip`)이 비면 예전 동작.
+- **⚠ 결투 간격은 상수가 아니라 패턴이 든 시간 함수다**(`Pattern.duelDistanceCurve`, §11-9).
+- **⚠ `EnemyDirector.PlayerPosition`은 결투 앵커가 아니라 그 부모(플레이어 루트)다.** 앵커의 역할은 **기준 간격을 정하는 것**이지 플레이어의 자리가 아니다 — 앵커는 플레이어보다 그 간격만큼 **앞**(적 쪽)에 있어서, **현재 간격이 그보다 좁아지면 `BuildDuelPlan`의 `toEnemy`가 부호를 뒤집어 목표가 적 반대편에 잡힌다**(물러나야 할 때 **적을 관통해 건너간다**). 예전에는 결투 간격 = 앵커 거리라 경계값에 딱 붙어 증상이 안 났고, **거리 커브(§11-9)가 그 전제를 깼다**(임팩트 간격 0.4m로 저작하면 매 패턴 그 구간에 들어간다).
 - **⚠ 플레이어 회전은 이동과 별개 스케줄이다**(`PlayerCombatMover.turnDuration` 0.15초). 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가 **무대를 가로지르는 내내 목을 천천히 돌린다.** 예전엔 `OnOpponentChanged`의 회전이 같은 프레임 `OnDuelScheduled`에 통째로 덮여 `turnDuration`이 한 번도 안 쓰였다. 지금은 **먼저 상대를 보고 그 다음에 달린다.**
 - 상세: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
 ### 11-6. 적 무리 배치 (EnemyCluster)
@@ -391,6 +394,15 @@ Assets/
   - **⚠ 깊이 상태를 건드리면 안 된다.** `CelOutline`은 메쉬를 부풀려 **뒷면만**(`Cull Front`) 그리는 셸 방식이라 **깊이 테스트가 겹치는 부분을 잘라내야 테두리만 남는다.** `depthCompareFunction = Always`로 열면 셸이 앞면 위에 그려져 **적 표면 전체가 칠해진다.**
 - **소리는 `SfxManager.Play(SfxTrigger)`만 부른다**(`AmbushTelegraph`/`DodgeSuccess`/`DodgeFail` — 각각 `Fire()`·`Succeed()`·`Fail()`). `DodgeDirector`가 오디오를 직접 만지지 않는다(카탈로그 조회·풀은 매니저 관할). ⚠ **클립이 아직 카탈로그에 미배선이라 지금은 무음**이다 — 버그가 아니라 에셋이 안 꽂힌 상태이며, 넣으면 코드 변경 없이 난다.
 - 상세: `docs/EnemyAmbushDodge/` · `docs/AmbushVisibility/` · 측정 기록과 폐기된 대안(예보·슬롯 저작): `docs/AmbushSlot/` · `docs/AmbushLookahead/`
+
+### 11-9. 결투 거리 커브 (DuelDistanceCurve)
+- **간격은 패턴이 든 시간 함수다** — `Pattern.duelDistanceCurve`(키 시간 = **임팩트 기준 상대초**, 값 = **절대 간격 m**). 계산은 `Pattern/Core/DuelGap`(asmdef·테스트됨) 하나이고 런타임·짝 에디터·슬라이서가 **같은 함수**를 부른다. **커브가 비면 예전 상수 경로**(`앵커 + duelDistanceOffset`) — 기존 패턴 회귀 0.
+- **적은 고정, 플레이어만 움직인다.** 그래서 간격은 파생값이 아니라 `enemy − player(t)`라는 **정의**다. 음수면 플레이어가 적을 **지나쳐 뒤로** 나가고 **회전은 안 건드린다**(등 돌린 채 지나침 = 참격 후 잔심).
+- **⚠ 시각의 출처는 `CharacterActionPlayer.DuelCurveTime` 하나다** — `Time.time − impactTime`을 쓰면 셋이 어긋난다: ① 히트스톱은 `AttackSpeed = 0`으로만 걸려 **시계는 계속 흐른다**(캐릭터는 얼었는데 몸만 미끄러짐 = "렉") ② `AttackSpeed` 압축이 걸리면 칼 리치와 간격의 대응이 깨진다 ③ 다중 히트스톱 예산은 재생을 F만큼 일찍 시작한다. **재생 헤드에서 파생하면 셋 다 공짜로 성립한다**(`clipConsumed`·`playSpeed`·`playingBaseSpeed`). 액션이 없으면 `NaN` → 구동 정지 = 홀드.
+- **구동 구간 = 플레이어 클립 재생 구간**(도착 이후). 도착 목표 간격이 `curve(arriveTime − impactTime)`이라 이음매가 연속이고, 구간 밖은 `AnimationCurve`의 기본 Clamp가 **끝 키 값으로 홀드**한다(홀드 코드 0줄). 채보의 창 길이와는 무관하다.
+- **위치의 주인 순서**: `rolling`(구르기) > **커브 구동** > 수렴 이동. 구르기는 진입 시 커브 구동을 놓는다(구른 뒤 자리는 구르기가 정한다).
+- **⚠ `Attacker.Enemy`에서는 저작자 책임이다** — 적 칼은 예약 시점의 자리를 겨냥하므로 임팩트 시점 간격이 저작값과 다르면 빗나간다. 막지 않는 이유는 툴 프리뷰가 그 어긋남을 그대로 보여 주기 때문.
+- 저작: `Tools/Animation Clip Trimmer`(타임라인 `t`와 같은 축) — 기준 거리는 씬 `EnemyDirector.DuelBaseDistance()`에서 자동으로 읽고, **프리뷰는 런타임과 같이 플레이어를 움직인다**(적은 임팩트 자리 고정). 가이드: `docs/!Guides/Guide_CharacterActionTrim.md` / 상세: `docs/DuelDistanceCurve/`
 
 ### 11-4. 견제 — 표적이 된 순간부터 임팩트까지 (EnemyFeint)
 - **`Attacker.Player` 패턴에서 적은 휘두르지 않는다** → 그 구간에 클립이 없어 **표적이 된 순간부터 베이는 순간까지 가만히 서 있었다.** `Pattern.EnemyFeint`(`ClipAlignment` 슬롯)가 그 구간을 채운다.

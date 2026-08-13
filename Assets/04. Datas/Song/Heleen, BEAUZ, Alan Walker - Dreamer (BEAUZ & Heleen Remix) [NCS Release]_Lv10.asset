@@ -31,6 +31,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
   - {fileID: 11400000, guid: d93fa021f33b2d141a53a7cbe58105fd, type: 2}
   - {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
+  - {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
+  - {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
   entries:
   - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
     onsetTimes:
@@ -45,7 +47,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
     onsetTimes:
     - 3.6000001
     - 4
@@ -84,7 +86,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
     onsetTimes:
     - 7.2000003
     - 7.6
@@ -145,7 +147,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 12.8
     - 13.2
@@ -345,7 +347,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
     onsetTimes:
     - 27.6
     - 28
@@ -403,7 +405,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
     onsetTimes:
     - 32.8
     - 33.2
@@ -552,7 +554,7 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 45.2
     - 45.600002
