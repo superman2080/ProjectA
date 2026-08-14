@@ -35,8 +35,14 @@ namespace ChartGen
         private Coroutine playCoroutine;
         private bool songEndRaised;
 
-        /// <summary>GameSession의 선택된 채보를 우선 사용하고, 없으면 debugChart를 사용한다.</summary>
-        private SongChart ActiveChart =>
+        /// <summary>
+        /// GameSession의 선택된 채보를 우선 사용하고, 없으면 debugChart를 사용한다.
+        ///
+        /// <para><b>공개인 이유</b>: 채점기(<c>ScoreDirector</c>)가 총 노트 수와 만점을 알려면 곡을 알아야 하는데,
+        /// 이 판단(<c>SelectedChart ?? debugChart</c>)을 복제하면 <b>디버그 재생에서만 만점이 어긋난다</b>.
+        /// 곡의 진실의 원천은 하나여야 한다.</para>
+        /// </summary>
+        public SongChart ActiveChart =>
             (GameSession.Instance != null && GameSession.Instance.SelectedChart != null)
                 ? GameSession.Instance.SelectedChart
                 : debugChart;

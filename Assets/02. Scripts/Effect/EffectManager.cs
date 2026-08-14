@@ -199,7 +199,11 @@ public class EffectManager : MonoBehaviour
         }
     }
 
-    /// <summary>배경 앰비언트 강도(0~1)를 설정한다. 실제 호출자(콤보/점수 연동)는 추후 별도 플랜에서 연결.</summary>
+    /// <summary>
+    /// 배경 앰비언트 강도(0~1)를 설정한다. <b>호출자는 <see cref="ScoreDirector"/></b> —
+    /// 콤보를 <c>comboIntensityFull</c>로 나눈 값을 넘긴다(docs/ScoreCombo).
+    /// 그쪽 배선이 비면 강도는 그냥 안 바뀐다.
+    /// </summary>
     public void SetIntensity(float value)
     {
         foreach (var a in ambients)
