@@ -47,6 +47,18 @@ namespace ChartGen
         /// </summary>
         public Pattern[] patternPool;
 
+        /// <summary>
+        /// 이 곡의 <b>만점</b>. 0 이하면 <c>ScoreDirector.defaultMaxScore</c>로 폴백한다(기존 채보 회귀 0).
+        ///
+        /// <para><b>왜 곡 에셋인가</b>: 만점은 "이 곡을 완주하면 몇 점인가"라 <b>채보의 성질</b>이다
+        /// (<see cref="patternPool"/>이 여기 사는 것과 같은 근거). 씬의 디렉터에 두면 곡을 바꿀 때마다 씬을 고쳐야 한다.</para>
+        ///
+        /// <para><b>⚠ 이 값을 키워도 등급이 쉬워지지 않는다.</b> 등급은 절대 점수가 아니라 <b>달성 비율</b>로
+        /// 갈리므로, 곡별 만점은 화면에 뜨는 숫자만 정한다 — 난이도 높은 곡에 큰 숫자를 주면서
+        /// 곡 간 공정성이 유지된다.</para>
+        /// </summary>
+        public long maxScore;
+
         /// <summary>level/bpm/beatOffset을 인스펙터에서 직접 고쳐도 이미 구운 entries의 온셋/그룹 구조는 자동으로 바뀌지 않는다 — 굽는 에디터에서 재분석해야 한다.</summary>
         public SongChartEntry[] entries;
     }
