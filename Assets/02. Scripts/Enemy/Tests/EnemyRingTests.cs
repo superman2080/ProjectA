@@ -454,4 +454,100 @@ public class EnemyRingTests
         Assert.That(new Vector2(result.x, result.z).magnitude, Is.LessThanOrEqualTo(8.01f));
         Assert.That(Vector3.Distance(result, Vector3.zero), Is.GreaterThanOrEqualTo(0.99f), "spawned inside the player guard");
     }
+
+    // ── 불가침 캡슐 (docs/ActorSeparation) ──────────────────────────────────
+
+    /// <summary>점 → 선분 평면 거리. 테스트가 자기 기준을 직접 재도록 둔다(구현을 다시 부르지 않는다).</summary>
+    private static float FlatDistanceToSegment(Vector3 p, Vector3 a, Vector3 b)
+    {
+        p.y = a.y = b.y = 0f;
+
+        Vector3 ab = b - a;
+        float lenSq = ab.sqrMagnitude;
+        float t = lenSq > 1e-6f ? Mathf.Clamp01(Vector3.Dot(p - a, ab) / lenSq) : 0f;
+
+        return Vector3.Distance(p, a + ab * t);
+    }
+
+    [Test]
+    public void SeparationPushIgnoresPointsOutsideCapsule()
+    {
+        Vector3 push = EnemyRing.SeparationPush(
+            new Vector3(0f, 0f, 5f), Vector3.zero, new Vector3(4f, 0f, 0f), radius: 1f);
+
+        Assert.That(push, Is.EqualTo(Vector3.zero));
+    }
+
+    [Test]
+    public void SeparationPushClearsEndCapToExactlyRadius()
+    {
+        Vector3 a = Vector3.zero;
+        Vector3 b = new Vector3(4f, 0f, 0f);
+        Vector3 inside = new Vector3(-0.3f, 0f, 0.2f); // a 쪽 끝 원 안
+
+        Vector3 result = inside + EnemyRing.SeparationPush(inside, a, b, radius: 1f);
+
+        Assert.That(FlatDistanceToSegment(result, a, b), Is.EqualTo(1f).Within(0.001f));
+    }
+
+    [Test]
+    public void SeparationPushClearsCorridorSideways()
+    {
+        // 통로 한복판 옆구리 — 원만 봤다면 안 걸렸을 자리다.
+        Vector3 a = Vector3.zero;
+        Vector3 b = new Vector3(4f, 0f, 0f);
+        Vector3 inside = new Vector3(2f, 0f, 0.4f);
+
+        Vector3 push = EnemyRing.SeparationPush(inside, a, b, radius: 1f);
+        Vector3 result = inside + push;
+
+        Assert.That(FlatDistanceToSegment(result, a, b), Is.EqualTo(1f).Within(0.001f));
+        // 통로를 따라 미끄러지면 안 된다 — 축 성분이 0이어야 옆으로 비켜선다.
+        Assert.That(Vector3.Dot(push, (b - a).normalized), Is.EqualTo(0f).Within(0.001f));
+    }
+
+    [Test]
+    public void SeparationPushDegeneratesToCircleWhenEndsCoincide()
+    {
+        Vector3 center = new Vector3(1f, 0f, 1f);
+        Vector3 inside = new Vector3(1.5f, 0f, 1f);
+
+        Vector3 push = EnemyRing.SeparationPush(inside, center, center, radius: 1f);
+
+        Assert.That(Vector3.Distance(inside + push, center), Is.EqualTo(1f).Within(0.001f));
+    }
+
+    [Test]
+    public void SeparationPushIgnoresPointsBeyondSegmentEnds()
+    {
+        // 선분의 <b>연장선</b> 위 — 통로가 무한 직선이면 걸렸을 자리다.
+        Vector3 push = EnemyRing.SeparationPush(
+            new Vector3(6f, 0f, 0f), Vector3.zero, new Vector3(4f, 0f, 0f), radius: 1f);
+
+        Assert.That(push, Is.EqualTo(Vector3.zero));
+    }
+
+    [Test]
+    public void SeparationPushGoesPerpendicularWhenExactlyOnSegment()
+    {
+        Vector3 a = Vector3.zero;
+        Vector3 b = new Vector3(4f, 0f, 0f);
+
+        Vector3 push = EnemyRing.SeparationPush(new Vector3(2f, 0f, 0f), a, b, radius: 1f);
+
+        Assert.That(push.magnitude, Is.EqualTo(1f).Within(0.001f));
+        Assert.That(Vector3.Dot(push, (b - a).normalized), Is.EqualTo(0f).Within(0.001f),
+            "밀 방향이 선분과 나란하면 통로를 따라 미끄러진다");
+    }
+
+    [Test]
+    public void SeparationPushNeverTouchesHeight()
+    {
+        Vector3 a = new Vector3(0f, 1.2f, 0f);
+        Vector3 b = new Vector3(4f, 0f, 0f);
+
+        Vector3 push = EnemyRing.SeparationPush(new Vector3(2f, 3f, 0.4f), a, b, radius: 1f);
+
+        Assert.That(push.y, Is.EqualTo(0f).Within(1e-5f));
+    }
 }

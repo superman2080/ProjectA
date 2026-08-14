@@ -432,6 +432,50 @@ namespace EnemySpace
             return position + bestDir * Mathf.Max(bestTravel, 0f);
         }
 
+        // ── 불가침 캡슐 (docs/ActorSeparation) ───────────────────────────────
+
+        /// <summary>
+        /// <paramref name="position"/>이 선분 <paramref name="a"/>–<paramref name="b"/>의 <b>캡슐</b>
+        /// (두 끝 원 + 잇는 통로) 안에 들어와 있으면 밖으로 밀어낼 <b>평면 변위</b>를 돌려준다.
+        /// 안 겹치면 <see cref="Vector3.zero"/>.
+        ///
+        /// <para><b>원은 특수해다</b> — <c>a == b</c>면 그대로 점 기준 원이 된다. 상대가 없는 구간을 위해
+        /// 분기를 따로 두지 않는다.</para>
+        ///
+        /// <para><b>⚠ 밀어내는 방향은 선분에 수직이다.</b> 통로 한가운데 선 적을 축 방향으로 밀면
+        /// 통로를 <b>따라</b> 미끄러질 뿐 밖으로 안 나간다. 수직이라야 옆으로 비켜선다 —
+        /// 화면에서 "군중이 갈라진다"가 되는 것은 이쪽뿐이다.</para>
+        ///
+        /// <para><b>⚠ <c>DuelGap.ResolveAxis</c>를 쓰지 않는다</b> — 그 함수는 부호가 뒤집히면 직전 축을 유지한다
+        /// (커브 관통 전용 규칙). 이격은 언제나 <b>지금 방향</b>으로 밀어야 하므로 그 규칙이 해롭다.</para>
+        /// </summary>
+        public static Vector3 SeparationPush(Vector3 position, Vector3 a, Vector3 b, float radius)
+        {
+            // 전부 평면에서 푼다 — 높이는 이격의 관심사가 아니다.
+            position = Flat(position);
+            a = Flat(a);
+            b = Flat(b);
+
+            Vector3 ab = b - a;
+            float lenSq = ab.sqrMagnitude;
+
+            // a == b면 t가 0이 되어 점 기준 원으로 자연히 떨어진다.
+            float t = lenSq > 1e-6f ? Mathf.Clamp01(Vector3.Dot(position - a, ab) / lenSq) : 0f;
+            Vector3 closest = a + ab * t;
+
+            Vector3 flat = position - closest;
+            float d = flat.magnitude;
+            if (d >= radius) return Vector3.zero;
+
+            // 선분 위에 정확히 올라선 경우 밀 방향이 없다 — 선분에 수직인 쪽으로 뺀다.
+            // ⚠ 플레이어 forward를 쓰면 안 된다: 그건 선분 방향과 거의 같아 통로를 따라 미끄러진다.
+            Vector3 axis = d > 1e-4f
+                ? flat / d
+                : (lenSq > 1e-6f ? Vector3.Cross(ab.normalized, Vector3.up) : Vector3.right);
+
+            return axis * (radius - d);
+        }
+
         /// <summary>
         /// <paramref name="from"/>에서 <paramref name="dir"/>로 갈 때 원 안에 머무를 수 있는 거리
         /// (<paramref name="maxDistance"/>로 클램프). 원 밖으로 나가는 지점까지의 거리를 직선-원 교차로 구한다.

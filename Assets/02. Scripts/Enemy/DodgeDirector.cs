@@ -586,6 +586,13 @@ namespace EnemySpace
             Vector3 end = signed > 0f ? plus : minus;
 
             float move = ResolveMoveDuration();
+
+            // ⚠ 착지점은 통로(플레이어–상대 캡슐) <b>밖</b> 원주 위라 매 프레임 이격에 안 걸린다.
+            // ScoreSpot이 좌/우 중 빈 쪽을 고르지만 그건 점수일 뿐 보장이 아니다 — 여기서 한 번 비운다.
+            // 도착 시각이 아니라 <b>출발 시각</b>인 것이 핵심이다: 원호를 도는 동안 적이 미리 비켜선다.
+            // 현재 상대와 기습자는 PushOut이 이미 거른다(끝점 / hasPendingAttack).
+            enemyDirector.ClearSpot(end);
+
             mover.RollArc(center, signed, move);
 
             bool toRight = Vector3.Dot(end - mover.transform.position, mover.transform.right) >= 0f;

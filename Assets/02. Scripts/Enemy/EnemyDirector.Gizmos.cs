@@ -76,6 +76,31 @@ namespace EnemySpace
             }
         }
 
+        /// <summary>
+        /// 불가침 캡슐(docs/ActorSeparation) — 플레이어 원 · 현재 상대 원 · 둘을 잇는 통로.
+        /// <b>통로 이격은 눈으로 봐야 튜닝된다</b>: 반경이 <c>standoffDistance</c>에 가까워지면
+        /// 배회 슬롯과 상시 싸우는데, 그건 숫자로는 안 보이고 캡슐이 배회 원을 삼키는 그림으로 보인다.
+        /// </summary>
+        private void DrawSeparationGizmo()
+        {
+            if (separationRadius <= 0f) return;
+
+            Vector3 a = PlayerPosition;
+            Vector3 b = currentOpponent != null ? currentOpponent.transform.position : a;
+
+            Gizmos.color = new Color(1f, 0.5f, 0.1f, 0.9f);
+            DrawCircle(a, separationRadius);
+
+            if (Vector3.ProjectOnPlane(b - a, Vector3.up).sqrMagnitude < 1e-4f) return;
+
+            DrawCircle(b, separationRadius);
+
+            // 통로의 양쪽 벽. 캡슐이 원 둘이 아니라 '이어진 하나'임을 그림으로 못박는다.
+            Vector3 side = Vector3.Cross(Vector3.ProjectOnPlane(b - a, Vector3.up).normalized, Vector3.up) * separationRadius;
+            Gizmos.DrawLine(a + side, b + side);
+            Gizmos.DrawLine(a - side, b - side);
+        }
+
         void OnDrawGizmos()
         {
             if (!drawGizmos) return;
@@ -102,6 +127,8 @@ namespace EnemySpace
                 (clusterEnabled ? $"\ncluster {clusterSize}  r={clusterRadius:0.0}  move={clusterMoveSpeed:0.0}m/s" : ""));
 
             if (!Application.isPlaying) return;
+
+            DrawSeparationGizmo();
 
             if (clusterEnabled) DrawClusterGizmos();
 
