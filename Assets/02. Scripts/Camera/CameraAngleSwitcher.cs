@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using Unity.Cinemachine;
 using UnityEngine;
 
@@ -38,15 +39,28 @@ public class CameraAngleSwitcher
     [Tooltip("나머지 vcam의 우선순위.")]
     [SerializeField] private int restingPriority = 0;
 
-    [Tooltip("교체 사이의 최소 간격(초). 만료 후 처음 오는 패턴 경계에서 예약되고, 그 패턴의 카메라 큐가 끝나면 발사된다.")]
+    [Tooltip("교체 사이의 최소 간격(초). 자격의 하한이다 — 이 값이 지나야 예약이 걸리고, 카메라 큐가 끝나면 발사된다.")]
     [SerializeField] private float switchInterval = 6f;
+
+    [Tooltip("예약 자격을 <b>상대 교체</b>에 묶는다(= 플레이어가 무대를 가로지르는 패턴).\n" +
+             "끄면 예전처럼 패턴 경계마다 쿨다운만 본다 — 난타 구간 한복판에서 갈릴 확률이 더 높았다.")]
+    [SerializeField] private bool armOnOpponentChange = true;
+
+    [Tooltip("교체 각도 밴드의 하한(도). 너무 비슷한 앵글로 가면 블렌드만 돌고 그림이 안 바뀐다.")]
+    [SerializeField] private float minSwitchAngle = 30f;
+
+    [Tooltip("교체 각도 밴드의 상한(도). 180 이상이면 제한이 사라진다(예전 동작).\n" +
+             "180도 법칙 — 반대편으로 넘어가면 좌우가 뒤집혀 '적이 어느 쪽에서 오는지'를 다시 찾아야 한다.")]
+    [SerializeField] private float maxSwitchAngle = 120f;
 
     private int currentIndex = -1;
     private float lastSwitchTime;
     private bool armed;
 
-    /// <summary>지금 선택된 앵글(디버그·검증용).</summary>
-    public int CurrentIndex => currentIndex;
+    // 각 vcam의 앵글 방향(도). FollowOffset의 yaw이며 Setup에서 한 번만 잰다.
+    // 그룹이 RotationMode = Manual, vcam이 LockToTarget이라 모든 오프셋이 같은(플레이어 기준) 좌표계다
+    // → 그래서 카메라끼리 각도 비교가 성립한다. 오프셋을 못 읽는 vcam은 NaN으로 두고 밴드 검사에서 뺀다.
+    private float[] angleYaw;
 
     private bool IsUsable => switchEnabled && cameras != null && cameras.Length >= 2;
 
@@ -59,15 +73,58 @@ public class CameraAngleSwitcher
     {
         if (cameras == null || cameras.Length == 0) return;
 
+        CacheAngles();
         Select(0);
         lastSwitchTime = Time.time; // 곡 시작 직후 곧바로 바뀌지 않게 쿨다운을 여기서 시작한다.
         armed = false;
     }
 
     /// <summary>
-    /// 패턴이 넘어가는 순간. 쿨다운이 찼으면 <b>예약만</b> 걸고 교체하지 않는다(위 ⚠ 참조).
+    /// 앵글 방향을 한 번만 재 둔다. 런타임에 매번 재면 <c>GetComponent</c>가 교체마다 돈다.
+    /// </summary>
+    private void CacheAngles()
+    {
+        angleYaw = new float[cameras.Length];
+
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            angleYaw[i] = float.NaN;
+            if (cameras[i] == null) continue;
+
+            var follow = cameras[i].GetComponent<CinemachineFollow>();
+            if (follow == null) continue;
+
+            Vector3 offset = follow.FollowOffset;
+            if (new Vector2(offset.x, offset.z).sqrMagnitude < 1e-6f) continue; // 바로 위/아래 = 방향이 없다
+
+            angleYaw[i] = Mathf.Atan2(offset.x, offset.z) * Mathf.Rad2Deg;
+        }
+    }
+
+    /// <summary>
+    /// 패턴이 넘어가는 순간. <see cref="armOnOpponentChange"/>가 켜져 있으면 여기서는 예약하지 않는다 —
+    /// 자격의 주인이 <see cref="OnOpponentChanged"/>로 옮겨간다.
     /// </summary>
     public void OnPatternBoundary()
+    {
+        if (armOnOpponentChange) return;
+
+        Arm();
+    }
+
+    /// <summary>
+    /// 교전 상대가 바뀐 순간 = 플레이어가 무대를 가로지르는 패턴. <b>화면이 이미 움직이는 구간</b>이라
+    /// 여기에 교체를 묶으면 큰 움직임 둘이 하나로 합쳐진다.
+    /// </summary>
+    public void OnOpponentChanged()
+    {
+        if (!armOnOpponentChange) return;
+
+        Arm();
+    }
+
+    /// <summary>쿨다운이 찼으면 <b>예약만</b> 건다(발사는 카메라 큐가 끝난 뒤 — 위 ⚠ 참조).</summary>
+    public void Arm()
     {
         if (!IsUsable) return;
         if (Time.time < lastSwitchTime + switchInterval) return;
@@ -98,13 +155,43 @@ public class CameraAngleSwitcher
         lastSwitchTime = Time.time;
     }
 
-    /// <summary>현재 것을 뺀 균등 랜덤. 같은 걸 다시 뽑으면 교체가 무연출로 낭비된다.</summary>
+    /// <summary>
+    /// 현재 것을 뺀 균등 랜덤. 같은 걸 다시 뽑으면 교체가 무연출로 낭비된다.
+    ///
+    /// <para><b>각도 밴드가 있으면 그 안에서만 뽑는다</b>(<see cref="minSwitchAngle"/>~<see cref="maxSwitchAngle"/>).
+    /// 180도 법칙 — 반대편 앵글로 넘어가면 좌우가 뒤집혀 <b>적이 어느 쪽에서 오는지</b>를 다시 찾아야 한다.
+    /// 판정은 화면과 무관해도(Overlay) 그 정보만은 화면이 유일한 단서다.</para>
+    ///
+    /// <para>밴드에 후보가 없으면 <b>예전처럼 아무나</b> 뽑는다 — 카메라가 두 대뿐이거나
+    /// 오프셋을 못 읽는 씬에서 교체 기능이 통째로 죽지 않게.</para>
+    /// </summary>
     private int PickOther()
     {
         int n = cameras.Length;
+
+        if (bandScratch == null) bandScratch = new List<int>(n);
+        bandScratch.Clear();
+
+        float from = currentIndex >= 0 && angleYaw != null ? angleYaw[currentIndex] : float.NaN;
+
+        if (!float.IsNaN(from) && maxSwitchAngle < 180f)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                if (i == currentIndex || cameras[i] == null || float.IsNaN(angleYaw[i])) continue;
+
+                float delta = Mathf.Abs(Mathf.DeltaAngle(from, angleYaw[i]));
+                if (delta >= minSwitchAngle && delta <= maxSwitchAngle) bandScratch.Add(i);
+            }
+        }
+
+        if (bandScratch.Count > 0) return bandScratch[UnityEngine.Random.Range(0, bandScratch.Count)];
+
         int offset = UnityEngine.Random.Range(1, n); // 1..n-1 → 현재 인덱스는 절대 안 나온다
         return (currentIndex + offset) % n;
     }
+
+    private List<int> bandScratch;
 
     private void Select(int index)
     {

@@ -25,46 +25,60 @@ MonoBehaviour:
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 7400000, guid: 916b0ba659ddf0f429f9bfd996666e17, type: 2}
     startOffset: 0
     duration: 1.5151639
     impactTime: 1.254902
     speed: 1
+    extraImpactTimes:
+    - 0.123646736
+    - 0.5024378
+    - 0.72814226
   enemyFeint:
     clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
     startOffset: 0
     duration: 0.26026186
-    impactTime: 0
+    impactTime: 0.26026186
     speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 7400000, guid: 681b322cea2d3b146bebfcace0bd4fbc, type: 2}
     startOffset: 0
     duration: 0.18207172
     impactTime: 0.079734184
     speed: 1
+    extraImpactTimes: []
   enemyHit:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   enemyParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 8af6377bc96d2bc429724c450249b05c, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   effectCues:
   - label: Slash Fire VFX
     prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}

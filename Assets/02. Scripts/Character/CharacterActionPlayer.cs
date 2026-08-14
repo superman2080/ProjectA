@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PatternSpace;
 using UnityEngine;
 
@@ -45,6 +45,10 @@ public class CharacterActionPlayer : MonoBehaviour
     [Tooltip("누가 휘두르는지(Attacker)를 물어볼 대상. 비우면 언제나 Attacker.Player로 본다(디버그 경로).")]
     [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
 
+    [Tooltip("한 번 멈추는 시간을 물어볼 대상(다중 히트스톱의 정지 예산). 비우면 예산이 0 —\n" +
+             "추가 스톱은 여전히 걸리지만 마지막 베기 정렬은 따라잡기가 맡는다.")]
+    [SerializeField] private HitStopDirector hitStopDirector;
+
     [Header("Animator Slot")]
     [Tooltip("첫 번째 슬롯 스테이트 이름.")]
     [SerializeField] private string attackStateAName = "Attack_A";
@@ -82,12 +86,15 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private string quickshiftStateName = "Quickshift";
     [Tooltip("Quickshift 스테이트의 Speed Multiplier 파라미터 이름.")]
     [SerializeField] private string quickshiftSpeedParam = "QuickshiftSpeed";
-    [Tooltip("Quickshift 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
+    [Tooltip("Quickshift 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하고, 백스텝 교체의 키로도 쓴다.\n" +
+             "⚠ 애니메이터의 Quickshift 스테이트에 실제로 물린 그 클립이어야 한다(키가 안 맞으면 교체가 조용히 무시된다).")]
     [SerializeField] private AnimationClip quickshiftClip;
+
+    [Tooltip("뒤로 빠질 때 쓸 대시 클립(Quickshift_B). 비우면 전진 클립 그대로 — 예전 동작.\n" +
+             "새 스테이트를 만들지 않고 AnimatorOverrideController로 quickshiftClip 자리를 갈아 끼운다.")]
+    [SerializeField] private AnimationClip quickshiftBackClip;
     [Tooltip("Sprint 스테이트의 Speed Multiplier 파라미터 이름.")]
     [SerializeField] private string sprintSpeedParam = "SprintSpeed";
-    [Tooltip("Sprint 스테이트에 물려 있는 클립. 길이를 읽어 배속을 역산하는 데만 쓴다.")]
-    [SerializeField] private AnimationClip sprintClip;
     [Tooltip("Sprint 애니메이션이 1배속으로 보일 이동 속도(m/s). 배속 = 실제 이동속도 ÷ 이 값.\n" +
              "다리 회전이 실제 이동보다 빠르면(발이 미끄러지면) 이 값을 올리고, 느리면 내린다.\n" +
              "상한이 아니다 — 이 값을 넘는 속도로 이동하면 배속도 1을 넘는다.\n" +
@@ -146,6 +153,18 @@ public class CharacterActionPlayer : MonoBehaviour
     public event Action OnSwingEnded;
 
     /// <summary>
+    /// 확장 포인트: <b>마지막 베기 이전의 칼질이 도달하는 절대 시각</b>. 다중 히트스톱이 이것만 구독한다.
+    ///
+    /// <para><b>이 시각을 아는 것은 여기뿐이다</b> — 클립 초로 저작된 마크를 월드 시각으로 바꾸려면
+    /// 그때의 실제 배속과 재생 시작 시각이 필요하고, 그 둘은 재생하는 배우만 든다(§6).
+    /// 반면 "얼마나 멈출까 · 누구를 멈출까"는 여전히 <c>HitStopDirector</c> 하나가 정한다.</para>
+    ///
+    /// <para>⚠ <b>한 번에 하나씩</b> 발행한다. 정지가 끼면 이후 칼질이 그만큼 밀리므로,
+    /// 미리 다 발행하면 두 번째부터 이르게 터진다.</para>
+    /// </summary>
+    public event Action<float> OnExtraImpact;
+
+    /// <summary>
     /// 확장 포인트: <b>적 칼이 실제로 플레이어에게 닿는 순간</b>(= <c>impactTime</c>). 첫 미스 순간이 아니다.
     /// 체력 감소·카메라 피격 큐가 이 이벤트만 구독한다.
     /// </summary>
@@ -191,6 +210,7 @@ public class CharacterActionPlayer : MonoBehaviour
     private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
     private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
+    private AnimationClip appliedQuickshiftClip; // Quickshift 자리에 지금 물려 있는 클립(전진/백스텝)
     private bool useSlotA = true; // 듀얼 슬롯 전환 플래그
 
     // 현재 액션의 복귀 스케줄.
@@ -198,11 +218,63 @@ public class CharacterActionPlayer : MonoBehaviour
     private float recoveryEndTime; // 연계가 없을 때 마무리 동작 노출이 끝나는 시각
     private bool speedRestored;    // actionEndTime에서 AttackSpeed를 1로 되돌렸는지
 
-    // 현재 재생의 스냅샷. actionEndTime만으로는 "지금까지 소비한 클립 초"를 역산할 수 없어
-    // 히트스톱 캐치업(ApplyHitStop)이 남은 클립 길이를 구하지 못한다.
-    private float playStartTime;
+    // 히트스톱이 얼렸다 되돌릴 배속.
     private float playSpeed = 1f;
-    private float playDur;
+
+    // 재생 진행 스냅샷. 임팩트 '이전'에 멈추는 다중 히트스톱이 이 둘을 요구한다 —
+    // 얼마나 남았는지 알아야 해제 시 배속을 다시 계산하고(따라잡기), 다음 칼질 시각도 구한다.
+    // ⚠ 이력: 2026-08-10 리팩토링이 소비자가 없다고 판단해 비슷한 필드(playStartTime/playDur)를 지웠다.
+    // 이 기능이 그 소비자다(docs/MultiHitStop). 지우기 전에 여기 주석부터 확인할 것.
+    private float segmentStartTime;  // 지금 배속 구간이 시작된 실시간
+    private float clipConsumed;      // 이번 재생에서 소비한 클립 초(정지 구간 제외)
+    private float playingImpactSpan; // 재생 중인 클립의 임팩트 스팬(0이면 정렬 대상 아님 = 피격·일회성)
+    private float playingBaseSpeed = 1f; // 재생 중인 클립의 저작 배속. 거리 커브의 시간 단위를 저작값에 맞추는 데 쓴다.
+    private float playingImpactAlignTime = float.NaN; // 재생 중인 정렬 대상의 임팩트 절대시각(= 그 클립이 속한 패턴의 신분증)
+
+    /// <summary>
+    /// 지금 재생 중인 <b>정렬 대상 액션이 어느 패턴의 것인지</b>를 말하는 값 — 그 패턴의 임팩트 절대시각이다.
+    /// 재생 중이 아니면 <c>NaN</c>.
+    ///
+    /// <para><b>왜 필요한가</b>: <see cref="DuelCurveTime"/>은 "지금 헤드가 어디냐"만 말할 뿐
+    /// <b>누구의 헤드인지</b>는 말하지 않는다. 다음 패턴의 결투 계획이 도착하면 그 패턴의 거리 커브가 걸리는데
+    /// 클립은 아직 시작 전이라, 소비자가 그대로 쓰면 <b>직전 클립의(이미 마지막 키를 지난) 시각</b>으로
+    /// 새 커브를 읽어 끝값(예: −5m)으로 튄다 — 화면에서는 <b>적을 관통해 뒤로 순간이동</b>한다.
+    /// 계획의 임팩트 시각과 이 값을 대조하면 그 구간이 사라진다.</para>
+    /// </summary>
+    public float PlayingImpactAlignTime => playingImpactAlignTime;
+
+    /// <summary>
+    /// 지금 재생 중인 액션의 <b>임팩트 기준 시각</b>(초). 저작 배속 단위라 <c>Animation Clip Trimmer</c>의
+    /// <c>t</c>와 같은 값이며, 결투 거리 커브가 이것을 시간 원점으로 쓴다.
+    ///
+    /// <para><b>월드 시각(<c>Time.time − impactTime</c>)을 쓰면 안 되는 이유가 셋이다</b> —
+    /// ① 히트스톱은 <c>AttackSpeed = 0</c>으로만 걸리고 <c>Time.time</c>은 계속 흐른다(§7-3):
+    /// 월드 시각으로 굴리면 캐릭터는 얼었는데 몸만 미끄러진다. ② <c>AttackSpeed</c> 압축(최대
+    /// <see cref="maxAttackSpeed"/>)이 걸리면 칼 리치와 간격의 대응이 깨진다. ③ 다중 히트스톱 예산은
+    /// 재생을 F만큼 일찍 시작한다(§7-3-1). <b>재생 헤드에서 파생하면 셋 다 공짜로 성립한다.</b></para>
+    ///
+    /// <para>재생 중인 정렬 대상 액션이 없으면 <c>NaN</c>이다(피격·일회성 클립 포함) —
+    /// 소비자는 그 구간에 아무것도 하지 않아 마지막 값이 그대로 유지된다.</para>
+    ///
+    /// <para>⚠ <c>Animator</c> 스테이트 시간을 읽지 않는다 — 크로스페이드 중에 값이 튄다.</para>
+    /// </summary>
+    public float DuelCurveTime
+    {
+        get
+        {
+            if (playingImpactSpan <= 0f) return float.NaN;
+
+            // 정지 중에는 헤드가 얼어 있다 — 흐른 실시간을 클립 초로 환산하면 안 된다.
+            float consumed = clipConsumed + (hitStopped ? 0f : (Time.time - segmentStartTime) * playSpeed);
+
+            return (consumed - playingImpactSpan) / Mathf.Max(playingBaseSpeed, 0.01f);
+        }
+    }
+
+    // 마지막 베기 이전의 칼질들(트림 시작 기준 상대 초, 오름차순)과 커서.
+    // ⚠ 한 번에 하나씩만 발행한다 — 전부 미리 발행하면 첫 정지 시간만큼 나머지가 이르게 터진다.
+    private float[] playingExtraSpans;
+    private int extraCursor;
 
     // 히트스톱. 정지 중에는 Update의 복귀 로직을 통째로 막고, 해제 시각에 원래 배속으로 이어 붙인다.
     private bool hitStopped;
@@ -224,6 +296,8 @@ public class CharacterActionPlayer : MonoBehaviour
     private float pendingBaseSpeed;
     private float pendingScheduleStart;
     private float pendingImpactAlignTime; // 임팩트 프레임이 도달해야 할 절대시각(= 표적 절단 시각).
+    private float[] pendingExtraSpans;    // 마지막 베기 이전의 칼질들(트림 시작 기준 상대 초).
+    private float pendingFreeze;          // 재생 중 소비될 총 정지 시간(예산). 시작 시각·배속이 이만큼을 미리 뺀다.
     private bool missedThisTarget; // 이번 판정 대상에서 이미 첫 미스 처리를 했는지
 
     // 이번 판정 대상에서 누가 휘두르는가. 클립 선택과 "맞는지 여부"를 동시에 가른다.
@@ -334,7 +408,7 @@ public class CharacterActionPlayer : MonoBehaviour
             if (Time.time < hitStopReleaseTime) return;
 
             hitStopped = false;
-            animator.SetFloat(attackSpeedHash, playSpeed); // 멈춘 자리에서 원래 속도로 이어진다.
+            ReleaseHitStop();
         }
 
         TryStartPendingSuccess();
@@ -344,6 +418,12 @@ public class CharacterActionPlayer : MonoBehaviour
         // 이 래치는 트림 끝을 정확히 1회만 통과하므로 스윙 종료 발행 지점으로 그대로 재사용한다.
         if (!speedRestored && Time.time >= actionEndTime)
         {
+            // ⚠ 재생 진행 스냅샷도 여기서 끊어 준다. 배속이 1로 바뀌는데 playSpeed가 옛 값으로 남으면
+            // 그 뒤 DuelCurveTime이 실제보다 빠르게 흐른다(거리 커브의 임팩트 이후 구간이 어긋난다).
+            clipConsumed += (Time.time - segmentStartTime) * playSpeed;
+            segmentStartTime = Time.time;
+            playSpeed = 1f;
+
             animator.SetFloat(attackSpeedHash, 1f);
             speedRestored = true;
             RaiseSwingEnded();
@@ -398,10 +478,6 @@ public class CharacterActionPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// base 로코모션 레이어를 지정 스테이트로 CrossFade한다(경로 ②=Sprint / 경로 ③=Idle).
-    /// 목표가 현재와 같으면 즉시 반환해 매 프레임 재진입을 막는다. 전환은 Attack 웨이트에 가려진 동안 일어나므로 눈에 띄지 않는다.
-    /// </summary>
-    /// <summary>
     /// 결투 수렴 구간의 로코모션. <b>창으로 갈린다</b> — 거리가 아니다.
     ///
     /// <para>기준은 <b>둘</b>이다 — "클립 하나가 창을 채우는가"와 <b>"그 속도가 달리기로 읽히는가"</b>.
@@ -430,7 +506,13 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     private void HandleDuelScheduled(EnemySpace.EnemyDirector.DuelPlan plan)
     {
-        float distance = Vector3.ProjectOnPlane(plan.PlayerPosition - transform.position, Vector3.up).magnitude;
+        Vector3 move = Vector3.ProjectOnPlane(plan.PlayerPosition - transform.position, Vector3.up);
+        float distance = move.magnitude;
+
+        // 뒤로 빠지는가. 도착 뒤 바라볼 방향(적 쪽)과 이동 방향이 반대면 뒷걸음질이다 —
+        // 회전은 PlayerCombatMover가 이미 적 쪽으로 걸어 두므로 이 식이 화면의 사실과 같다.
+        Vector3 facing = Vector3.ProjectOnPlane(plan.EnemyPosition - plan.PlayerPosition, Vector3.up);
+        bool backward = Vector3.Dot(move, facing) < 0f;
 
         // ⚠ ArriveTime이 아니라 PlayerArriveTime이다 — 재접근에서는 플레이어가 그보다 일찍 도착한다.
         // 실제 이동이 끝나는 시각으로 봐야 배속이 맞는다(창을 길게 잡으면 다 온 뒤에도 다리가 돈다).
@@ -444,10 +526,13 @@ public class CharacterActionPlayer : MonoBehaviour
         // 도착 뒤 남는 시간은 복귀 로직에 돌려준다(서 있는 구간이 로코모션에 묶이지 않게).
         convergeUntil = plan.PlayerArriveTime;
 
-        float dashLength = quickshiftClip != null ? quickshiftClip.length : 1f;
+        // 뒤로 갈 때는 백스텝 클립의 길이로 배속을 역산한다(길이가 다르면 창을 못 채운다).
+        AnimationClip dashClip = backward && quickshiftBackClip != null ? quickshiftBackClip : quickshiftClip;
+        float dashLength = dashClip != null ? dashClip.length : 1f;
         float travelSpeed = distance / window;
 
-        if (window > dashLength && travelSpeed >= minSprintTravelSpeed)
+        // ⚠ 뒤로 갈 때 Sprint 분기를 타면 전진 달리기 루프로 뒤로 미끄러진다. 백스텝은 Quickshift 경로로만.
+        if (window > dashLength && travelSpeed >= minSprintTravelSpeed && !backward)
         {
             // 실제 이동 속도에 배속을 맞춘다 — 안 맞추면 발이 지면을 긁는다.
             float runSpeed = Mathf.Max(0.1f, travelSpeed) / Mathf.Max(sprintReferenceSpeed, 0.01f);
@@ -465,10 +550,29 @@ public class CharacterActionPlayer : MonoBehaviour
         // 창이 클립보다 길어도(느린 이동 경로) 늘여서 채운다 — 0.7배 대시는 여전히 대시로 읽히지만
         // 0.2배 Sprint는 기어가는 그림이 된다. minQuickshiftSpeed 아래로는 늘이지 않는다.
         float speed = Mathf.Max(minQuickshiftSpeed, dashLength / window);
+
+        // 새 스테이트를 만들지 않는다 — 같은 Quickshift 스테이트의 클립만 갈아 끼운다.
+        // ⚠ 양쪽 분기에서 매번 대입한다. 한쪽만 쓰면 직전 방향의 클립이 그대로 남는다.
+        ApplyQuickshiftClip(dashClip);
+
         animator.SetFloat(quickshiftSpeedHash, speed);
         animator.CrossFadeInFixedTime(quickshiftStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
         currentBaseStateHash = quickshiftStateHash;
-        LogConverge($"Quickshift x{speed:0.00}", distance, window);
+        LogConverge($"{(backward ? "Quickshift(뒤)" : "Quickshift")} x{speed:0.00}", distance, window);
+    }
+
+    /// <summary>
+    /// Quickshift 스테이트가 재생할 클립을 갈아 끼운다(전진 ↔ 백스텝).
+    /// <b>키는 언제나 원본 <see cref="quickshiftClip"/></b>이다 — 오버라이드는 원본 클립을 키로 잡으므로
+    /// 이전에 무엇으로 바꿔 놨든 이 키로 되돌릴 수 있다.
+    /// </summary>
+    private void ApplyQuickshiftClip(AnimationClip clip)
+    {
+        if (overrideController == null || quickshiftClip == null || clip == null) return;
+        if (appliedQuickshiftClip == clip) return; // 같은 클립을 다시 대입하면 재생이 리셋된다
+
+        overrideController[quickshiftClip] = clip;
+        appliedQuickshiftClip = clip;
     }
 
     /// <summary>
@@ -658,7 +762,7 @@ public class CharacterActionPlayer : MonoBehaviour
         currentAttacker = enemyDirector != null ? enemyDirector.CurrentAttacker : EnemySpace.Attacker.Player;
 
         // 칼이 닿는 시각 — 적 공격·표적 절단과 반드시 같은 식이어야 한다.
-        float impactAlignTime = info.Deadline + info.Template.ImpactOffset;
+        float impactAlignTime = info.ImpactTime();
         pendingImpactAlignTime = impactAlignTime;
 
         var alignment = currentAttacker == EnemySpace.Attacker.Enemy
@@ -675,8 +779,16 @@ public class CharacterActionPlayer : MonoBehaviour
         pendingImpactSpan = alignment.ResolvedImpactSpan;
         pendingBaseSpeed = alignment.Speed;
 
+        // 마지막 베기 이전의 칼질마다 한 번씩 멈춘다 → 그 총 정지 시간(F)만큼 재생이 안 흐른다.
+        // ⚠ F를 미리 빼서 '일찍 시작'하는 것이 주 경로다. 배속으로 때우면 모션이 뭉개진다.
+        // 정지 길이는 HitStopDirector에서 당겨 온다 — 두 곳에 적으면 언젠가 하나만 고쳐진다.
+        pendingExtraSpans = alignment.ResolvedExtraImpactSpans;
+        pendingFreeze = pendingExtraSpans.Length > 0 && hitStopDirector != null
+            ? pendingExtraSpans.Length * hitStopDirector.HitStopDuration
+            : 0f;
+
         float playTime = pendingImpactSpan / pendingBaseSpeed; // 지정 배속으로 임팩트까지 가는 데 걸리는 시간
-        pendingScheduleStart = Mathf.Max(impactAlignTime - playTime, info.FirstNodeTime);
+        pendingScheduleStart = Mathf.Max(impactAlignTime - pendingFreeze - playTime, info.FirstNodeTime);
         hasPending = true;
     }
 
@@ -688,7 +800,20 @@ public class CharacterActionPlayer : MonoBehaviour
     {
         if (!hasPending || missedThisTarget || Time.time < pendingScheduleStart) return;
 
-        float remaining = Mathf.Max(pendingImpactAlignTime - Time.time, 0.0001f);
+        // 정지로 소비될 F를 먼저 뺀다 — 그 시간 동안 클립은 안 흐르기 때문이다.
+        // ⚠ 창이 예산을 못 감당하면(남은 시간 ≤ 0) 예산을 포기하고 F = 0으로 재계산한다.
+        // 정렬은 그 뒤 따라잡기(ApplyHitStop 해제 경로)가 끌어온다.
+        float freeze = pendingFreeze;
+        if (pendingImpactAlignTime - freeze - Time.time <= 0f)
+        {
+            if (freeze > 0f)
+                Debug.LogWarning(
+                    $"[CharacterActionPlayer] 정지 예산({freeze:0.00}s)이 남은 창보다 커서 포기합니다 — " +
+                    "추가 히트스톱 수를 줄이거나 마크를 앞으로 당기세요.", this);
+            freeze = 0f;
+        }
+
+        float remaining = Mathf.Max(pendingImpactAlignTime - freeze - Time.time, 0.0001f);
         float needed = pendingImpactSpan / remaining;
         float cap = Mathf.Max(maxAttackSpeed, pendingBaseSpeed);
         float speed = Mathf.Clamp(needed, pendingBaseSpeed, cap);
@@ -703,6 +828,15 @@ public class CharacterActionPlayer : MonoBehaviour
         }
 
         PlaySlot(pendingClip, pendingStartOffset, pendingDur, speed, isSwing: true);
+
+        // 이 재생만 정렬 대상이다(피격·일회성은 PlaySlot이 스팬 0으로 리셋한다).
+        playingImpactSpan = pendingImpactSpan;
+        playingBaseSpeed = pendingBaseSpeed;   // 거리 커브의 시간 단위 = 저작 배속(툴의 t와 같다)
+        playingImpactAlignTime = pendingImpactAlignTime; // 이 헤드가 '어느 패턴의 것'인지
+        playingExtraSpans = pendingExtraSpans;
+        extraCursor = 0;
+        EmitNextExtraImpact();
+
         hasPending = false;
     }
 
@@ -736,14 +870,81 @@ public class CharacterActionPlayer : MonoBehaviour
         // 트림 구간(스윙)을 재생 중일 때만 의미가 있다. speedRestored가 서 있으면 이미 마무리 동작이다.
         if (speedRestored || !swingActive) return false;
 
+        // 멈추기 전에 지금까지 소비한 클립 초를 확정한다 — 해제 시 남은 스팬을 알아야 한다.
+        clipConsumed += (Time.time - segmentStartTime) * playSpeed;
+
         hitStopReleaseTime = Time.time + duration;
         hitStopped = true;
 
-        actionEndTime += duration;
-        recoveryEndTime += duration;
+        // ⚠ 임팩트를 '지난 뒤'에만 복귀 스케줄을 민다. 아직 전이라면 미는 순간
+        // 마지막 베기가 정지 시간만큼 늦어져 표적 절단과 어긋난다 — 그건 해제 시 배속으로 벌충한다.
+        if (!IsBeforeImpact())
+        {
+            actionEndTime += duration;
+            recoveryEndTime += duration;
+        }
 
         animator.SetFloat(attackSpeedHash, 0f);
         return true;
+    }
+
+    /// <summary>정렬 대상 재생이면서 아직 마지막 베기(임팩트 프레임)에 도달하지 않았는가.</summary>
+    private bool IsBeforeImpact() => playingImpactSpan > 0f && clipConsumed < playingImpactSpan;
+
+    /// <summary>
+    /// 정지를 푼다. <b>임팩트 전이면 배속을 다시 계산한다</b>(따라잡기) —
+    /// 남은 임팩트 스팬을 남은 실시간에 정확히 채워 마지막 베기가 제자리에 도착하게 한다.
+    ///
+    /// <para>예산(<c>pendingFreeze</c>)이 정확하면 이 값은 원래 배속과 거의 같다.
+    /// 따라잡기는 <b>주 수단이 아니라 오차 보정</b>이다 — 스톱이 하나 버려지거나 창이 모자랐을 때 자기 수정된다.</para>
+    /// </summary>
+    private void ReleaseHitStop()
+    {
+        segmentStartTime = Time.time;
+
+        if (IsBeforeImpact())
+        {
+            float remainingSpan = playingImpactSpan - clipConsumed;
+            float remainingTime = pendingImpactAlignTime - Time.time;
+
+            if (remainingTime > 0.0001f)
+            {
+                float needed = remainingSpan / remainingTime;
+                float cap = Mathf.Max(maxAttackSpeed, playSpeed);
+
+                if (needed > cap)
+                    Debug.LogWarning(
+                        $"[CharacterActionPlayer] 히트스톱 이후 따라잡기가 배속 상한({cap:0.00})에 걸렸습니다 " +
+                        $"(필요 {needed:0.00}배) — 마지막 베기가 절단보다 늦습니다. 추가 스톱 수를 줄이세요.", this);
+
+                playSpeed = Mathf.Clamp(needed, 0.01f, cap);
+            }
+        }
+
+        animator.SetFloat(attackSpeedHash, playSpeed);
+
+        // 다음 칼질은 이 시점에야 정확히 계산된다(정지로 밀렸으므로).
+        EmitNextExtraImpact();
+    }
+
+    /// <summary>
+    /// 아직 안 온 칼질 중 <b>하나만</b> 알린다. 남은 클립 스팬을 지금 배속으로 나눠 절대 시각을 만든다.
+    /// 이미 지나간 마크는 건너뛴다(정지가 길어 통째로 삼켜진 경우).
+    /// </summary>
+    private void EmitNextExtraImpact()
+    {
+        if (OnExtraImpact == null || playingExtraSpans == null) return;
+
+        while (extraCursor < playingExtraSpans.Length)
+        {
+            float remainingSpan = playingExtraSpans[extraCursor] - clipConsumed;
+            extraCursor++;
+
+            if (remainingSpan <= 0f) continue; // 이미 지나갔다
+
+            OnExtraImpact.Invoke(Time.time + remainingSpan / Mathf.Max(playSpeed, 0.01f));
+            return;
+        }
     }
 
     // ─────────────────────────── 첫 미스 → 힛 ───────────────────────────
@@ -851,9 +1052,13 @@ public class CharacterActionPlayer : MonoBehaviour
         // 새 클립이 들어오면 진행 중이던 히트스톱은 의미를 잃는다(정지시킬 대상 자체가 바뀌었다).
         hitStopped = false;
 
-        playStartTime = Time.time;
         playSpeed = Mathf.Max(speed, 0.01f);
-        playDur = dur;
+        segmentStartTime = Time.time;
+        clipConsumed = 0f;
+        playingImpactSpan = 0f;      // 정렬 대상이면 호출부가 곧바로 채운다(TryStartPendingSuccess)
+        playingImpactAlignTime = float.NaN;
+        playingExtraSpans = null;
+        extraCursor = 0;
 
         actionEndTime = Time.time + dur / Mathf.Max(speed, 0.01f);
         recoveryEndTime = actionEndTime + recoveryHoldDuration;

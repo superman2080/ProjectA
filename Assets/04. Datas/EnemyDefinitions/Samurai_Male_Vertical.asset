@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be286b99322153c4c8dc1002f0d802eb, type: 3}
+  m_Name: Samurai_Male_Vertical
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySpace.EnemyDefinition
+  prefab: {fileID: 7891724665517407530, guid: 0b6c0dc99f690d6448862df79bfe876c, type: 3}
+  deathSliceSet: {fileID: 11400000, guid: f552809cc7e3d9c4182cef09cabc8411, type: 2}
+  ambushAttacks:
+  - clip: {fileID: 7400000, guid: f67de248f8947da40b042795e914709f, type: 2}
+    startOffset: 0
+    duration: 0.8396832
+    impactTime: 0.5923077
+    speed: 2
+    extraImpactTimes: []
+  - clip: {fileID: 7400000, guid: 0e2fcbecedc05a742bfb97b18957bb73, type: 2}
+    startOffset: 0
+    duration: 0.2765859
+    impactTime: 0.1915802
+    speed: 2
+    extraImpactTimes: []
+  scaleJitter: 0.05
+  initialPoolSize: 4
+  maxPoolSize: 12

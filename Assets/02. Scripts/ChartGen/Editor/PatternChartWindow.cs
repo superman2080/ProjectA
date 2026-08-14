@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using PatternSpace;
@@ -52,7 +52,6 @@ namespace ChartGen
         private int tier2Max = 20;
         private int maxGroupGapSteps = 1;
 
-        private PatternHandler referenceHandler;
         private SongChart existingChart;
 
         private readonly List<ChartEntryDraft> drafts = new List<ChartEntryDraft>();
@@ -134,16 +133,6 @@ namespace ChartGen
             EditorGUILayout.LabelField("음원 / 대상 SongChart", EditorStyles.boldLabel);
             clip = (AudioClip)EditorGUILayout.ObjectField("Audio Clip", clip, typeof(AudioClip), false);
             existingChart = (SongChart)EditorGUILayout.ObjectField("기존 SongChart (불러오기용)", existingChart, typeof(SongChart), false);
-            EditorGUI.BeginChangeCheck();
-            referenceHandler = (PatternHandler)EditorGUILayout.ObjectField("씬 PatternHandler 참조", referenceHandler, typeof(PatternHandler), true);
-            if (EditorGUI.EndChangeCheck())
-            {
-                // 핸들러가 없으면 스폰 시각을 못 구해 비어 있다 — 꽂는 즉시 되살린다.
-                foreach (var d in drafts) RecomputeSpawnTimes(d);
-            }
-
-            if (referenceHandler == null)
-                EditorGUILayout.HelpBox("스폰 시각 계산을 위해 씬의 PatternHandler를 지정해야 합니다. 지정 전까지 저장이 비활성화됩니다.", MessageType.Warning);
         }
 
         /// <summary>
@@ -362,7 +351,7 @@ namespace ChartGen
 
         private void RecomputeSpawnTimes(ChartEntryDraft draft)
         {
-            if (draft.template == null || referenceHandler == null)
+            if (draft.template == null)
             {
                 draft.spawnTimes = null;
                 return;
@@ -383,9 +372,9 @@ namespace ChartGen
             draft.spawnTimes = new float[draft.onsetTimes.Length];
             for (int i = 0; i < draft.onsetTimes.Length; i++)
             {
-                int pointIndex = draft.template.AllData[i].index;
-                float duration = referenceHandler.ComputeFallDuration(pointIndex, draft.exposureDurations[i]);
-                draft.spawnTimes[i] = draft.onsetTimes[i] - duration;
+                // 스폰 리드타임 = 노출 시간 그대로다. 링은 Point 자리에서 크기만 줄어들 뿐 이동하지 않아
+                // 화면 기하가 개입할 여지가 없다(낙하 노드 시절엔 행마다 속도를 역산해야 해서 씬 참조가 필요했다).
+                draft.spawnTimes[i] = draft.onsetTimes[i] - draft.exposureDurations[i];
             }
         }
 
@@ -713,7 +702,7 @@ namespace ChartGen
             EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
 
             // 배정은 됐는데 크기가 안 맞는 상태. 저장이 여기서 멈추므로 행에서 바로 보이게 한다.
-            if (!unassigned && draft.spawnTimes == null && referenceHandler != null)
+            if (!unassigned && draft.spawnTimes == null)
             {
                 int templateNodes = draft.template.AllData == null ? 0 : draft.template.AllData.Count;
                 EditorGUILayout.HelpBox(
@@ -879,7 +868,12 @@ namespace ChartGen
 
         // ── 견제 클립 정보 ──────────────────────────────────────────────────
 
-        /// <summary>판정 종료가 마지막 노드에서 얼마나 뒤인지(PatternHandler.goodWindow). 창 표시는 근사면 충분하다.</summary>
+        /// <summary>
+        /// 판정 종료가 마지막 노드에서 얼마나 뒤인지(<c>PatternHandler.goodWindow</c>).
+        ///
+        /// <para><b>복제인 것을 알고 둔다.</b> 이 툴은 씬 없이도 도는 에디터 창이라 런타임 <c>PatternHandler</c>를
+        /// 들 수 없다. 창 길이 <b>표시</b>에만 쓰이므로 근사로 충분하고, 굽는 값(스폰 시각)에는 관여하지 않는다.</para>
+        /// </summary>
         private const float GoodWindowApprox = 0.1f;
 
         /// <summary>
@@ -1134,7 +1128,7 @@ namespace ChartGen
         private void DrawSaveButton()
         {
             bool hasUnassigned = drafts.Any(d => d.template == null);
-            bool canSave = !hasUnassigned && referenceHandler != null;
+            bool canSave = !hasUnassigned;
 
             using (new EditorGUI.DisabledScope(!canSave))
             {
@@ -1149,9 +1143,7 @@ namespace ChartGen
         private void Save()
         {
             // 스폰 시각은 '굽는 시점의 계산값 스냅샷'이라 낡을 수 있다. 저장 직전에 전부 다시 계산한다.
-            //
-            // 특히 referenceHandler를 나중에 꽂으면 LoadExisting 시점에는 null이라 spawnTimes가 비어 있고,
-            // 그 뒤 저장 버튼만 활성화돼 그대로 저장하려다 터진다. 여기서 다시 계산하면 그 경로가 닫힌다.
+            // 노드 수와 온셋 수가 어긋난 그룹은 여기서도 null로 남고, 아래에서 몇 번 그룹인지 찍고 저장을 중단한다.
             foreach (var d in drafts) RecomputeSpawnTimes(d);
 
             var invalid = drafts.FindIndex(d => d.spawnTimes == null);

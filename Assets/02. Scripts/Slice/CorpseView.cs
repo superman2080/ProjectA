@@ -26,18 +26,6 @@ namespace SliceSpace
         [SerializeField] private int rootPieceIndex = -1;
 
         private readonly List<SlicePiece> launched = new List<SlicePiece>();
-        private float bornTime;
-
-        public IReadOnlyList<SlicePiece> Pieces => pieces;
-        public Transform[] Bones => bones;
-        public int RootPieceIndex => rootPieceIndex;
-
-        /// <summary>교체된 뒤 흐른 시간. 디렉터가 회수 시점을 잡는 데 쓴다.</summary>
-        public float Age => Time.time - bornTime;
-
-        /// <summary>래그돌이 붙을 조각(후속 플랜). 없으면 null.</summary>
-        public SlicePiece RootPiece =>
-            pieces != null && rootPieceIndex >= 0 && rootPieceIndex < pieces.Length ? pieces[rootPieceIndex] : null;
 
         /// <summary>
         /// 산 적의 포즈를 그대로 물려받는다.
@@ -83,7 +71,6 @@ namespace SliceSpace
         public void Burst(float scatterSpeed, float scatterSpin, int pieceLayer, Queue<Mesh> meshPool,
             bool keepRootSkinned = false)
         {
-            bornTime = Time.time;
             launched.Clear();
             if (pieces == null) return;
 

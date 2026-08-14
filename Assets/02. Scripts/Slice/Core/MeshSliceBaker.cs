@@ -66,9 +66,6 @@ namespace SliceSpace
             return null;
         }
 
-        /// <summary>기존 호출자 호환용. 정적 경로 검증으로 위임한다.</summary>
-        public static string Validate(Mesh source) => ValidateStatic(source);
-
         private static string ValidateCommon(Mesh source)
         {
             if (source == null) return "원본 메쉬가 없습니다.";

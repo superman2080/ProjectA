@@ -18,11 +18,6 @@ MonoBehaviour:
   - index: 1
   - index: 5
   - index: 7
-  successAnimationClip: {fileID: 7400000, guid: c1cb7cbccecdbeb4f981b527b1356d64, type: 2}
-  animationStartOffset: 0
-  animationDuration: 1.2258651
-  animationImpactTime: 1.0882354
-  animationSpeed: 1.5
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}
@@ -30,25 +25,91 @@ MonoBehaviour:
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 7400000, guid: c1cb7cbccecdbeb4f981b527b1356d64, type: 2}
     startOffset: 0
     duration: 1.2258651
     impactTime: 1.0882354
     speed: 2
+    extraImpactTimes: []
+  enemyFeint:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 7400000, guid: ba3aea449950e0249b2cf236dd7b7c00, type: 2}
     startOffset: 0
     duration: 0.9
     impactTime: 0.10685766
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 8af6377bc96d2bc429724c450249b05c, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: -0.5441177
+      value: 4
+      inSlope: -2.7019866
+      outSlope: -2.7019866
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: -0.32201332
+      value: 5.0152435
+      inSlope: -2.8509932
+      outSlope: -2.8509932
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: -0.21160877
+      value: -5
+      inSlope: -0.09866597
+      outSlope: -0.09866597
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.60469335
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.35
+      value: -5
+      inSlope: -0
+      outSlope: -0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.12587321
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  effectCues: []

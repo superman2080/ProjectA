@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PatternSpace;
 using SliceSpace;
@@ -17,7 +17,7 @@ namespace EnemySpace
     /// 판정 대상은 언제나 선두 하나이고 완료도 순서대로 일어나므로 안전하다. cue도 같은 규율로
     /// <c>ChartPlayer</c>가 <c>SetPattern</c> 직전에 밀어 넣는다.</para>
     /// </summary>
-    public class EnemyDirector : MonoBehaviour
+    public partial class EnemyDirector : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private PatternHandler handler;
@@ -67,6 +67,17 @@ namespace EnemySpace
 
         [Tooltip("무리 스폰 시 한 명씩 나오는 간격(초). 전원이 동시에 나타나면 팝인이 티 난다.")]
         [SerializeField] private float spawnStagger = 0.15f;
+
+        [Tooltip("staged에서 빌려간 기습자가 집결지로 돌아오는 데 주는 마감(초).\n" +
+                 "실제 도착은 적 자기 moveSpeed가 정하므로 이건 상한일 뿐이다 — 아무도 기다리지 않는 이동이라 넉넉해도 된다.")]
+        [SerializeField] private float stagedReturnDuration = 3f;
+
+        [Tooltip("다음 무리 집결지까지의 <b>거리 상한</b>(m). 곧 무리와 무리 사이의 간격이다.\n" +
+                 "⚠ 이 거리는 원래 창에 비례한다(§11-2의 속도감) — 그대로 두면 6~8m가 나오고,\n" +
+                 "적 moveSpeed 3m/s로는 2.0~2.7초가 걸려 리드 1.1초짜리 기습에 <b>구조적으로 못 온다.</b>\n" +
+                 "상한을 걸면 그 무리가 기습 후보로 살아난다. 대가는 긴 창에서 대시가 짧아지는 것.\n" +
+                 "⚠ minPlayerDistance(현재 5)가 실질 하한이라 그보다 작게 줄이려면 그 값도 같이 내려야 한다.")]
+        [SerializeField] private float stagedMaxDistance = 8f;
 
         [Tooltip("스폰이 화면에 걸릴 때 자기 자리에서 밀어낼 수 있는 최대 거리(m).\n" +
                  "자리가 이미 화면 밖이면 0 — 그 자리에 그대로 선다.")]
@@ -217,12 +228,25 @@ namespace EnemySpace
             /// </summary>
             public readonly float PlayerArriveTime;
 
-            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime)
+            /// <summary>플레이어 → 적 방향의 단위벡터(평면). 거리 커브가 이 축 위에서 플레이어를 민다.</summary>
+            public readonly Vector3 Axis;
+
+            /// <summary>이번 패턴에서 칼이 닿는 절대 시각. 거리 커브의 시간 원점(t = 0)이다.</summary>
+            public readonly float ImpactTime;
+
+            /// <summary>이번 패턴의 템플릿. 거리 커브를 들고 있는 주체다(널일 수 있다 — 디버그 경로).</summary>
+            public readonly Pattern Template;
+
+            public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime,
+                            Vector3 axis, float impactTime, Pattern template)
             {
                 PlayerPosition = player;
                 EnemyPosition = enemy;
                 ArriveTime = arriveTime;
                 PlayerArriveTime = playerArriveTime;
+                Axis = axis;
+                ImpactTime = impactTime;
+                Template = template;
             }
         }
 
@@ -257,6 +281,13 @@ namespace EnemySpace
 
         /// <summary>기즈모용 — 지금 살아 있는 계획. 숫자로는 안 보이는 문제라 씬 뷰에 그린다.</summary>
         private DuelPlan? lastPlan;
+
+        /// <summary>
+        /// 이번 교전의 축(플레이어 → 적)과 그 주인. <b>상대와 수명을 같이한다</b> —
+        /// 사슬 내내 유지되고 상대가 바뀌면 그 자리에서 새로 잡힌다(<see cref="DuelGap.ResolveAxis"/>).
+        /// </summary>
+        private Vector3 duelAxis;
+        private EnemyView duelAxisOwner;
 
         /// <summary>
         /// 지금 판정 대상 패턴에서 누가 휘두르는가. 예약이 없으면 Player(적 무방비)로 본다.
@@ -379,6 +410,9 @@ namespace EnemySpace
         private readonly List<EnemyView> activeCluster = new List<EnemyView>();
         private readonly List<EnemyView> stagedCluster = new List<EnemyView>();
 
+        /// <summary>이 무리 세대에서 보충(<see cref="ReinforceActiveIfThin"/>)을 이미 썼는가. 승격 때 초기화된다.</summary>
+        private bool reinforcedThisCluster;
+
         /// <summary>표적 후보 버퍼. positionScratch와 인덱스가 1:1이어야 한다.</summary>
         private readonly List<EnemyView> candidateScratch = new List<EnemyView>();
 
@@ -403,10 +437,9 @@ namespace EnemySpace
         /// <summary>무대에 유지할 총원. 무리 모드에서는 <b>사망 1 : 스폰 1</b>이라 언제나 clusterSize다.</summary>
         private int RingCapacity => clusterEnabled ? Mathf.Max(clusterSize, 1) : ringCount;
 
-        // 프리팹별 자체 풀(EffectManager·SliceTargetDirector 선례). Pool(PoolKey 단일 매핑)은 프리팹 수 증가에 맞지 않는다.
-        private readonly Dictionary<GameObject, Queue<GameObject>> pools = new Dictionary<GameObject, Queue<GameObject>>();
-        private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
-        private Transform poolRoot;
+        // 프리팹별 인스턴스 풀. Pool(PoolKey 단일 매핑)은 프리팹 수 증가에 맞지 않는다.
+        // 적은 무대 위를 자유롭게 움직이므로 대여 시 비활성 root에서 떼어낸다(detachOnRent).
+        private PrefabPool pool;
 
         /// <summary>
         /// 무대의 중심. <b>월드에 고정된 상수다</b> — <c>arenaCenter</c>는 무대 오브젝트를 가리켜야 하며
@@ -418,8 +451,22 @@ namespace EnemySpace
         /// </summary>
         private Vector3 Center => arenaCenter != null ? arenaCenter.position : transform.position;
 
-        /// <summary>플레이어 위치. 배치·표적 선택이 "플레이어에게서 얼마나 먼가"를 재는 데 쓴다.</summary>
-        private Vector3 PlayerPosition => duelAnchor != null ? duelAnchor.position : Center;
+        /// <summary>
+        /// 플레이어 위치. 배치·표적 선택·결투 배치가 "플레이어에게서 얼마나 먼가"를 재는 데 쓴다.
+        ///
+        /// <para><b>⚠ 앵커가 아니라 앵커의 부모(플레이어 루트)다.</b> 앵커의 역할은
+        /// <see cref="DuelBaseDistance"/>가 읽는 <b>기준 간격을 정하는 것</b>이지 플레이어의 자리가 아니다.
+        /// 앵커를 위치로 쓰면 그 자리가 <b>플레이어보다 기준 간격만큼 앞</b>(적 쪽)이라,
+        /// <b>현재 간격이 그 값보다 좁아지는 순간 <c>BuildDuelPlan</c>의 <c>toEnemy</c>가 부호를 뒤집어</b>
+        /// 목표 자리가 적 <b>반대편</b>에 잡힌다 — 물러나야 할 때 적을 관통해 건너가는 그림이 된다.</para>
+        ///
+        /// <para>예전에는 결투 간격이 앵커 거리와 같아 간격이 그보다 좁아질 일이 없었고(경계값에 딱 붙어 있었다),
+        /// 그래서 증상이 안 났다. <b>거리 커브가 그 전제를 깼다</b> — 임팩트 간격을 0.4m 같은 값으로
+        /// 저작하면 매 패턴 그 구간에 들어간다. 정의를 하나로 두면 이 부류가 원천 소멸한다.</para>
+        /// </summary>
+        private Vector3 PlayerPosition => duelAnchor != null
+            ? (duelAnchor.parent != null ? duelAnchor.parent.position : duelAnchor.position)
+            : Center;
 
         // 절두체 평면 6장. 스폰마다 배열을 새로 만들지 않도록 재사용한다.
         private readonly Plane[] frustumScratch = new Plane[6];
@@ -460,24 +507,102 @@ namespace EnemySpace
         /// 발동 시점의 <see cref="EnemyView.IsIdle"/>가 거른다.</para>
         /// </summary>
         /// <param name="hasAmbushClip">이 적이 쓸 기습 클립이 있는가. 폴백 판단은 호출자가 안다.</param>
-        public EnemyView PickIdleAmbusher(System.Func<Vector3, bool> isVisible, System.Func<EnemyView, bool> hasAmbushClip)
+        /// <param name="includeStaged">
+        /// 다음 무리(<c>staged</c>)까지 후보로 볼 것인가.
+        ///
+        /// <para><b>⚠ 이 인자가 있는 이유는 실측이다.</b> <c>active</c>만 보면 후보가 <b>구조적으로 자주 0</b>이다 —
+        /// 사망 보충은 <c>staged</c>로 들어가고 승격은 <c>active</c>가 완전히 빌 때만 일어나므로,
+        /// <c>active</c>는 4→3→2→1로 마르고 <b>1에 도달하면 그 1명이 현재 상대</b>다.
+        /// 한 곡 실측에서 "후보 없음" 19건 중 <b>17건이 <c>active 1 · staged 3</c></b>이었고
+        /// 다른 필터(바쁨·화면 밖·클립 없음)는 전부 0이었다.</para>
+        ///
+        /// <para><b>인원 수는 하나도 안 건드린다</b> — <c>staged</c> 적이 잠깐 이탈했다 돌아올 뿐이라
+        /// "<c>active</c> 잔여 + <c>staged</c> = <c>clusterSize</c>" 불변식(§11-6)이 그대로 유지된다.
+        /// 돌려보내는 일은 <see cref="ReleaseAmbusher"/>가 한다.</para>
+        ///
+        /// <para><b>⚠ 늦은 선정에서는 false여야 한다.</b> <c>staged</c>는 집결지(창에 비례, 6~8m일 수 있음)에 있어
+        /// <c>moveSpeed</c> 3m/s로 2초 이상 걸린다 — 리드 1초짜리 창에서 부르면 못 붙는다.
+        /// 사전 접근(한 패턴 앞)에서만 감당된다.</para>
+        /// </param>
+        /// <param name="canReach">
+        /// 추가 자격(선택). <b>늦은 선정이 <c>staged</c>를 볼 수 있게 하는 열쇠다</b> —
+        /// "먼가"가 아니라 "제때 닿는가"를 호출자가 직접 묻는다. null이면 검사하지 않는다.
+        /// </param>
+        public EnemyView PickIdleAmbusher(System.Func<Vector3, bool> isVisible, System.Func<EnemyView, bool> hasAmbushClip,
+            bool includeStaged = false, System.Func<EnemyView, bool> canReach = null)
         {
             candidateScratch.Clear();
 
-            foreach (var view in activeCluster)
-            {
-                if (view == null || view == currentOpponent) continue;
-                if (!view.IsIdle) continue;
-                if (isVisible != null && !isVisible(view.transform.position)) continue;
-                if (hasAmbushClip != null && !hasAmbushClip(view)) continue;
+#if UNITY_EDITOR
+            int rejectedOpponent = 0, rejectedBusy = 0, rejectedOffscreen = 0, rejectedNoClip = 0, rejectedTooFar = 0;
+#endif
 
-                candidateScratch.Add(view);
+            CollectAmbushCandidates(activeCluster, isVisible, hasAmbushClip, canReach
+#if UNITY_EDITOR
+                , ref rejectedOpponent, ref rejectedBusy, ref rejectedOffscreen, ref rejectedNoClip, ref rejectedTooFar
+#endif
+                );
+
+            // active가 빈손일 때만 staged를 본다 — 가까이 있는 적이 있으면 그쪽이 언제나 낫다(이동이 없다).
+            if (includeStaged && candidateScratch.Count == 0)
+            {
+                CollectAmbushCandidates(stagedCluster, isVisible, hasAmbushClip, canReach
+#if UNITY_EDITOR
+                    , ref rejectedOpponent, ref rejectedBusy, ref rejectedOffscreen, ref rejectedNoClip, ref rejectedTooFar
+#endif
+                    );
             }
+
+#if UNITY_EDITOR
+            // ⚠ 진단 전용. "후보 없음"이 왜 나오는지는 <b>탈락 내역이 없으면 추측이 된다</b> —
+            // active 무리가 비어서인지, 전부 이동 중이라서인지, 화면 밖이라서인지 로그로는 구분이 안 된다.
+            // 매 프레임이 아니라 결투 계획·공백 접수에서만 불리므로 문자열 보간을 허용한다.
+            LastAmbusherPick =
+                $"active {activeCluster.Count} · staged {stagedCluster.Count} → 후보 {candidateScratch.Count}" +
+                $" (상대 {rejectedOpponent} · 바쁨 {rejectedBusy} · 화면밖 {rejectedOffscreen} · 클립없음 {rejectedNoClip} · 못닿음 {rejectedTooFar})";
+#endif
 
             if (candidateScratch.Count == 0) return null;
 
             return candidateScratch[UnityEngine.Random.Range(0, candidateScratch.Count)];
         }
+
+        /// <summary>한 무리에서 기습 후보를 추려 <c>candidateScratch</c>에 담는다. 두 무리가 같은 기준을 쓰게 하는 지점.</summary>
+        private void CollectAmbushCandidates(List<EnemyView> cluster,
+            System.Func<Vector3, bool> isVisible, System.Func<EnemyView, bool> hasAmbushClip, System.Func<EnemyView, bool> canReach
+#if UNITY_EDITOR
+            , ref int rejectedOpponent, ref int rejectedBusy, ref int rejectedOffscreen, ref int rejectedNoClip, ref int rejectedTooFar
+#endif
+            )
+        {
+            foreach (var view in cluster)
+            {
+                if (view == null) continue;
+#if UNITY_EDITOR
+                if (view == currentOpponent) { rejectedOpponent++; continue; }
+                if (!view.IsIdle) { rejectedBusy++; continue; }
+                if (isVisible != null && !isVisible(view.transform.position)) { rejectedOffscreen++; continue; }
+                if (hasAmbushClip != null && !hasAmbushClip(view)) { rejectedNoClip++; continue; }
+                if (canReach != null && !canReach(view)) { rejectedTooFar++; continue; }
+#else
+                if (view == currentOpponent) continue;
+                if (!view.IsIdle) continue;
+                if (isVisible != null && !isVisible(view.transform.position)) continue;
+                if (hasAmbushClip != null && !hasAmbushClip(view)) continue;
+                if (canReach != null && !canReach(view)) continue;
+#endif
+
+                candidateScratch.Add(view);
+            }
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// 마지막 <see cref="PickIdleAmbusher"/> 호출의 탈락 내역(에디터 진단 전용).
+        /// <c>DodgeDirector</c>의 "후보 없음" 로그가 이걸 덧붙여 찍는다.
+        /// </summary>
+        public string LastAmbusherPick { get; private set; }
+#endif
 
         /// <summary>
         /// 기습이 끝난 적을 놓아준다 — <b>제자리에 남아 배회로 돌아간다</b>. 성패로 가르지 않는다.
@@ -486,7 +611,24 @@ namespace EnemySpace
         /// 무리에서 하나가 튀어나와 찌르고, 그 자리에서 다시 무리로 섞이는 것이 이 사건의 전부다.
         /// 그래서 무대 계산(<c>PickRetreatTarget</c>)도 이 경로에는 없다.</para>
         /// </summary>
-        public void ReleaseAmbusher(EnemyView view) => view?.ReleaseAction();
+        public void ReleaseAmbusher(EnemyView view)
+        {
+            if (view == null) return;
+
+            view.ReleaseAction();
+
+            // ⚠ staged에서 빌려온 기습자는 <b>집결지로 돌려보낸다</b>. 안 그러면 찌른 자리에 남아
+            // 대형이 흐트러지고, 그 상태로 승격되면 다음 무리가 어긋난 채 시작한다.
+            // active에서 온 기습자는 제자리에 남는 게 맞다(정정 8: 무리에서 하나가 나와 찌르고 다시 섞인다).
+            int index = stagedCluster.IndexOf(view);
+            if (index < 0) return;
+
+            Vector3 slot = EnemyRing.PlaceInCluster(
+                stagedCenter, index, Mathf.Max(clusterSize, 1), clusterRadius, minSpacing);
+
+            // 마감을 넉넉히 준다 — 복귀는 아무도 기다리지 않는 이동이라 자기 moveSpeed로 걸어가면 된다.
+            view.ScheduleApproach(slot, Time.time + stagedReturnDuration);
+        }
 
         private Vector3 ViewForward
         {
@@ -502,8 +644,7 @@ namespace EnemySpace
             var rootGo = new GameObject("[EnemyPool]");
             rootGo.transform.SetParent(transform, false);
             rootGo.SetActive(false);
-            poolRoot = rootGo.transform;
-
+            pool = new PrefabPool(rootGo.transform, detachOnRent: true);
         }
 
         void OnEnable()
@@ -593,9 +734,7 @@ namespace EnemySpace
             {
                 if (definition == null || !definition.IsUsable) continue;
 
-                maxSizes[definition.Prefab] = definition.MaxPoolSize;
-                for (int i = 0; i < definition.InitialPoolSize; i++)
-                    Release(CreateInstance(definition.Prefab));
+                pool.Prewarm(definition.Prefab, definition.InitialPoolSize, definition.MaxPoolSize);
 
                 PrewarmSet(definition.DeathSliceSet, seen);
             }
@@ -609,18 +748,14 @@ namespace EnemySpace
             // 스킨드 세트의 산출물은 시체 프리팹 하나다(조각 배열이 아니라).
             if (set.Skinned)
             {
-                maxSizes[set.CorpsePrefab] = set.MaxPoolSize;
-                for (int i = 0; i < set.InitialPoolSize; i++)
-                    Release(CreateInstance(set.CorpsePrefab));
+                pool.Prewarm(set.CorpsePrefab, set.InitialPoolSize, set.MaxPoolSize);
                 return;
             }
 
             foreach (var prefab in set.PiecePrefabs)
             {
                 if (prefab == null) continue;
-                maxSizes[prefab] = set.MaxPoolSize;
-                for (int i = 0; i < set.InitialPoolSize; i++)
-                    Release(CreateInstance(prefab));
+                pool.Prewarm(prefab, set.InitialPoolSize, set.MaxPoolSize);
             }
         }
 
@@ -653,7 +788,7 @@ namespace EnemySpace
                 minSpacing, minPlayerDistance,
                 isVisible, () => UnityEngine.Random.value, spawnCandidateCount);
 
-            var go = Rent(definition.Prefab, definition.MaxPoolSize);
+            var go = pool.Rent(definition.Prefab, definition.MaxPoolSize);
             if (go == null) return null;
 
             var view = go.GetComponent<EnemyView>();
@@ -709,7 +844,7 @@ namespace EnemySpace
                 slot, Center, stageRadius, PlayerPosition, minPlayerDistance,
                 viewPosition, ViewForward, isVisible, spawnMaxOffset);
 
-            var go = Rent(definition.Prefab, definition.MaxPoolSize);
+            var go = pool.Rent(definition.Prefab, definition.MaxPoolSize);
             if (go == null) return null;
 
             var view = go.GetComponent<EnemyView>();
@@ -740,7 +875,11 @@ namespace EnemySpace
         {
             // 사망 시점에는 창을 알 수 없다. BindReservation이 지나가며 남긴 마지막 목표 거리를 쓴다.
             float desired = lastDesiredDistance > 0f ? lastDesiredDistance : minTargetDistance * 2f;
-            desired = Mathf.Clamp(desired, minTargetDistance, stageRadius * 2f);
+
+            // ⚠ 상한은 <b>여기에만</b> 건다 — TakeTargetForWindow(상대 선택)는 그대로 창에 비례한다.
+            // 즉 무리 '안'의 교전 거리와 속도감은 안 건드리고, 무리와 무리 '사이'만 좁힌다.
+            float ceiling = Mathf.Min(stageRadius * 2f, Mathf.Max(stagedMaxDistance, minTargetDistance));
+            desired = Mathf.Clamp(desired, minTargetDistance, ceiling);
 
             Vector3 avoidCenter = ClusterCenterOf(activeCluster, PlayerPosition);
             float avoidRadius = activeCluster.Count > 0 ? clusterRadius * 2f : 0f;
@@ -870,8 +1009,64 @@ namespace EnemySpace
             activeCluster.AddRange(stagedCluster);
             stagedCluster.Clear();
 
+            // 새 무리는 보충권을 다시 얻는다 — 이 무리를 싸우는 동안 한 번 쓴다.
+            reinforcedThisCluster = false;
+
             // 무리가 비었으니 다음 집결지를 새로 지정한다. 이후 사망마다 한 명씩 여기로 걸어온다.
             DesignateStagedCenter();
+        }
+
+        /// <summary>
+        /// <c>active</c>가 <b>현재 상대 하나만</b> 남으면 다음 무리에서 한 명을 불러 합류시킨다.
+        ///
+        /// <para><b>왜 필요한가</b>(실측): 기습 후보는 <c>active − 현재 상대</c>인데, <c>active</c>는
+        /// 4→3→2→1로 마르고 <b>1에 도달하면 그 1명이 상대</b>라 후보가 0이 된다.
+        /// 한 곡 실측에서 "후보 없음" 19건 중 17건이 <c>active 1 · staged 3</c>이었다 —
+        /// <b>인원은 있는데 다른 목록에 있었다.</b></para>
+        ///
+        /// <para><b>⚠ 인원 불변식은 안 깨진다.</b> §11-6의 "<c>active</c> 잔여 + <c>staged</c> = <c>clusterSize</c>"는
+        /// <b>합</b>에 대한 규칙이고, 여기서는 어느 목록에 있느냐만 바뀐다. 사망 1 : 스폰 1도 그대로다.</para>
+        ///
+        /// <para><b>⚠ 무리 세대당 한 번만</b>(<see cref="reinforcedThisCluster"/>). 계속 채우면
+        /// <c>active</c>가 0에 도달하지 못해 <b>승격이 영영 안 일어나고</b>, 그러면 다음 무리로 이동하는
+        /// §11-6의 리듬(무리를 하나 치우고 다음 무리로 대시)이 통째로 사라진다.
+        /// 한 번만 부르면 교전이 한 번 늘어날 뿐 그 리듬은 유지된다.</para>
+        ///
+        /// <para>부르는 대상은 <b>현재 무리에서 가장 가까운</b> 적이다 — 이동이 짧을수록 빨리 후보가 되고
+        /// 다음 무리의 대형도 덜 흐트러진다.</para>
+        /// </summary>
+        private void ReinforceActiveIfThin()
+        {
+            if (!clusterEnabled || reinforcedThisCluster) return;
+            if (activeCluster.Count > 1 || stagedCluster.Count == 0) return;
+
+            Vector3 center = ClusterCenterOf(activeCluster, PlayerPosition);
+
+            EnemyView nearest = null;
+            float best = float.MaxValue;
+
+            foreach (var view in stagedCluster)
+            {
+                if (view == null) continue;
+
+                float distance = Vector3.ProjectOnPlane(view.transform.position - center, Vector3.up).sqrMagnitude;
+                if (distance >= best) continue;
+
+                best = distance;
+                nearest = view;
+            }
+
+            if (nearest == null) return;
+
+            stagedCluster.Remove(nearest);
+            activeCluster.Add(nearest);
+            reinforcedThisCluster = true;
+
+            // 합류 자리는 현재 무리의 대형 안이다. 마감은 넉넉히 — 아무도 기다리지 않는 이동이다.
+            Vector3 slot = EnemyRing.PlaceInCluster(
+                center, activeCluster.Count - 1, Mathf.Max(clusterSize, 1), clusterRadius, minSpacing);
+
+            nearest.ScheduleApproach(slot, Time.time + stagedReturnDuration);
         }
 
         private EnemyDefinition PickDefinition()
@@ -934,11 +1129,20 @@ namespace EnemySpace
             foreach (var e in ring)
             {
                 if (restrict && !activeCluster.Contains(e)) continue;
+
+                // ⚠ 이미 클립을 든 적은 건너뛴다 — 기습자로 예약된 적이 여기서 상대로 뽑히면
+                // 그 기습은 Fire()의 BusyReasonBy에서 조용히 취소된다(§11-8: 고르는 곳이 둘인데 서로를 안 봤다).
+                // 기습자는 stageDistance(2.5m)에 서 있어 짧은 창에서 오히려 잘 뽑히므로 우연이 아니다.
+                // ⚠ BusyReasonBy로 넓게 막으면 안 된다 — 이동 중인 적까지 빠져 표적 선택이 좁아진다(§11-6).
+                if (e.HasPendingAction) continue;
+
                 candidateScratch.Add(e);
                 positionScratch.Add(e.transform.position);
             }
 
             // 무리가 비었는데 링에는 남아 있다(승격 직전 등) — 그때만 링 전체로 폴백한다.
+            // ⚠ 폴백에서는 HasPendingAction도 무시한다. 상대가 없으면 그 패턴에 벨 대상이 아예 없으므로
+            // "기습 하나를 지키려다 교전을 통째로 잃는" 거래가 된다 — 진행 중인 기습을 깨는 쪽이 낫다.
             if (candidateScratch.Count == 0)
             {
                 foreach (var e in ring)
@@ -962,16 +1166,25 @@ namespace EnemySpace
         /// 앵커는 플레이어 자식이므로 플레이어까지의 평면 거리가 곧 기본 간격이고, 패턴이 리치만큼 보정한다.
         /// 툴(<c>짝 에디터</c>·<c>슬라이서</c>)의 `기준 결투 거리`에 같은 값을 넣어야 그림이 일치한다.
         /// </summary>
-        private float DuelDistanceOf(Pattern template)
+        private float DuelDistanceOf(Pattern template, float relTime)
         {
-            // 앵커가 없으면 툴 기본값과 같은 1m로 본다 — 두 곳이 다르면 프리뷰와 게임이 어긋난다.
+            float baseDistance = DuelBaseDistance();
+
+            return template != null ? template.DuelGapAt(relTime, baseDistance) : baseDistance;
+        }
+
+        /// <summary>
+        /// 앵커가 정하는 기준 간격(m). <b>기준 거리의 단일 출처</b>이며 툴(<c>짝 에디터</c>)이
+        /// 씬에서 같은 식으로 읽어 간다 — 두 곳이 다르면 프리뷰와 게임이 어긋난다.
+        /// </summary>
+        public float DuelBaseDistance()
+        {
+            // 앵커가 없으면 툴 기본값과 같은 1m로 본다.
             float baseDistance = duelAnchor != null && duelAnchor.parent != null
                 ? Vector3.ProjectOnPlane(duelAnchor.position - duelAnchor.parent.position, Vector3.up).magnitude
                 : 1f;
 
-            if (baseDistance < 0.1f) baseDistance = 1f;
-
-            return Mathf.Max(baseDistance + (template != null ? template.DuelDistanceOffset : 0f), 0.1f);
+            return baseDistance < 0.1f ? 1f : baseDistance;
         }
 
         /// <summary>
@@ -985,20 +1198,42 @@ namespace EnemySpace
         /// 한 걸음이라도 마중 나와야 교전으로 보인다. 그 몫이 창 전체로 늘어져 기어가는 문제는
         /// <c>EnemyView.EarliestArrival</c>이 막는다(빨리 가서 서고 플레이어를 바라본다).</para>
         /// </summary>
-        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime)
+        private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime,
+                                       float impactTime)
         {
             Vector3 player = PlayerPosition;
-            float distance = DuelDistanceOf(template);
+
+            // 배치의 기준 시각. 커브가 있으면 <b>커브가 열리는 시각</b>이다 — 그 시점 값으로 자리를 잡고
+            // 그 시각까지 도착해야 이음매가 연속이다. 도착 시각(= 클립 시작/임팩트)으로 재면
+            // 접근이 끝난 자리와 커브 첫 키가 달라 커브가 열리는 순간 그 차이만큼 순간이동한다.
+            float baseRelTime = template != null && template.HasDuelDistanceCurve
+                ? template.DuelCurveStartTime
+                : arriveTime - impactTime;
+
+            float distance = DuelDistanceOf(template, baseRelTime);
+
+            // 커브가 열리기 전에 도착을 끝낸다. 앞당기는 것은 언제나 안전하다(EarliestArrival과 같은 규율).
+            if (template != null && template.HasDuelDistanceCurve)
+                playerArriveTime = Mathf.Min(playerArriveTime, impactTime + baseRelTime);
 
             // 상대가 없으면(디버그 경로) 플레이어는 제자리, 적 자리만 앞에 잡아 준다.
             if (opponent == null)
+            {
+                duelAxisOwner = null;
                 return new DuelPlan(player, player + Vector3.forward * distance, arriveTime,
-                                    ResolvePlayerArrival(playerArriveTime, 0f));
+                                    ResolvePlayerArrival(playerArriveTime, 0f),
+                                    Vector3.forward, impactTime, template);
+            }
 
             // '지금 위치'가 아니라 '갈 곳'으로 잡는다 — 배정 순간 적이 이동 중이면(후퇴 등)
             // transform.position은 곧 떠날 위치다. 후퇴에서는 "둘 다 제자리"로 계산되어 플레이어가 안 붙는다.
             Vector3 toEnemy = Vector3.ProjectOnPlane(opponent.Destination - player, Vector3.up);
-            Vector3 dir = toEnemy.sqrMagnitude < 1e-6f ? Vector3.forward : toEnemy.normalized;
+
+            // ⚠ 축은 순간 위치에서 파생시키지 않는다 — 커브가 관통(음수 간격)시켜 놓으면
+            // 그 자리에서 잰 toEnemy가 180° 뒤집혀 다음 패턴부터 커브 전체가 거울로 돈다(DuelGap.ResolveAxis).
+            Vector3 dir = DuelGap.ResolveAxis(toEnemy, opponent == duelAxisOwner ? duelAxis : Vector3.zero);
+            duelAxis = dir;
+            duelAxisOwner = opponent;
 
             Vector3 meet = player + toEnemy * playerShare;
             Vector3 playerTarget = meet - dir * (distance * playerShare);
@@ -1009,7 +1244,8 @@ namespace EnemySpace
             float travel = Vector3.ProjectOnPlane(playerTarget - player, Vector3.up).magnitude;
 
             return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime,
-                                ResolvePlayerArrival(playerArriveTime, travel));
+                                ResolvePlayerArrival(playerArriveTime, travel),
+                                dir, impactTime, template);
         }
 
         /// <summary>
@@ -1093,7 +1329,7 @@ namespace EnemySpace
             EnemyCue cue = pendingCues.Count > 0 ? pendingCues.Dequeue() : FallbackCue();
 
             // 임팩트 보정도 패턴이 정한다 — 플레이어 칼·카메라 큐와 같은 값을 읽어야 어긋날 수가 없다.
-            float impactTime = info.Deadline + (info.Template != null ? info.Template.ImpactOffset : 0f);
+            float impactTime = info.ImpactTime();
 
             var reservation = new Reservation
             {
@@ -1146,7 +1382,9 @@ namespace EnemySpace
                 ? r.attack.ResolveScheduleStart(r.impactTime, Time.time)
                 : r.impactTime;
 
-            float duelDistance = DuelDistanceOf(r.template);
+            // 표적 선택도 '도착 시각의 간격'을 쓴다 — 커브가 그 뒤 간격을 바꿔도
+            // 어느 적을 고를지는 붙는 순간의 거리로 정해야 창과 속도감이 맞는다(§11-2).
+            float duelDistance = DuelDistanceOf(r.template, arriveTime - r.impactTime);
 
             // 상대가 남아 있다 = 직전 교전이 처치로 끝나지 않았다 = 같은 적에게 다시 다가간다.
             // 이 경로만 거리가 창에 안 맞춰지므로 여기서만 이동 시간을 줄인다.
@@ -1168,7 +1406,8 @@ namespace EnemySpace
             var opponent = currentOpponent;
             r.opponent = opponent;
 
-            var plan = BuildDuelPlan(opponent, r.template, arriveTime, ResolvePlayerArriveTime(arriveTime, reapproach));
+            var plan = BuildDuelPlan(opponent, r.template, arriveTime,
+                                     ResolvePlayerArriveTime(arriveTime, reapproach), r.impactTime);
             lastPlan = plan;
             OnDuelScheduled?.Invoke(plan);
 
@@ -1218,10 +1457,6 @@ namespace EnemySpace
                 return;
             }
         }
-
-        /// <summary>보정 없는 기준선. 기즈모가 쓴다 — 특정 패턴에 묶이지 않는다.</summary>
-        private Vector3 DuelAnchorPosition() =>
-            duelAnchor != null ? duelAnchor.position : Center + Vector3.forward * 2f;
 
         private void HandlePatternComplete(PatternCompletionInfo info)
         {
@@ -1397,6 +1632,7 @@ namespace EnemySpace
                 ForgetFromClusters(opponent);
                 SpawnOneIntoStaged();
                 PromoteClusterIfEmpty();
+                ReinforceActiveIfThin();
             }
             else if (ring.Count < RingCapacity)
             {
@@ -1413,19 +1649,19 @@ namespace EnemySpace
         /// <para><b>반환된 절단 시각을 반드시 되받아 쓴다.</b> 절단은 임팩트 그 순간이라 정지 시간만큼
         /// 뒤로 밀리는데, 갱신을 빠뜨리면 <b>멈춘 프레임에 그대로 갈라져 정지가 안 보인다.</b></para>
         /// </summary>
-        public void ApplyHitStop(float duration)
+        public void ApplyHitStop(float duration, bool pushBurst = true)
         {
             for (int i = 0; i < pendingKills.Count; i++)
             {
                 var pending = pendingKills[i];
                 if (pending.opponent == null) continue;
 
-                pending.burstTime = pending.opponent.ApplyHitStop(duration, pending.burstTime);
+                pending.burstTime = pending.opponent.ApplyHitStop(duration, pending.burstTime, pushBurst);
             }
 
             // 살아남은 상대(사슬 중간 타격)도 같이 언다. 안 그러면 플레이어만 멈추고 적 리액션만 흐른다.
             // 죽는 중이면 위 순회가 이미 얼렸고 뷰의 hitStopped 가드가 두 번째 호출을 막는다.
-            currentOpponent?.ApplyHitStop(duration, 0f);
+            currentOpponent?.ApplyHitStop(duration, 0f, pushBurst);
         }
 
         /// <summary>사망 클립이 끝난 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
@@ -1465,7 +1701,7 @@ namespace EnemySpace
             {
                 for (int i = 0; i < set.PieceCount; i++)
                 {
-                    var go = Rent(set.PiecePrefabs[i], set.MaxPoolSize);
+                    var go = pool.Rent(set.PiecePrefabs[i], set.MaxPoolSize);
                     if (go == null) continue;
 
                     var piece = go.GetComponent<SlicePiece>();
@@ -1485,7 +1721,7 @@ namespace EnemySpace
         /// </summary>
         private void SwapToCorpse(EnemyView opponent, SliceSet set)
         {
-            var go = Rent(set.CorpsePrefab, set.MaxPoolSize);
+            var go = pool.Rent(set.CorpsePrefab, set.MaxPoolSize);
             if (go == null)
             {
                 ReleaseEnemy(opponent);
@@ -1496,7 +1732,7 @@ namespace EnemySpace
             if (corpse == null)
             {
                 Debug.LogWarning($"[EnemyDirector] '{set.name}'의 시체 프리팹에 CorpseView가 없습니다. 다시 구우세요.", set);
-                Release(go);
+                pool.Release(go);
                 ReleaseEnemy(opponent);
                 return;
             }
@@ -1581,330 +1817,13 @@ namespace EnemySpace
             TickPendingKills();
         }
 
-        /// <summary>수명이 다했거나 조각이 전부 잠든 시체를 회수한다.</summary>
-        private void RecycleCorpses()
-        {
-            for (int i = corpses.Count - 1; i >= 0; i--)
-            {
-                var corpse = corpses[i];
-                if (corpse.view == null) { corpses.RemoveAt(i); continue; }
-
-                bool expired = Time.time - corpse.time >= debrisLifetime;
-                if (!expired && !corpse.view.AllPiecesSettled) continue;
-
-                ReleaseCorpse(corpse);
-                corpses.RemoveAt(i);
-            }
-
-            // 시체 수 상한 — 래그돌 비용은 조각 수가 아니라 시체(스켈레톤) 수에 비례한다.
-            while (corpses.Count > maxActiveCorpses)
-            {
-                ReleaseCorpse(corpses[0]);
-                corpses.RemoveAt(0);
-            }
-        }
-
-        private void ReleaseCorpse(Corpse corpse)
-        {
-            if (corpse.view == null) return;
-
-            corpse.view.ResetState(frozenMeshPool);
-            Release(corpse.view.gameObject);
-        }
-
-        private void RecycleDissolved()
-        {
-            for (int i = ring.Count - 1; i >= 0; i--)
-            {
-                var view = ring[i];
-                if (view == null) { ring.RemoveAt(i); continue; }
-                if (!view.DissolveFinished) continue;
-
-                ring.RemoveAt(i);
-                ForgetFromClusters(view);
-                ReleaseEnemy(view);
-            }
-
-            if (currentOpponent != null && currentOpponent.DissolveFinished)
-            {
-                ForgetFromClusters(currentOpponent);
-                ReleaseEnemy(currentOpponent);
-                currentOpponent = null;
-            }
-
-        }
-
-        private void RecycleDebris()
-        {
-            for (int i = debris.Count - 1; i >= 0; i--)
-            {
-                var d = debris[i];
-                bool expired = Time.time - d.time >= debrisLifetime;
-                if (!expired && !AllSettled(d)) continue;
-
-                RecycleDebrisEntry(d);
-                debris.RemoveAt(i);
-            }
-        }
-
-        private static bool AllSettled(Debris d)
-        {
-            if (d.pieces == null || d.pieces.Count == 0) return true;
-
-            foreach (var p in d.pieces)
-            {
-                if (p != null && !p.IsSettled) return false;
-            }
-
-            return true;
-        }
-
-        private void RecycleDebrisEntry(Debris d)
-        {
-            if (d.pieces != null)
-            {
-                foreach (var p in d.pieces)
-                {
-                    if (p == null) continue;
-                    p.ResetState();
-                    Release(p.gameObject);
-                }
-            }
-
-            if (d.view != null) ReleaseEnemy(d.view);
-        }
-
-        private void EnforcePieceBudget()
-        {
-            int total = 0;
-            foreach (var d in debris) total += d.pieces != null ? d.pieces.Count : 0;
-
-            for (int i = 0; i < debris.Count && total > maxActivePieces; i++)
-            {
-                var d = debris[i];
-                total -= d.pieces != null ? d.pieces.Count : 0;
-                RecycleDebrisEntry(d);
-                debris.RemoveAt(i);
-                i--;
-            }
-        }
 
         private void ReleaseEnemy(EnemyView view)
         {
             view.ResetState();
-            Release(view.gameObject);
+            pool.Release(view.gameObject);
         }
 
-        // ── 프리팹별 풀 ──────────────────────────────────────────────────────────
-
-        private GameObject CreateInstance(GameObject prefab)
-        {
-            if (prefab == null) return null;
-
-            var go = Instantiate(prefab, poolRoot);
-            go.name = prefab.name;
-
-            var link = go.GetComponent<EnemyPooledInstance>();
-            if (link == null) link = go.AddComponent<EnemyPooledInstance>();
-            link.SourcePrefab = prefab;
-            return go;
-        }
-
-        private GameObject Rent(GameObject prefab, int maxSize)
-        {
-            if (prefab == null) return null;
-
-            maxSizes[prefab] = maxSize;
-
-            if (pools.TryGetValue(prefab, out var queue) && queue.Count > 0)
-            {
-                var pooled = queue.Dequeue();
-                pooled.transform.SetParent(null, false);
-                pooled.SetActive(true);
-                return pooled;
-            }
-
-            var created = CreateInstance(prefab);
-            if (created != null)
-            {
-                created.transform.SetParent(null, false);
-                created.SetActive(true);
-            }
-
-            return created;
-        }
-
-        private void Release(GameObject instance)
-        {
-            if (instance == null) return;
-
-            var link = instance.GetComponent<EnemyPooledInstance>();
-            if (link == null || link.SourcePrefab == null)
-            {
-                Destroy(instance);
-                return;
-            }
-
-            var prefab = link.SourcePrefab;
-            if (!pools.TryGetValue(prefab, out var queue))
-                pools[prefab] = queue = new Queue<GameObject>();
-
-            int cap = maxSizes.TryGetValue(prefab, out int m) ? m : int.MaxValue;
-            if (queue.Count >= cap)
-            {
-                Destroy(instance);
-                return;
-            }
-
-            instance.SetActive(false);
-            instance.transform.SetParent(poolRoot, false);
-            queue.Enqueue(instance);
-        }
-
-        // ── 기즈모 (에디터 전용) ─────────────────────────────────────────────────
-
-#if UNITY_EDITOR
-        /// <summary>
-        /// 반경은 카메라 화각·격자 크기와 같이 봐야 정해진다. 숫자만 봐선 못 정하므로 씬 뷰에 그린다.
-        /// <b>편집 중에도 그린다</b> — 플레이 없이 반경을 잡아야 하기 때문.
-        /// </summary>
-        /// <summary>
-        /// 무리 상태. <b>집결지가 고정인지, 몇 명이 모였는지, 누가 아직 걸어오는 중인지</b>를 그린다 —
-        /// 집결지가 프레임마다 움직이면 그게 곧 예전의 우르르 이동 버그다.
-        /// </summary>
-        private void DrawClusterGizmos()
-        {
-            Vector3 activeCenter = ClusterCenterOf(activeCluster, PlayerPosition);
-
-            Gizmos.color = Color.red;
-            DrawCircle(activeCenter, clusterRadius);
-
-            // 집결지 — 무리가 찰 때까지 여기 고정이다.
-            Gizmos.color = Color.cyan;
-            DrawCircle(stagedCenter, clusterRadius);
-            Gizmos.DrawLine(PlayerPosition, stagedCenter);
-
-            // 아직 걸어오는 중인 적: 현재 위치 → 자기 자리.
-            Gizmos.color = Color.green;
-            foreach (var e in stagedCluster)
-            {
-                if (e == null) continue;
-                Gizmos.DrawLine(e.transform.position, e.Destination);
-            }
-
-            UnityEditor.Handles.color = Color.cyan;
-            UnityEditor.Handles.Label(stagedCenter + Vector3.up * 1.2f,
-                $"집결 {stagedCluster.Count}/{clusterSize}   dist={Vector3.Distance(PlayerPosition, stagedCenter):0.0}m\n" +
-                $"active {activeCluster.Count}   desired={lastDesiredDistance:0.0}m");
-
-            if (!wanderEnabled) return;
-
-            // 배회 궤도 — 플레이어 주위 standoff 원과, 각 적이 자기 슬롯으로 가는 선.
-            Gizmos.color = Color.yellow;
-            DrawCircle(PlayerPosition, standoffDistance);
-
-            int count = Mathf.Max(activeCluster.Count, 1);
-            for (int i = 0; i < activeCluster.Count; i++)
-            {
-                var view = activeCluster[i];
-                if (view == null) continue;
-
-                bool engaged = view == currentOpponent;
-                Gizmos.color = engaged ? Color.red : (view.Wandering ? Color.yellow : Color.grey);
-
-                if (engaged) continue;
-
-                Vector3 slot = EnemyRing.PickOrbitSlot(
-                    PlayerPosition, i, count, standoffDistance, orbitPhase,
-                    Center, stageRadius, JitterOf(view, orbitJitter));
-
-                Gizmos.DrawLine(view.transform.position, slot);
-                Gizmos.DrawWireSphere(slot, 0.2f);
-
-                // 배회를 안 하고 있으면 이유가 뷰 안에 있다 — 라벨로 끌어낸다.
-                if (!view.Wandering)
-                    UnityEditor.Handles.Label(view.transform.position + Vector3.up * 1.6f, $"정지({view.Current})");
-            }
-        }
-
-        void OnDrawGizmos()
-        {
-            if (!drawGizmos) return;
-
-            Vector3 center = Center;
-
-            // 무대 경계. 적은 이 원 '안'에 흩어진다.
-            Gizmos.color = gizmoRingColor;
-            DrawCircle(center, stageRadius);
-
-            var faded = gizmoRingColor;
-            faded.a *= 0.35f;
-            Gizmos.color = faded;
-            DrawCircle(center, stageRadius * 0.5f);
-
-            // 플레이어 주변 스폰 금지 반경 — 코앞에 튀어나오는지 눈으로 본다.
-            Gizmos.color = gizmoDuelColor;
-            DrawCircle(PlayerPosition, minPlayerDistance);
-
-            UnityEditor.Handles.color = gizmoRingColor;
-            UnityEditor.Handles.Label(center + Vector3.up * 0.5f,
-                $"stage r={stageRadius:0.0}  count={RingCapacity}  spacing={minSpacing:0.0}m\n" +
-                $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s" +
-                (clusterEnabled ? $"\ncluster {clusterSize}  r={clusterRadius:0.0}  move={clusterMoveSpeed:0.0}m/s" : ""));
-
-            if (!Application.isPlaying) return;
-
-            if (clusterEnabled) DrawClusterGizmos();
-
-            foreach (var e in ring)
-            {
-                if (e == null) continue;
-                Gizmos.color = gizmoRingColor;
-                Gizmos.DrawWireCube(e.transform.position, Vector3.one * 0.4f);
-            }
-
-            if (currentOpponent != null)
-            {
-                Gizmos.color = Color.red;
-                Gizmos.DrawWireCube(currentOpponent.transform.position, Vector3.one * 0.8f);
-            }
-
-            // 수렴 계획 — 둘이 어디서 만나기로 했는지. 숫자로는 안 보이는 문제라 그린다.
-            if (lastPlan.HasValue)
-            {
-                var plan = lastPlan.Value;
-                Vector3 meet = (plan.PlayerPosition + plan.EnemyPosition) * 0.5f;
-
-                Gizmos.color = new Color(0.4f, 1f, 0.6f);
-                Gizmos.DrawWireSphere(plan.PlayerPosition, 0.25f);
-                Gizmos.DrawWireSphere(plan.EnemyPosition, 0.25f);
-                Gizmos.DrawLine(plan.PlayerPosition, plan.EnemyPosition);
-
-                UnityEditor.Handles.color = new Color(0.4f, 1f, 0.6f);
-                UnityEditor.Handles.Label(meet + Vector3.up * 0.6f,
-                    $"결투 {Vector3.Distance(plan.PlayerPosition, plan.EnemyPosition):0.00}m  " +
-                    $"(도착까지 {plan.ArriveTime - Time.time:+0.00;-0.00;0.00}s)");
-            }
-        }
-
-        private static void DrawCircle(Vector3 center, float radius, int segments = 48)
-        {
-            if (radius <= 0f) return;
-
-            Vector3 prev = EnemyRing.AngleToPosition(center, 0f, radius);
-            for (int i = 1; i <= segments; i++)
-            {
-                Vector3 next = EnemyRing.AngleToPosition(center, 360f * i / segments, radius);
-                Gizmos.DrawLine(prev, next);
-                prev = next;
-            }
-        }
-#endif
     }
 
-    /// <summary>풀 반납 시 어느 프리팹에서 나왔는지 되짚기 위한 표식.</summary>
-    public class EnemyPooledInstance : MonoBehaviour
-    {
-        public GameObject SourcePrefab;
-    }
 }

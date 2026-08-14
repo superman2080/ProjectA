@@ -2588,7 +2588,13 @@ MonoBehaviour:
   speedSmoothing: 0.12
   walkEnterSpeed: 0.3
   walkExitSpeed: 0.12
-  wanderArriveDistance: 0.02
+  upperBodyLayerName: Upper Body Layer
+  upperBodyStateName: UpperIdle
+  upperBodyPlaceholder: {fileID: 7400000, guid: 822a0587b5524dd419b0930465021ca6, type: 2}
+  upperBodyIdleClips:
+  - {fileID: 7400000, guid: 822a0587b5524dd419b0930465021ca6, type: 2}
+  - {fileID: 7400000, guid: 6c6efaacf48be9e43a6b5d4db993bb81, type: 2}
+  upperBodyBlendDuration: 0.18
   moveSpeed: 3
   reactionHoldDuration: 0.6
   gazeTurnSpeed: 360

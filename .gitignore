@@ -73,3 +73,7 @@ crashlytics-build.properties
 
 # Weapon Bone Bake 복원 지점 — 로컬 전용(69MB). 굽기 전 원본은 git 히스토리에도 남는다.
 Assets/05. Animations/Clip/_Backup/
+
+# Unity 씬 복구 파일 — 로컬 전용(에디터가 크래시 시 만든다).
+Assets/_Recovery/
+Assets/_Recovery.meta

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PatternSpace;
 using UnityEngine;
@@ -143,12 +143,6 @@ public class PatternHandler : MonoBehaviour
         }
     }
 #endif
-
-    /// <summary>
-    /// Good 판정 윈도우(초). 외부 연출이 <c>Deadline = LastNodeTime + GoodWindow</c>로
-    /// 성패 확정 시각을 만드는 데 쓴다 — 표적 절단·칼날 임팩트가 맞춰지는 그 시각이다.
-    /// </summary>
-    public float GoodWindow => goodWindow;
 
     /// <summary>스트로크(마우스 드래그 또는 키보드 연속 입력) 진행 중 여부.</summary>
     public bool IsDragging { get; private set; }
@@ -335,8 +329,9 @@ public class PatternHandler : MonoBehaviour
             }
             else
             {
-                float exposureDuration = exposureDurations != null && i < exposureDurations.Count ? exposureDurations[i] : DefaultExposureDuration;
-                shrinkDuration = ComputeFallDuration(pointIndex, exposureDuration);
+                // 링은 Point 자리에서 크기만 줄어들 뿐 이동하지 않으므로 노출 시간이 곧 수축 시간이다
+                // (낙하 노드 시절엔 화면 기하로 행마다 속도를 역산해야 했다).
+                shrinkDuration = exposureDurations != null && i < exposureDurations.Count ? exposureDurations[i] : DefaultExposureDuration;
                 spawnOffset = active.GetInputTime(i) - shrinkDuration;
             }
 
@@ -401,16 +396,6 @@ public class PatternHandler : MonoBehaviour
         canvasCamera = canvas != null ? canvas.worldCamera : null;
     }
 
-    /// <summary>
-    /// 노출 시간을 그대로 수축 시간으로 돌려준다. 링은 Point 자리에서 크기만 줄어들 뿐 이동하지 않으므로
-    /// 화면 기하가 개입할 여지가 없다 — 낙하 노드 시절 행마다 속도를 역산하던 계산은 사라졌다.
-    /// <paramref name="pointIndex"/>는 쓰이지 않지만 굽기 툴(PatternChartWindow)이 호출하는 시그니처라 유지한다.
-    /// </summary>
-    public float ComputeFallDuration(int pointIndex, float exposureDuration)
-    {
-        return exposureDuration;
-    }
-
     private void OnPointPressed(int index)
     {
         if (!IsDragging)
@@ -455,7 +440,7 @@ public class PatternHandler : MonoBehaviour
         return (rowA + rowB) / 2 * 3 + (colA + colB) / 2;
     }
 
-    private void OnPointReleased(int index)
+    private void OnPointReleased(int _)
     {
         EndStroke();
     }
@@ -661,7 +646,8 @@ public class PatternHandler : MonoBehaviour
         // Remove가 먼저 실행됐으므로 이 시점의 선두(activePatterns[0])가 곧 다음 대기 패턴이다.
         // 다음 패턴이 없으면(채보상 공백) -1f → 겹침 방지 속도 제약 없음.
         float nextLastNodeTime = activePatterns.Count > 0 ? activePatterns[0].LastNodeTime : -1f;
-        OnPatternComplete?.Invoke(new PatternCompletionInfo(pattern.AllCorrect, pattern.Template, pattern.LastNodeTime, nextLastNodeTime));
+        OnPatternComplete?.Invoke(new PatternCompletionInfo(
+            pattern.AllCorrect, pattern.Template, pattern.LastNodeTime, nextLastNodeTime, pattern.Deadline));
 
         // 키보드 스트로크는 여기서 끝낸다. 마우스 드래그는 끊지 않는다 —
         // 다음 패턴으로 이어 긋는 중일 수 있고, connectedIndices는 아래에서 어차피 비워지므로 이어져도 안전하다.

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PatternSpace;
 using SliceSpace;
 using UnityEngine;
@@ -76,15 +76,23 @@ namespace EnemySpace
 
         [Tooltip("Walk → Idle 전환 속도(m/s). enter보다 작아야 경계에서 깜빡이지 않는다.")]
         [SerializeField] private float walkExitSpeed = 0.12f;
-        [Tooltip("배회 목표에 이 거리(m) 안이면 멈춘다.\n" +
-                 "⚠ 궤도 슬롯은 계속 움직이므로 '도착'이라는 게 없다 — 크게 잡으면 데드존 안에서 걷다 서다를 반복한다.\n" +
-                 "떨림만 막을 만큼 작게 둘 것.")]
-        [SerializeField] private float wanderArriveDistance = 0.02f;
+
+        [Header("Upper Body (배회 중 상체 고정)")]
+        [Tooltip("배회 중 상체를 덮을 마스크 레이어 이름. 못 찾으면 이 기능만 조용히 꺼진다(배선 누락 규율).\n" +
+                 "⚠ 왜 필요한가 — Walk 블렌드 트리의 WalkForward는 칼을 '한 손'으로, 나머지 _HS 셋은 '두 손'으로 잡는다.\n" +
+                 "블렌드는 본 회전을 가중 평균하므로 대각선 이동에서 두 파지 사이의 어중간한 포즈가 나온다.\n" +
+                 "상체를 클립 하나로 덮으면 파지가 섞일 수가 없다.")]
+        [SerializeField] private string upperBodyLayerName = "Upper Body Layer";
+        [SerializeField] private string upperBodyStateName = "UpperIdle";
+        [Tooltip("UpperIdle 스테이트에 물려 있는 placeholder. 런타임에 아래 후보 중 하나로 교체된다.")]
+        [SerializeField] private AnimationClip upperBodyPlaceholder;
+        [Tooltip("배회에 들어갈 때마다 하나를 뽑는다(직전 것은 피한다). 비면 placeholder가 그대로 쓰인다.")]
+        [SerializeField] private AnimationClip[] upperBodyIdleClips;
+        [Tooltip("상체 레이어 웨이트를 올리고 내리는 시간(초). 0이면 파지가 순간이동한다.")]
+        [SerializeField] private float upperBodyBlendDuration = 0.18f;
+
         [Tooltip("결투 위치로 접근할 때의 이동 속도(m/s). 도착 시각까지 시간이 남으면 이 속도로 먼저 가서 선다.")]
         [SerializeField] private float moveSpeed = 3f;
-
-        /// <summary>이 적이 접근에 쓰는 속도(m/s). 디렉터가 "창 안에 닿을 수 있는가"를 판단할 때 같은 값을 봐야 한다.</summary>
-        public float MoveSpeed => moveSpeed;
         [Tooltip("리액션(피격·회피)이 로코모션에 덮이지 않게 지키는 시간(초). 리액션 클립 길이에 맞춘다.")]
         [SerializeField] private float reactionHoldDuration = 0.6f;
 
@@ -108,6 +116,12 @@ namespace EnemySpace
         [Header("Dissolve")]
         [Tooltip("소멸 셰이더의 노출 프로퍼티 이름. Assets/Shaders/Dissolve/Dissolve.shadergraph 기준.")]
         [SerializeField] private string dissolveProperty = "_Dissolve";
+
+        [Header("Highlight")]
+        [Tooltip("강조(아웃라인) 중에 옮겨 놓을 레이어 이름. URP의 RenderObjects 피처가 이 레이어만 골라\n" +
+                 "아웃라인 머티리얼로 한 번 더 그린다(Assets/Settings/PC_Renderer.asset).\n" +
+                 "⚠ 레이어를 못 찾으면 강조 기능만 조용히 꺼진다(배선 누락 규율).")]
+        [SerializeField] private string highlightLayerName = "AmbushOutline";
 
         /// <summary>현재 단계. 디렉터가 배정 가능 여부를 판단하는 데 쓴다.</summary>
         public Phase Current { get; private set; } = Phase.RingIdle;
@@ -194,6 +208,13 @@ namespace EnemySpace
         private float dissolveDuration;
         private bool dissolving;
 
+        // 상체 마스크 레이어. 레이어를 못 찾으면 -1이고 그 상태로 기능만 꺼진다.
+        private int upperBodyLayerIndex = -1;
+        private int upperBodyStateHash;
+        private float upperBodyWeight;
+        private bool upperBodyOn;        // 지금 상체를 덮기로 했는가(웨이트는 이 목표를 뒤따른다)
+        private int lastUpperClipIndex = -1;
+
         private AnimatorOverrideController overrideController;
         private int attackStateHash;
         private int attackSpeedHash;
@@ -204,6 +225,11 @@ namespace EnemySpace
         private Renderer[] renderers;
         private int dissolveId;
 
+        // 강조. 레이어를 못 찾으면 -1이고 그 상태로 기능만 꺼진다(upperBodyLayerIndex와 같은 규율).
+        private int highlightLayer = -1;
+        private int normalLayer;
+        private bool highlighted;
+
         void Awake()
         {
             if (animator == null) animator = GetComponentInChildren<Animator>();
@@ -213,9 +239,17 @@ namespace EnemySpace
             deathStateHash = Animator.StringToHash(deathStateName);
             deathSpeedHash = Animator.StringToHash(deathSpeedParam);
             parrySpeedHash = Animator.StringToHash(parrySpeedParam);
+            upperBodyStateHash = Animator.StringToHash(upperBodyStateName);
             dissolveId = Shader.PropertyToID(dissolveProperty);
             renderers = GetComponentsInChildren<Renderer>(true);
             propertyBlock = new MaterialPropertyBlock();
+
+            // ⚠ 원래 레이어는 여기서 딱 한 번 잡는다. 강조를 켤 때 읽으면 이미 켜진 상태에서 또 켰을 때
+            // 강조 레이어 자신이 '원래 값'으로 기록돼 영영 원복이 안 된다.
+            normalLayer = gameObject.layer;
+            highlightLayer = string.IsNullOrEmpty(highlightLayerName)
+                ? -1
+                : LayerMask.NameToLayer(highlightLayerName);
 
             // 인스턴스마다 따로 만든다 — 공유하면 동시에 공격하는 두 적이 서로의 클립을 덮어쓴다.
             if (animator != null && animator.runtimeAnimatorController != null)
@@ -223,6 +257,11 @@ namespace EnemySpace
                 overrideController = new AnimatorOverrideController(animator.runtimeAnimatorController);
                 animator.runtimeAnimatorController = overrideController;
             }
+
+            // 레이어가 없으면 -1로 남겨 기능만 끈다 — 나머지 로코모션은 그대로 돈다.
+            if (animator != null && !string.IsNullOrEmpty(upperBodyLayerName))
+                upperBodyLayerIndex = animator.GetLayerIndex(upperBodyLayerName);
+            if (upperBodyLayerIndex >= 0) animator.SetLayerWeight(upperBodyLayerIndex, 0f);
         }
 
         /// <summary>풀에서 꺼내 쓸 때의 초기화. 링 위치·각도는 디렉터가 정한다.</summary>
@@ -336,16 +375,15 @@ namespace EnemySpace
         public bool IsIdle => IsFreeBy(Time.time);
 
         /// <summary>
-        /// <paramref name="t"/> 시점까지 지금의 이동·리액션이 끝나 <b>다른 일을 시킬 수 있는가</b>.
+        /// <b>클립이 예약돼 있는가</b>(공격 또는 리액션). <c>IsIdle</c>보다 <b>좁다</b> —
+        /// 이동 중은 포함하지 않는다.
         ///
-        /// <para><b>기습의 사전 접근이 이것을 요구한다.</b> 사전 접근은 창이 열리는 프레임에 이동을 걸고,
-        /// 그 창의 시작이 곧 플레이어 도착 시각(= 적 도착 시각)이다 — 그래서 <see cref="IsIdle"/>로 물으면
-        /// <b>자기가 켠 <c>moving</c>에 자기가 걸린다</b>(docs/EnemyAmbushDodge 정정 4).
-        /// 물어야 할 것은 "지금 노는가"가 아니라 "그때까지 끝나는가"다.</para>
-        ///
-        /// <para>사유까지 필요하면 <see cref="BusyReasonBy"/>를 쓴다 — 이건 그것의 bool 뷰다.</para>
+        /// <para><b>⚠ 좁은 것이 요구다.</b> 이 값을 쓰는 곳은 상대 배정(<c>EnemyDirector.TakeTargetForWindow</c>)이고,
+        /// 거기서 <c>BusyReasonBy</c>로 넓게 막으면 <b>이동 중인 적까지 후보에서 빠진다</b> —
+        /// 무리 집결·링 복귀·등장 걸어오기는 상시 일어나는 정상 상태라(§11-6) 표적 선택이 통째로 좁아진다.
+        /// 막아야 하는 것은 <b>이미 자기 클립을 든 적</b> 하나뿐이다.</para>
         /// </summary>
-        public bool ReadyBy(float t) => IsFreeBy(t);
+        public bool HasPendingAction => hasPendingAttack || hasPendingReaction;
 
         /// <summary>진행 중인 이동이 끝나는 절대 시각. 이동이 없으면 −1. <b>진단용</b> — 어느 이동이 자격을 막는지 갈라 보려면 이 값이 필요하다.</summary>
         public float MoveEndsAt => moving ? moveEnd : -1f;
@@ -382,6 +420,7 @@ namespace EnemySpace
             // 배속을 1로 되돌린다 — 0으로 남기면 다음에 Walk에 들어갈 때 한 프레임 얼어붙는다.
             if (animator != null && !string.IsNullOrEmpty(walkSpeedParam)) animator.SetFloat(walkSpeedParam, 1f);
 
+            SetUpperBody(false); // 배회가 외부에서 끊겨도 웨이트가 남지 않게
             ApplyLocomotion();
         }
 
@@ -391,6 +430,10 @@ namespace EnemySpace
         /// <summary>
         /// <paramref name="t"/> 시점의 자유 여부. <b>배회 조건과 기습 조건이 같은 술어를 쓴다</b> —
         /// 하나뿐이라 둘이 어긋날 수가 없다(<see cref="IsIdle"/>은 <c>t = 지금</c>인 특수해다).
+        ///
+        /// <para><b>⚠ "지금 노는가"가 아니라 "그때까지 끝나는가"를 물어야 한다.</b> 기습의 사전 접근은
+        /// 창이 열리는 프레임에 이동을 걸고 그 창의 시작이 곧 도착 시각이라,
+        /// <see cref="IsIdle"/>로 물으면 <b>자기가 켠 <c>moving</c>에 자기가 걸린다</b>(docs/EnemyAmbushDodge 정정 4).</para>
         /// </summary>
         private bool IsFreeBy(float t) => BusyReasonBy(t) == null;
 
@@ -468,6 +511,77 @@ namespace EnemySpace
             }
 
             CrossFadeSticky(walkingNow ? walkStateName : idleStateName);
+
+            // 상체를 덮을지는 '지금 배회 걷는 중인가' 하나로 정한다 — 새 판정을 만들지 않는다.
+            // walkingNow는 이미 히스테리시스를 통과한 값이라 경계에서 떨지 않는다.
+            SetUpperBody(walkingNow);
+        }
+
+        /// <summary>
+        /// 배회 중 상체를 Idle 클립 하나로 덮을지 정한다. <b>진입 순간에만</b> 클립을 뽑는다 —
+        /// 매 프레임 뽑으면 포즈가 떨리고, 스폰 때 한 번만 뽑으면 그 적은 곡 내내 같은 자세다.
+        ///
+        /// <para><b>⚠ 공격·사망·리액션에서는 무조건 내린다.</b> 그 클립들은 상체가 전부라
+        /// 마스크가 덮으면 <b>칼을 휘두르지 않는 그림</b>이 된다. 조건은 <see cref="ApplyLocomotion"/>이
+        /// 쓰는 것과 <b>같은 식</b>이다 — 새 술어를 만들지 않는다.</para>
+        /// </summary>
+        private void SetUpperBody(bool want)
+        {
+            if (upperBodyLayerIndex < 0 || animator == null) return;
+
+            if (Current == Phase.Windup || Current == Phase.Dying || Time.time < reactionUntil)
+                want = false;
+
+            if (want == upperBodyOn) return;
+            upperBodyOn = want;
+
+            if (!want) return;
+
+            // 진입 — 이번 배회에 쓸 클립을 하나 뽑아 슬롯에 끼운다.
+            var clip = NextUpperIdleClip();
+            if (clip != null && overrideController != null && upperBodyPlaceholder != null)
+                overrideController[upperBodyPlaceholder] = clip;
+
+            if (animator.HasState(upperBodyLayerIndex, upperBodyStateHash))
+                animator.CrossFadeInFixedTime(upperBodyStateHash, crossFadeDuration, upperBodyLayerIndex);
+        }
+
+        /// <summary>
+        /// 상체 레이어 웨이트를 목표로 밀어 준다. <b>배회 밖에서도 돌아야 한다</b> —
+        /// 배회가 끝나는 순간 <see cref="TickWander"/>는 즉시 return하므로 거기 두면 웨이트가 1에 굳는다.
+        /// </summary>
+        private void TickUpperBody()
+        {
+            if (upperBodyLayerIndex < 0 || animator == null) return;
+
+            // 공격/사망/리액션이 시작되면 배회 신호를 기다리지 않고 즉시 목표를 내린다.
+            if (upperBodyOn && (Current == Phase.Windup || Current == Phase.Dying || Time.time < reactionUntil))
+                upperBodyOn = false;
+
+            float target = upperBodyOn ? 1f : 0f;
+            if (Mathf.Approximately(upperBodyWeight, target)) return;
+
+            float step = Time.deltaTime / Mathf.Max(upperBodyBlendDuration, 0.0001f);
+            upperBodyWeight = Mathf.MoveTowards(upperBodyWeight, target, step);
+            animator.SetLayerWeight(upperBodyLayerIndex, upperBodyWeight);
+        }
+
+        /// <summary>
+        /// 상체에 쓸 Idle 클립을 고른다. 후보가 둘 이상이면 <b>직전 것을 피해</b> 뽑는다 —
+        /// 같은 게 연달아 나오면 랜덤이 아니라 고장으로 보인다
+        /// (<c>CharacterActionPlayer.NextHitClip</c>·<c>DodgeDirector.lastClip</c>과 같은 관례).
+        /// </summary>
+        private AnimationClip NextUpperIdleClip()
+        {
+            if (upperBodyIdleClips == null || upperBodyIdleClips.Length == 0) return null;
+            if (upperBodyIdleClips.Length == 1) { lastUpperClipIndex = 0; return upperBodyIdleClips[0]; }
+
+            int index = Random.Range(0, upperBodyIdleClips.Length);
+            if (index == lastUpperClipIndex)
+                index = (index + 1) % upperBodyIdleClips.Length;
+
+            lastUpperClipIndex = index;
+            return upperBodyIdleClips[index];
         }
 
         private void ApplyBlend(Vector2 value)
@@ -631,6 +745,17 @@ namespace EnemySpace
         /// </summary>
         public void ScheduleApproach(Vector3 to, float latest)
             => ScheduleMove(transform.position, to, Time.time, EarliestArrival(transform.position, to, latest));
+
+        /// <summary>
+        /// 지금 출발하면 <paramref name="to"/>까지 가는 데 걸리는 시간(초). <b>도착 가능성을 밖에서 묻기 위한 것</b> —
+        /// 기습 후보를 고를 때 "먼가"가 아니라 "제때 닿는가"를 물어야 하기 때문이다(거리는 무리 배치에 따라 3~8m로 변한다).
+        /// </summary>
+        public float TravelTime(Vector3 to)
+        {
+            if (moveSpeed <= 0f) return float.MaxValue;
+
+            return Vector3.ProjectOnPlane(to - transform.position, Vector3.up).magnitude / moveSpeed;
+        }
 
         private float EarliestArrival(Vector3 from, Vector3 to, float latest)
         {
@@ -854,6 +979,7 @@ namespace EnemySpace
 
             TickMove();
             TickWander();    // 진짜 이동이 없을 때만 실제로 움직인다(CanWander가 moving을 거른다)
+            TickUpperBody(); // ⚠ TickWander 안이 아니다 — 배회가 끝나도 웨이트는 계속 내려가야 한다
             TickGaze();      // 이동이 없을 때만 실제로 돈다(TickMove가 회전을 소유한다)
             TryStartAttack();
             TryStartReaction();
@@ -1011,7 +1137,7 @@ namespace EnemySpace
         /// <para><b>새 절단 시각을 돌려준다.</b> 배속은 이 뷰가 알고 시각은 <c>EnemyDirector</c>가 드는 구조라,
         /// 반환값으로 <c>PendingKill.burstTime</c>을 갱신하지 않으면 <b>둘이 갈라진다</b>.</para>
         /// </summary>
-        public float ApplyHitStop(float duration, float burstTime)
+        public float ApplyHitStop(float duration, float burstTime, bool pushBurst = true)
         {
             if (animator == null || duration <= 0f || hitStopped) return burstTime;
 
@@ -1029,7 +1155,9 @@ namespace EnemySpace
             animator.SetFloat(dying ? deathSpeedHash : attackSpeedHash, 0f);
 
             // 절단은 임팩트 바로 그 순간이라 정지 시간만큼 밀어야 한다. 살아 있는 적은 밀 절단이 없다.
-            return dying ? burstTime + duration : burstTime;
+            // ⚠ pushBurst가 false면 밀지 않는다 — 마지막 베기 이전의 스톱(다중 히트스톱)이 그 경우다.
+            // 스톱 수만큼 밀면 몸이 갈라지는 순간이 마지막 칼질보다 한참 뒤가 된다.
+            return dying && pushBurst ? burstTime + duration : burstTime;
         }
 
         /// <summary>
@@ -1123,6 +1251,33 @@ namespace EnemySpace
             }
         }
 
+        /// <summary>
+        /// 아웃라인 강조를 켜고 끈다. <b>이 적이 지금 특별하다</b>는 표시 — 현재는 기습자에게만 쓴다.
+        ///
+        /// <para><b>머티리얼을 안 만진다.</b> 서브트리 레이어만 바꾸면 URP의 <c>RenderObjects</c> 피처가
+        /// 그 레이어를 골라 아웃라인 머티리얼로 한 번 더 그린다 — 프리팹·머티리얼·셰이더 어느 것도 건드리지 않는다.
+        /// 색·두께 튜닝은 전부 그 머티리얼 인스펙터 한 곳에 모인다.</para>
+        ///
+        /// <para><b>⚠ 끄는 것을 빠뜨리면 강조가 켜진 채 풀에 반납되고 다음 대여가 빛나는 적으로 나온다</b>
+        /// (<c>dissolve</c>·상체 웨이트와 같은 부류의 함정). 그래서 <see cref="ResetState"/>도 이걸 부른다.</para>
+        /// </summary>
+        public void SetHighlight(bool on)
+        {
+            if (highlightLayer < 0) return;      // 레이어 미설정 — 기능만 꺼진다
+            if (highlighted == on) return;
+
+            highlighted = on;
+            SetLayerRecursive(transform, on ? highlightLayer : normalLayer);
+        }
+
+        private static void SetLayerRecursive(Transform target, int layer)
+        {
+            target.gameObject.layer = layer;
+
+            for (int i = 0; i < target.childCount; i++)
+                SetLayerRecursive(target.GetChild(i), layer);
+        }
+
         private void SetRenderersEnabled(bool value)
         {
             if (renderers == null) return;
@@ -1144,7 +1299,12 @@ namespace EnemySpace
             hasPendingReaction = false;
             attackStarted = false;
             Current = Phase.RingIdle;
+            upperBodyOn = false;
+            upperBodyWeight = 0f;
+            lastUpperClipIndex = -1;
+            if (animator != null && upperBodyLayerIndex >= 0) animator.SetLayerWeight(upperBodyLayerIndex, 0f);
             transform.localScale = Vector3.one;
+            SetHighlight(false);   // 안 끄면 다음 대여가 빛나는 적으로 나온다
             SetDissolveAmount(0f);
             SetRenderersEnabled(true);
         }

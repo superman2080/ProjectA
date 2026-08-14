@@ -3227,6 +3227,7 @@ MonoBehaviour:
   handler: {fileID: 0}
   animator: {fileID: 4475183906137064827}
   enemyDirector: {fileID: 0}
+  hitStopDirector: {fileID: 0}
   attackStateAName: Attack_A
   attackStateBName: Attack_B
   attackLayerName: Attack Layer
@@ -3243,9 +3244,10 @@ MonoBehaviour:
   quickshiftStateName: Quickshift
   quickshiftSpeedParam: QuickshiftSpeed
   quickshiftClip: {fileID: 7400000, guid: 444be3fccd1081146bb844a62b44a6ed, type: 2}
+  quickshiftBackClip: {fileID: 7400000, guid: 57e9cb9b7517d8649a0cdf45a7a3485c, type: 2}
   sprintSpeedParam: SprintSpeed
-  sprintClip: {fileID: 7400000, guid: c6ce09bd2c3f38645b61adeccab81781, type: 2}
   sprintReferenceSpeed: 2
+  sprintSpeedRange: {x: 0.6, y: 2}
   minSprintTravelSpeed: 2
   minQuickshiftSpeed: 0.6
   convergeMinDistance: 1.5
@@ -3304,6 +3306,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCombatMover
   enemyDirector: {fileID: 0}
+  actionPlayer: {fileID: 3187604648233032263}
   turnDuration: 0.1
 --- !u!1 &5192546819066341882
 GameObject:

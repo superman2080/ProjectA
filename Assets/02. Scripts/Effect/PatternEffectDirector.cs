@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using EnemySpace;
 using PatternSpace;
 using UnityEngine;
@@ -79,11 +79,8 @@ public class PatternEffectDirector : MonoBehaviour
     private readonly List<AlignedEffect> aligned = new List<AlignedEffect>();
     private readonly List<CanvasEffectView> active = new List<CanvasEffectView>();
 
-    // 프리팹별 자체 큐. Pool(PoolKey 단일 매핑)은 프리팹 수 증가에 맞지 않는다(EffectManager·SliceTargetDirector 선례).
-    private readonly Dictionary<GameObject, Queue<CanvasEffectView>> pools = new Dictionary<GameObject, Queue<CanvasEffectView>>();
-    private readonly Dictionary<GameObject, int> maxSizes = new Dictionary<GameObject, int>();
-
-    private Transform poolRoot;
+    // 프리팹별 뷰 풀. EffectManager와 같은 구현을 공유한다.
+    private CanvasEffectPool pool;
     private int nextToken;
 
     // 히트스톱 창. 창 안에서 새로 뜨는 이펙트도 얼려야 그놈만 혼자 흐르지 않는다.
@@ -97,7 +94,8 @@ public class PatternEffectDirector : MonoBehaviour
         var rootGo = new GameObject("[PatternEffectPool]");
         rootGo.transform.SetParent(transform, false);
         rootGo.SetActive(false);
-        poolRoot = rootGo.transform;
+        // 월드 이펙트는 앵커를 따라가느라 부모가 바뀌므로, 뷰가 돌아올 자리를 스스로 알아야 한다.
+        pool = new CanvasEffectPool(rootGo.transform, assignPoolParent: true);
 
         bladePath = new BladePath(playerWeapon);
     }
@@ -297,7 +295,7 @@ public class PatternEffectDirector : MonoBehaviour
         Transform anchor = ResolveAnchor(cue.Anchor);
         if (anchor == null) return;   // 배선이 비면 이 큐만 조용히 빠진다
 
-        var view = Rent(cue.Prefab, cue.PoolSize);
+        var view = pool.Rent(cue.Prefab, cue.PoolSize);
         if (view == null) return;
 
         Vector3 localPosition = cue.PositionOffset;
@@ -378,66 +376,18 @@ public class PatternEffectDirector : MonoBehaviour
             {
                 if (cue == null || !cue.IsUsable) continue;
 
-                maxSizes[cue.Prefab] = Mathf.Max(GetMaxSize(cue.Prefab), cue.PoolSize);
-
-                var queue = GetQueue(cue.Prefab);
-                for (int i = queue.Count; i < cue.PoolSize; i++)
-                {
-                    var view = CreateView(cue.Prefab);
-                    view.OnDespawn();
-                    queue.Enqueue(view);
-                }
+                pool.Prewarm(cue.Prefab, cue.PoolSize, cue.PoolSize);
             }
         }
     }
 
-    private Queue<CanvasEffectView> GetQueue(GameObject prefab)
-    {
-        if (!pools.TryGetValue(prefab, out var queue))
-            pools[prefab] = queue = new Queue<CanvasEffectView>();
-        return queue;
-    }
-
-    private int GetMaxSize(GameObject prefab) => maxSizes.TryGetValue(prefab, out int m) ? m : 0;
-
-    private CanvasEffectView CreateView(GameObject prefab)
-    {
-        var go = Instantiate(prefab, poolRoot);
-        go.name = prefab.name;
-
-        var view = go.GetComponent<CanvasEffectView>();
-        if (view == null) view = go.AddComponent<CanvasEffectView>();
-
-        view.SourcePrefab = prefab;
-        view.SetPoolParent(poolRoot);
-        return view;
-    }
-
-    private CanvasEffectView Rent(GameObject prefab, int poolSize)
-    {
-        if (prefab == null) return null;
-
-        maxSizes[prefab] = Mathf.Max(GetMaxSize(prefab), poolSize);
-
-        var queue = GetQueue(prefab);
-        return queue.Count > 0 ? queue.Dequeue() : CreateView(prefab);
-    }
-
+    /// <summary>뷰를 회수한다. <b>활성 목록에서 먼저 뺀다</b> — 히트스톱이 그 목록을 훑기 때문.</summary>
     private void ReturnView(CanvasEffectView view)
     {
         if (view == null) return;
 
         active.Remove(view);
-        view.OnDespawn();   // 부모·크기·배속을 여기서 되돌린다
-
-        var prefab = view.SourcePrefab;
-        if (prefab == null) { Destroy(view.gameObject); return; }
-
-        var queue = GetQueue(prefab);
-        int cap = Mathf.Max(GetMaxSize(prefab), 1);
-
-        if (queue.Count < cap) queue.Enqueue(view);
-        else Destroy(view.gameObject);
+        pool.Return(view);
     }
 
 }
