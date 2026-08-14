@@ -129,6 +129,57 @@ namespace PatternSpace.Tests
             Assert.IsFalse(new PatternEffectCue().IsUsable);
         }
 
+        // ── 소리 큐 (docs/PatternEffectSfx) ──────────────────────────────────
+        //
+        // IsUsable은 예약·프리웜·툴 목록·툴 경고가 전부 보는 단일 게이트다.
+        // '프리팹만'과 '소리만'이 같은 문을 통과해야 소리 전용 큐가 성립한다.
+
+        [Test]
+        public void PrefabOnlyCueIsUsable()
+        {
+            var cue = new PatternEffectCue();
+            new SerializedLikeSetter(cue).Set("prefab", new GameObject("prefab-only"));
+
+            Assert.IsTrue(cue.IsUsable);
+        }
+
+        [Test]
+        public void SoundOnlyCueIsUsable()
+        {
+            // 이번 변경의 핵심 — 프리팹 없이 소리만 있어도 예약된다.
+            var cue = new PatternEffectCue();
+            new SerializedLikeSetter(cue).Set("sfx", AudioClip.Create("blip", 64, 1, 8000, false));
+
+            Assert.IsTrue(cue.IsUsable);
+        }
+
+        [Test]
+        public void CueWithNeitherPrefabNorSoundIsNotUsable()
+        {
+            Assert.IsFalse(new PatternEffectCue().IsUsable);
+            Assert.IsNull(new PatternEffectCue().Sfx);
+        }
+
+        [Test]
+        public void SoundOnlyCueStillHasAName()
+        {
+            // "(비어 있음)"으로 뜨면 툴 목록에서 소리 큐를 고를 수가 없다.
+            var cue = new PatternEffectCue();
+            new SerializedLikeSetter(cue).Set("sfx", AudioClip.Create("slash", 64, 1, 8000, false));
+
+            Assert.AreEqual("slash", cue.Label);
+        }
+
+        [Test]
+        public void SoundPitchNeverCollapsesToZero()
+        {
+            // 0 피치는 재생되지 않는다 — 무음과 구분이 안 되는 상태를 만들지 않는다.
+            var cue = new PatternEffectCue();
+            new SerializedLikeSetter(cue).Set("sfxPitch", 0f);
+
+            Assert.Greater(cue.SfxPitch, 0f);
+        }
+
         /// <summary>
         /// 직렬화 필드에 값을 넣는 테스트 전용 도구. 큐의 필드는 인스펙터 저장 대상이라 <c>private</c>인데,
         /// 그렇다고 테스트를 위해 세터를 열면 <b>런타임이 값을 바꿀 수 있는 문이 생긴다</b>(패턴은 모양 원본이다).

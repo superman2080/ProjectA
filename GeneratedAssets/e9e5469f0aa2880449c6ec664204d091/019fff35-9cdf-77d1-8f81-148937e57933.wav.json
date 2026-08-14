@@ -1,0 +1,15 @@
+{
+    "asset": "e9e5469f0aa2880449c6ec664204d091",
+    "fileName": "019fff35-9cdf-77d1-8f81-148937e57933.wav",
+    "prompt": "Heavy metallic sword clash, intense blade collision with strong impact, heavy steel strike sound effect, epic combat impact",
+    "negativePrompt": "",
+    "model": "elevenlabs-sound-effects-v2",
+    "modelName": "ElevenLabs Sound Effects V2",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "duration": 1.5,
+    "autoTrim": false,
+    "hasReference": false,
+    "voice": ""
+}

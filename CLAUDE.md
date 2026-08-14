@@ -272,6 +272,12 @@ Assets/
 - **⚠ 패턴인풋 노드(Point) 자리는 앵커가 아니다** — 루트 Canvas가 `ScreenSpaceOverlay`라 그 좌표는 월드가 아니다(§7-5). 노드 자리 이펙트는 기존 `EffectManager` 관할이며 이 시스템은 침범하지 않는다.
 - **⚠ `NodeTimes`는 '예정'이지 '실제'가 아니다.** 늦게 눌러도 안 밀린다. 입력 순간에 정확히 붙는 연출은 판정 이벤트를 쓴다.
 - 뷰는 `CanvasEffectView`를 **그대로 재사용**한다(월드 경로 `SetWorldPose`/`SetSpeed` 추가). 이름이 Canvas인 채 남은 것은 **프리팹 스크립트 참조가 클래스명에 묶여** rename이 기존 이펙트를 통째로 깨기 때문. ⚠ `MainModule`은 구조체 사본이라 **되대입해야** 배속이 반영되고, 풀 재사용이라 **반납 시 부모·크기·배속을 원복**해야 한다(안 하면 따라가기 이펙트가 앵커와 함께 파괴되고 다음 큐가 이전 배속을 물려받는다).
+- **큐는 그림뿐 아니라 소리도 든다**(`PatternEffectCue.Sfx`). 패턴마다 다른 임팩트음이 필요한데 `SfxTrigger` enum은 **키를 코드가 정해** 패턴 수만큼 못 늘린다(`SliceSet`이 enum 카탈로그를 안 두는 것과 같은 지점). 큐에 얹으면 **시각·조건·개수·툴 타임라인이 전부 공짜로 따라온다** — 새 시계도 새 저작 화면도 없다. 조건이 소리에 더 직접적이다: `Success`(Player) 촥 / `Success`(Enemy)·`Parry` 챙 / `Evade`는 **큐를 안 만들어** 무음.
+  - **`IsUsable`이 `prefab != null || sfx != null`이다.** 이 값을 보는 곳이 예약·프리웜·툴 목록·툴 경고 **전부**라 여기만 넓히면 나머지가 따라온다. ⚠ 그래서 **`cue.Prefab`을 역참조하는 모든 지점에 null 가드가 필요하다**(프리웜·`OnValidate` 경고·툴 프리뷰 — 이번 확장의 유일한 회귀 지점).
+  - **⚠ `Fire`는 소리가 먼저다.** 소리는 2D라 앵커가 필요 없는데 앵커 가드가 앞에 있으면 소리 전용 큐가 통째로 죽는다.
+  - **⚠ 히트스톱은 소리를 안 얼린다.** 파티클은 `simulationSpeed = 0`으로 얼지만 오디오는 원래 `timeScale` 밖이고(§7-3), 타격감으로도 **멈추는 그 순간**에 울리는 것이 맞다 — 재생 중 끊으면 "정지"가 아니라 "소리가 끊겼다"로 읽힌다.
+  - **⚠ 소리 큐가 하나라도 있으면 §7의 공용 `SfxTrigger.PatternImpact` 폴백이 물러난다**(`Pattern.HasSfxCue`). 안 그러면 둘 다 임팩트 시각이라 한 소리로 뭉쳐 들리고 저작자가 원인을 못 짚는다. 타이밍이 `Impact`인지까지는 안 본다 — **"소리를 직접 설계한 패턴"이라는 사실 하나**로 가르는 편이 규칙으로 단순하다.
+  - **툴 프리뷰는 소리를 내지 않는다** — `ParticleSystem.Simulate`는 되감기가 되지만 오디오는 안 된다. 스크럽마다 소리가 튀면 저작을 방해한다(타임라인 막대로 시각만 보여 준다).
 - **저장**: `Tools/Pattern Effect Tool` — 패턴 진행 전체 타임라인 + 애니메이션·파티클 동시 프리뷰(`ParticleSystem.Simulate`라 **되감기가 된다**) + 칼날 경로 폴리라인(우클릭으로 그 프레임 시각을 `timeOffset`에 집기). 가이드: `docs/!Guides/Guide_PatternEffectTool.md` / 상세: `docs/PatternEffect/`
 
 ### 7-5. 앵글 교체 (CameraAngleSwitcher)
@@ -289,6 +295,11 @@ Assets/
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**
 - **`EffectCatalog`**: `EffectTrigger` enum(Perfect/Good/Miss/PatternCompleteFull/PatternComplete/NodeConnected) + `EffectEntry`(트리거→프리팹+풀 크기). **이펙트 추가 = 카탈로그에 한 줄 추가**(코드 수정 없음). 프리팹 비면 무연출.
+- **효과음도 여기서 낸다** — `SfxManager`는 게임플레이를 모르고(어느 씬에도 놓이는 싱글톤) `Play(SfxTrigger)` 요청만 받는다. 판정음(`Perfect`/`Good`/`Miss`)은 `OnFocusRingResolved`에서 즉시, **`PatternImpact`는 `Deadline + ImpactOffset`에 예약해서** 낸다(§6·§11과 같은 `info.ImpactTime()`).
+  - **⚠ 패턴 완료 순간에 울리면 안 된다.** 완료 = 마지막 노드 입력이고 칼이 닿는 것은 거기서 `goodWindow`(0.1초) + 보정만큼 뒤다. **예약은 최대 하나**(§7-1과 같은 근거), `OnDisable`에서 회수한다.
+  - **⚠ 히트스톱과 시계가 안 어긋난다.** 예약이 `Time.time`이고 히트스톱은 `timeScale`을 안 쓰므로(§7-3) 정지 창 안에서도 제때 울린다 — 타격감 관점에서도 **멈추는 그 순간**에 나는 것이 맞다.
+  - **⚠ 소리 층은 소리 층이 든다.** `HitStopDirector`가 이미 같은 시각에 예약하고 있어 거기 한 줄이 더 짧지만, §7-3의 층 분리("`HitStopDirector`는 카메라를 안 만지고 `CameraDirector`는 애니메이터를 안 만진다")를 깬다.
+  - **⚠ `PatternImpact`는 폴백이다.** 패턴이 자기 소리를 들고 있으면(§7-4의 `Pattern.HasSfxCue`) 이 공용음은 예약조차 안 한다 — 겹치면 한 소리로 뭉쳐 들려 원인을 못 짚는다. **패턴별 소리는 `SfxTrigger`가 아니라 이펙트 큐로 낸다**(enum 키는 코드가 정해 패턴 수만큼 못 늘린다).
 - 프리팹별 자체 풀 큐로 관리. 배경 앰비언트는 상시 루프 인스턴스로 배치하고 `SetIntensity`로 강도 조절. 상세: `docs/CanvasEffect/`
 
 ### 7-6. 목숨 (PlayerHealth)
@@ -346,7 +357,12 @@ Assets/
 - **⚠ 결투 간격은 상수가 아니라 패턴이 든 시간 함수다**(`Pattern.duelDistanceCurve`, §11-9).
 - **⚠ `EnemyDirector.PlayerPosition`은 결투 앵커가 아니라 그 부모(플레이어 루트)다.** 앵커의 역할은 **기준 간격을 정하는 것**이지 플레이어의 자리가 아니다 — 앵커는 플레이어보다 그 간격만큼 **앞**(적 쪽)에 있어서, **현재 간격이 그보다 좁아지면 `BuildDuelPlan`의 `toEnemy`가 부호를 뒤집어 목표가 적 반대편에 잡힌다**(물러나야 할 때 **적을 관통해 건너간다**). 예전에는 결투 간격 = 앵커 거리라 경계값에 딱 붙어 증상이 안 났고, **거리 커브(§11-9)가 그 전제를 깼다**(임팩트 간격 0.4m로 저작하면 매 패턴 그 구간에 들어간다).
 - **⚠ 플레이어 회전은 이동과 별개 스케줄이다**(`PlayerCombatMover.turnDuration` 0.15초). 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가 **무대를 가로지르는 내내 목을 천천히 돌린다.** 예전엔 `OnOpponentChanged`의 회전이 같은 프레임 `OnDuelScheduled`에 통째로 덮여 `turnDuration`이 한 번도 안 쓰였다. 지금은 **먼저 상대를 보고 그 다음에 달린다.**
-- 상세: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
+- **⚠ 몸이 겹치는 것은 콜라이더로 못 막는다.** 플레이어·적 둘 다 `transform.position`을 **대입**한다(닫힌 보간·커브 구동) — 물리가 밀어낸 값은 다음 프레임에 소멸하고, 이동을 물리로 옮기면 도착 시각 계약(§6 임팩트 정렬)이 깨진다. 이격은 위치 계산 층에서 한다.
+- **불가침 영역은 원이 아니라 캡슐이다** — 플레이어 원 ∪ 현재 상대 원 ∪ **둘을 잇는 통로**(`EnemyRing.SeparationPush`, `separationRadius` 1m). 통로가 곧 대시 경로이자 칼이 지나가는 선이라, 비우면 겹친 뒤 밀어내는 게 아니라 **닿기 전에 비켜서 있다**. 상대가 없으면 두 끝점이 같아져 **그대로 원**이 된다(분기 없음).
+- **⚠ 미는 것은 적뿐이고, 그것도 `IsIdle`인 적뿐이다.** 플레이어는 도착 시각과 거리 커브가 위치를 소유하고, 이동 중인 적은 `Destination`이 결투 계획의 입력이다(§11-1) — 밀면 플레이어가 밀린 자리로 달려간다. **현재 상대는 캡슐의 끝점이라 애초에 위반자가 아니다**(거리 커브의 음수 = 관통은 의도다, §11-9).
+- **⚠ 밀어내는 방향은 선분에 수직이다.** 방사로 밀면 통로 한가운데 선 적이 통로를 **따라** 미끄러질 뿐이다. 수직이라야 옆으로 비켜서고, 그래야 화면에서 "군중이 갈라진다"가 된다.
+- **⚠ `LateUpdate`에서 돈다**(`TickSeparation`). `Update`면 `EnemyView.TickMove`·`PlayerCombatMover`의 보간과 실행 순서가 안 정해져 밀어낸 값이 **같은 프레임 lerp에 덮인다**(§7-3 `TickPendingKills`와 같은 근거). 밀린 값이 살아남는 이유는 대상이 idle이라 이동 보간이 꺼져 있고 배회가 `+=` 증분 경로이기 때문 — **새 상태 필드가 없다.**
+- 상세: `docs/ActorSeparation/` · 무대 배치: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
 ### 11-6. 적 무리 배치 (EnemyCluster)
 - **적은 무대 전체에 흩어지지 않고 `active`(지금 싸우는 무리) + `staged`(다음 무리) 두 덩어리로만 존재한다.** `ringCount`는 더 이상 독립 필드가 아니라 **`clusterSize × 2`로 파생**된다 — 둘을 따로 두면 어긋난 채 조용히 굴러간다.
 - **무리 위치는 씬이 아니라 런타임이 정한다.** 앵커를 씬에 박으면 공급(적 위치)이 고정이고 수요(`desired = cruiseSpeed × 창 / playerShare + duelDistance`)가 연속이라 **거리가 이산화**된다 — 창이 5.5m를 요구해도 고를 수 있는 게 3m나 8m뿐인 상태. **찾는 대신 놓으면** 그 부류가 원천 소멸한다.
@@ -393,6 +409,7 @@ Assets/
   - 구현은 **레이어 스왑 하나**다 — URP `RenderObjects` 피처(`AmbushOutline` 레이어 → `AmbushOutlineMaterial`)가 그 레이어만 한 번 더 그린다. 프리팹·머티리얼·셰이더를 안 건드리고 튜닝은 머티리얼 한 곳(`_OutlineColor`·`_OutlineWidth`)에 모인다.
   - **⚠ 깊이 상태를 건드리면 안 된다.** `CelOutline`은 메쉬를 부풀려 **뒷면만**(`Cull Front`) 그리는 셸 방식이라 **깊이 테스트가 겹치는 부분을 잘라내야 테두리만 남는다.** `depthCompareFunction = Always`로 열면 셸이 앞면 위에 그려져 **적 표면 전체가 칠해진다.**
 - **소리는 `SfxManager.Play(SfxTrigger)`만 부른다**(`AmbushTelegraph`/`DodgeSuccess`/`DodgeFail` — 각각 `Fire()`·`Succeed()`·`Fail()`). `DodgeDirector`가 오디오를 직접 만지지 않는다(카탈로그 조회·풀은 매니저 관할). ⚠ **클립이 아직 카탈로그에 미배선이라 지금은 무음**이다 — 버그가 아니라 에셋이 안 꽂힌 상태이며, 넣으면 코드 변경 없이 난다.
+- **회피 착지점은 구르기 <b>시작</b> 시각에 비운다**(`EnemyDirector.ClearSpot` — 캡슐이 점으로 무너진 특수해). 원호 중심이 현재 상대라 착지점은 통로 **밖**이고, 그래서 §11-2의 매 프레임 이격에 안 걸린다. `ScoreSpot`이 좌/우 중 빈 쪽을 고르지만 그건 점수일 뿐 보장이 아니다. **도착이 아니라 출발 시각인 것이 핵심** — 도착 후에 밀면 겹친 프레임이 이미 나온 뒤다. **기습자에게 예외 처리가 없다**: `Fire()`의 `AssignAttack` 이후 `hasPendingAttack`이라 `IsIdle`이 false로 자동 제외되고, 사전 접근 중에는 `"이동 중"`으로 걸린다.
 - 상세: `docs/EnemyAmbushDodge/` · `docs/AmbushVisibility/` · 측정 기록과 폐기된 대안(예보·슬롯 저작): `docs/AmbushSlot/` · `docs/AmbushLookahead/`
 
 ### 11-9. 결투 거리 커브 (DuelDistanceCurve)

@@ -292,8 +292,18 @@ public class PatternEffectDirector : MonoBehaviour
 
     private void Fire(PatternEffectCue cue)
     {
+        // ⚠ 소리가 먼저다. 소리는 2D라 앵커가 필요 없는데, 앵커 가드를 앞에 두면
+        // 소리 전용 큐(또는 앵커 배선이 빈 경우)에서 소리까지 같이 죽는다.
+        //
+        // ⚠ 히트스톱은 소리를 얼리지 않는다. 오디오는 원래 timeScale의 지배를 안 받고(§7-3),
+        // 타격감으로도 '멈추는 그 순간'에 울리는 것이 맞다 — 재생 중 AudioSource를 멈추면
+        // "정지"가 아니라 "소리가 끊겼다"로 읽힌다(카메라를 즉시 얼리는 규율과 같은 결).
+        if (cue.Sfx != null) SfxManager.Instance.Play(cue.Sfx, cue.SfxVolume, cue.SfxPitch);
+
+        if (cue.Prefab == null) return;   // 소리 전용 큐는 여기서 끝
+
         Transform anchor = ResolveAnchor(cue.Anchor);
-        if (anchor == null) return;   // 배선이 비면 이 큐만 조용히 빠진다
+        if (anchor == null) return;   // 배선이 비면 그림만 조용히 빠진다
 
         var view = pool.Rent(cue.Prefab, cue.PoolSize);
         if (view == null) return;
@@ -375,6 +385,10 @@ public class PatternEffectDirector : MonoBehaviour
             foreach (var cue in pattern.EffectCues)
             {
                 if (cue == null || !cue.IsUsable) continue;
+
+                // ⚠ IsUsable이 '소리만 있어도 true'로 넓어졌으므로 여기 null이 도달할 수 있다.
+                // 소리는 풀이 필요 없다 — SfxManager의 보이스 풀이 동시 재생을 감당한다.
+                if (cue.Prefab == null) continue;
 
                 pool.Prewarm(cue.Prefab, cue.PoolSize, cue.PoolSize);
             }

@@ -125,7 +125,31 @@ namespace PatternSpace
         [Min(0)]
         [SerializeField] private int poolSize = 2;
 
-        public string Label => string.IsNullOrEmpty(label) ? (prefab != null ? prefab.name : "(비어 있음)") : label;
+        [Header("Sound")]
+        [Tooltip("이 큐가 낼 효과음. 비우면 무음.\n" +
+                 "⚠ 2D로 재생된다(앵커와 무관) — 임팩트음이 좌우로 흔들리면 판정 단서가 흐려진다.\n" +
+                 "프리팹 없이 이것만 채우면 '소리 전용 큐'가 된다.")]
+        [SerializeField] private AudioClip sfx;
+
+        [Tooltip("효과음 볼륨.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float sfxVolume = 1f;
+
+        [Tooltip("효과음 피치. 1 = 원본 그대로.")]
+        [Min(0.01f)]
+        [SerializeField] private float sfxPitch = 1f;
+
+        public string Label
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(label)) return label;
+                if (prefab != null) return prefab.name;
+
+                // ⚠ 소리 전용 큐도 이름이 있어야 한다 — "(비어 있음)"으로 뜨면 툴 목록에서 고를 수가 없다.
+                return sfx != null ? sfx.name : "(비어 있음)";
+            }
+        }
         public GameObject Prefab => prefab;
         public EffectCondition Condition => condition;
         public EffectTiming Timing => timing;
@@ -141,8 +165,18 @@ namespace PatternSpace
         public float Speed => Mathf.Max(speed, 0.01f);
         public int PoolSize => Mathf.Max(poolSize, 0);
 
-        /// <summary>재생할 것이 있는가. 비면 예약 자체를 만들지 않는다(= "뒷구르기는 무연출"의 구현 전부).</summary>
-        public bool IsUsable => prefab != null;
+        public AudioClip Sfx => sfx;
+        public float SfxVolume => sfxVolume;
+        public float SfxPitch => Mathf.Max(sfxPitch, 0.01f);
+
+        /// <summary>
+        /// 재생할 것이 있는가. 비면 예약 자체를 만들지 않는다(= "뒷구르기는 무연출"의 구현 전부).
+        ///
+        /// <para><b>프리팹과 소리 중 하나만 있어도 성립한다</b> — 소리 전용 큐(앵커 없음)와 그림 전용 큐가
+        /// 같은 게이트를 통과한다. 이 값을 보는 곳이 예약·프리웜·툴 목록·툴 경고 <b>전부</b>라
+        /// 여기만 넓히면 나머지가 따라온다.</para>
+        /// </summary>
+        public bool IsUsable => prefab != null || sfx != null;
 
         /// <summary>성패가 정해져야만 뜰 수 있는 큐인가.</summary>
         public bool NeedsOutcome => condition != EffectCondition.Always;

@@ -23,44 +23,91 @@ MonoBehaviour:
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 7400000, guid: b3273694d9f16a7468d4ffe9198ca8d8, type: 2}
     startOffset: 0.33333334
     duration: 0.39677045
     impactTime: 0.6574395
     speed: 1.5
+    extraImpactTimes: []
   enemyFeint:
     clip: {fileID: 7400000, guid: acfaa3806b1b1d9499e1c233ced07a1f, type: 2}
     startOffset: 0
     duration: 0.0008167256
     impactTime: 0.0008167256
     speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 7400000, guid: 681b322cea2d3b146bebfcace0bd4fbc, type: 2}
     startOffset: 0
     duration: 0.5
     impactTime: 0.043644037
     speed: 1
+    extraImpactTimes: []
   enemyHit:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   enemyParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 28d5dce78958b184f94bd04b234af2bc, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
-  effectCues: []
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  effectCues:
+  - label: 
+    prefab: {fileID: 0}
+    condition: 1
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 3df9bbbc130ccb344af5f3fc793a630f, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
+  - label: 
+    prefab: {fileID: 0}
+    condition: 2
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 4e7a9f408abdba8459fdccbeaea95215, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
