@@ -16,11 +16,6 @@ MonoBehaviour:
   - index: 0
   - index: 4
   - index: 8
-  successAnimationClip: {fileID: 7400000, guid: 3e4cca08479845446a1670ff2767df9a, type: 2}
-  animationStartOffset: 0.34298247
-  animationDuration: 0.7472138
-  animationImpactTime: 0.964706
-  animationSpeed: 1.5
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}
@@ -28,34 +23,57 @@ MonoBehaviour:
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 7400000, guid: 3e4cca08479845446a1670ff2767df9a, type: 2}
     startOffset: 0.34298247
     duration: 0.7472138
     impactTime: 0.964706
     speed: 1.5
+    extraImpactTimes: []
   enemyFeint:
     clip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
     startOffset: 0
     duration: 0.4470934
     impactTime: 0.4470934
     speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 7400000, guid: a7ced0bb2e3d3ac499044e59fc812ea4, type: 2}
     startOffset: 0
     duration: 1
     impactTime: 0.04723985
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: d601a5211803adf46a05ffb625ee7bd2, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   effectCues:
   - label: 
     prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
@@ -72,3 +90,42 @@ MonoBehaviour:
     scale: 0
     speed: 1
     poolSize: 3
+    sfx: {fileID: 0}
+    sfxVolume: 1
+    sfxPitch: 1
+  - label: 
+    prefab: {fileID: 0}
+    condition: 1
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 1, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 203.58}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 3df9bbbc130ccb344af5f3fc793a630f, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
+  - label: 
+    prefab: {fileID: 0}
+    condition: 2
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 1, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 203.58}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 4e7a9f408abdba8459fdccbeaea95215, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2

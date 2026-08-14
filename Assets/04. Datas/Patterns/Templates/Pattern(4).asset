@@ -21,44 +21,73 @@ MonoBehaviour:
     duration: 0.980969
     impactTime: 0.3011524
     speed: 1.5
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 7400000, guid: 620f78649addacc41a9e3434cf5a4daf, type: 2}
     startOffset: 0
     duration: 0.980969
     impactTime: 0.34665996
     speed: 1.5
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0.98096895
     impactTime: 0.3455531
     speed: 1.5
+    extraImpactTimes: []
   enemyFeint:
     clip: {fileID: 0}
     startOffset: 0
     duration: 1
     impactTime: 0.2636906
     speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 0}
     startOffset: 0
     duration: 1
     impactTime: 0.09800859
     speed: 1
+    extraImpactTimes: []
   enemyHit:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   enemyParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 8af6377bc96d2bc429724c450249b05c, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
-  effectCues: []
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  effectCues:
+  - label: 
+    prefab: {fileID: 0}
+    condition: 1
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 0
+    speed: 0
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: e5ecc98ff40556543b77c8c2aa090822, type: 3}
+    sfxVolume: 1
+    sfxPitch: 1

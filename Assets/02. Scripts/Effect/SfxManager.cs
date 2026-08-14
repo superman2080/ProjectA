@@ -26,7 +26,10 @@ public class SfxManager : Singleton<SfxManager>
         base.Awake();
 
         foreach (var entry in catalog)
+        {
+            if (entry == null) continue;   // class라 리스트에 빈 칸이 생길 수 있다
             catalogByTrigger[entry.trigger] = entry;
+        }
 
         for (int i = 0; i < voiceCount; i++)
         {
@@ -77,16 +80,32 @@ public class SfxManager : Singleton<SfxManager>
     /// <summary>트리거에 매핑된 클립을 재생한다. 매핑이 없거나 clip이 비어 있으면 아무것도 하지 않는다.</summary>
     public void Play(SfxTrigger trigger)
     {
-        if (!catalogByTrigger.TryGetValue(trigger, out var entry) || entry.clip == null)
+        if (!catalogByTrigger.TryGetValue(trigger, out var entry) || entry == null)
             return;
+
+        // ⚠ entry.pitch가 아니라 Pitch다 — 0으로 저장된 옛 행을 1로 구제한다(피치 0 = 무음).
+        PlayClip(entry.clip, entry.volume, entry.Pitch);
+    }
+
+    /// <summary>
+    /// 카탈로그를 거치지 않고 클립을 직접 재생한다. <b>패턴이 소유한 소리</b>가 이 경로로 온다
+    /// (<c>PatternEffectCue.Sfx</c>) — 키를 코드가 정하는 enum으로는 패턴 수만큼 늘릴 수 없기 때문
+    /// (<c>SliceSet</c>이 enum 카탈로그를 안 두는 것과 같은 지점).
+    /// </summary>
+    public void Play(AudioClip clip, float volume, float pitch) => PlayClip(clip, volume, pitch);
+
+    private void PlayClip(AudioClip clip, float volume, float pitch)
+    {
+        if (clip == null) return;
 
         int index = GetFreeVoiceIndex();
         AudioSource voice = voices[index];
 
-        baseVolumes[index] = entry.volume;
-        voice.clip = entry.clip;
-        voice.pitch = entry.pitch;
-        voice.volume = entry.volume * SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Sfx);
+        // ⚠ baseVolumes에 기록해야 재생 도중 SoundManager 볼륨 변경이 반영된다(HandleVolumeChanged).
+        baseVolumes[index] = volume;
+        voice.clip = clip;
+        voice.pitch = pitch;
+        voice.volume = volume * SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Sfx);
         voice.Play();
     }
 

@@ -152,7 +152,7 @@ MonoBehaviour:
   - channel: 0
     volume: 1
   - channel: 1
-    volume: 0.3
+    volume: 0.6
   - channel: 2
     volume: 0.1
 --- !u!4 &424918437

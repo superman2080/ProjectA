@@ -46,6 +46,12 @@ namespace EnemySpace
         [Tooltip("무대 배치 후보 수. 늘리면 간격이 고르지만 스폰 비용이 는다.")]
         [SerializeField] private int spawnCandidateCount = 24;
 
+        [Header("Separation")]
+        [Tooltip("불가침 캡슐의 반경(m). 플레이어 원 · 현재 상대 원 · 둘을 잇는 통로를 이 두께로 비운다.\n" +
+                 "⚠ standoffDistance(3.5)보다 한참 작아야 한다 — 크면 배회 슬롯과 상시 싸워 적이 계속 밀린다.\n" +
+                 "0이면 이격 끄기(다른 층은 그대로 돈다).")]
+        [SerializeField] private float separationRadius = 1f;
+
         [Header("Cluster")]
         [Tooltip("적을 무리 지어 배치한다. 끄면 예전처럼 무대 전체에 흩어진다(회귀 없음).")]
         [SerializeField] private bool clusterEnabled = true;
@@ -1815,8 +1821,88 @@ namespace EnemySpace
         void LateUpdate()
         {
             TickPendingKills();
+            TickSeparation();
         }
 
+        // ── 불가침 캡슐 (docs/ActorSeparation) ──────────────────────────────────
+
+        /// <summary>
+        /// <b>불가침 캡슐</b>(플레이어 원 · 현재 상대 원 · 둘을 잇는 통로) 안에 들어온
+        /// <b>자유로운</b> 적을 밖으로 민다.
+        ///
+        /// <para><b>⚠ LateUpdate여야 한다.</b> <c>Update</c>에 두면 <c>EnemyView.TickMove</c>·
+        /// <c>PlayerCombatMover</c>의 보간과 스크립트 실행 순서가 보장되지 않아
+        /// 밀어낸 값이 <b>같은 프레임 lerp에 덮인다</b>.</para>
+        ///
+        /// <para><b>⚠ 미는 것은 적뿐이다.</b> 플레이어 위치는 도착 시각과 거리 커브가 소유한다 —
+        /// 밀면 저작한 임팩트 간격이 어긋나 칼이 빗나간다(§6 임팩트 정렬).</para>
+        ///
+        /// <para><b>⚠ 현재 상대는 캡슐의 <u>끝점</u>이지 위반자가 아니다.</b> 자기 영역에 자기가 걸릴 수 없다.
+        /// 게다가 거리 커브의 음수 구간은 <b>관통이 의도</b>다(§11-9).</para>
+        ///
+        /// <para>상대가 없으면 두 끝점이 같아져 <b>그대로 원</b>이 된다 — 분기를 두지 않는다.</para>
+        /// </summary>
+        private void TickSeparation()
+        {
+            // 통로의 반대편 끝. 상대가 없으면 플레이어 자신 = 캡슐이 원으로 무너진다.
+            // ⚠ Destination이 아니라 transform.position이다 — 통로는 '지금 화면에 있는 선'이다.
+            Vector3 player = PlayerPosition;
+            PushOut(player, currentOpponent != null ? currentOpponent.transform.position : player);
+        }
+
+        /// <summary>
+        /// <paramref name="spot"/> 주위를 <b>한 번</b> 비운다. 캡슐이 점으로 무너진 특수해다(<c>a == b</c>).
+        ///
+        /// <para><b>왜 도착 시점이 아니라 출발 시점인가</b>: 회피 구르기는 원호를 도는 데 시간이 걸린다.
+        /// 출발할 때 비우면 <b>플레이어가 도착하기 전에</b> 적이 비켜서 있다 —
+        /// 도착 후에 밀면 겹친 프레임이 이미 화면에 나온 뒤다.</para>
+        ///
+        /// <para><b>왜 한 번으로 충분한가</b>: 밀린 적은 idle이라 아무도 그 위치를 대입하지 않는다
+        /// (<see cref="PushOut"/>과 같은 근거).</para>
+        /// </summary>
+        public void ClearSpot(Vector3 spot) => PushOut(spot, spot);
+
+        /// <summary>
+        /// 선분 <paramref name="a"/>–<paramref name="b"/>의 캡슐에서 자유로운 적을 밀어낸다.
+        /// <b>이 루프가 이격의 유일한 구현이다</b> — 매 프레임 통로(<see cref="TickSeparation"/>)와
+        /// 일회성 자리 비우기(<see cref="ClearSpot"/>)가 같은 몸통을 쓴다.
+        ///
+        /// <para>밀린 값이 <b>살아남는 이유</b>: 대상이 <c>IsIdle</c>이라 이동 보간(<c>TickMove</c>)이 꺼져 있고,
+        /// 배회는 <c>transform.position +=</c> 증분 경로라 외부 변위를 덮지 않는다.</para>
+        /// </summary>
+        private void PushOut(Vector3 a, Vector3 b)
+        {
+            if (separationRadius <= 0f) return;
+
+            for (int i = 0; i < ring.Count; i++)
+            {
+                var view = ring[i];
+                if (view == null || view == currentOpponent) continue;
+
+                // IsIdle 하나로 사망중·공격예약·리액션·이동중이 전부 걸린다. 새 판정을 만들지 않는다.
+                if (!view.IsIdle) continue;
+
+                Vector3 push = EnemyRing.SeparationPush(view.transform.position, a, b, separationRadius);
+                if (push == Vector3.zero) continue;
+
+                view.transform.position = ClampToStage(view.transform.position + push);
+            }
+        }
+
+        /// <summary>
+        /// 이격으로 무대를 벗어난 자리를 경계에 붙인다. <b>이것만 막는다</b> —
+        /// 무대 밖 적은 <c>TakeTargetForWindow</c>의 후보 판정과 카메라 프레이밍을 동시에 흔든다.
+        /// 나머지 표류(집결지에서 조금 벗어남)는 다음 배회·재배치가 흡수한다.
+        /// </summary>
+        private Vector3 ClampToStage(Vector3 position)
+        {
+            Vector3 fromCenter = Vector3.ProjectOnPlane(position - Center, Vector3.up);
+            if (fromCenter.magnitude <= stageRadius) return position;
+
+            Vector3 clamped = Center + fromCenter.normalized * stageRadius;
+            clamped.y = position.y;
+            return clamped;
+        }
 
         private void ReleaseEnemy(EnemyView view)
         {

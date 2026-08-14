@@ -200,12 +200,15 @@ public class PatternEffectWindow : EditorWindow
         else if (!valid) GUI.color = new Color(1f, 0.5f, 0.45f);
 
         float w = rect.width;
-        var labelRect = new Rect(rect.x, rect.y, w * 0.34f, rect.height);
-        var condRect = new Rect(labelRect.xMax, rect.y, w * 0.18f, rect.height);
+        var labelRect = new Rect(rect.x, rect.y, w * 0.30f, rect.height);
+        var sfxRect = new Rect(labelRect.xMax, rect.y, w * 0.04f, rect.height);
+        var condRect = new Rect(sfxRect.xMax, rect.y, w * 0.18f, rect.height);
         var timeRect = new Rect(condRect.xMax, rect.y, w * 0.26f, rect.height);
         var anchorRect = new Rect(timeRect.xMax, rect.y, w * 0.22f, rect.height);
 
         EditorGUI.LabelField(labelRect, cue.Label);
+        // 소리 뱃지 — 그림 없는 큐가 목록에서 빈 줄로 보이면 안 된다.
+        if (cue.Sfx != null) EditorGUI.LabelField(sfxRect, "♪");
         EditorGUI.LabelField(condRect, cue.Condition.ToString());
         EditorGUI.LabelField(timeRect, $"{cue.Timing}{(cue.Timing == EffectTiming.Node ? $"[{cue.NodeIndex}]" : "")} {Signed(cue.TimeOffset)}");
         EditorGUI.LabelField(anchorRect, cue.Anchor + (cue.Follow ? " (follow)" : ""));
@@ -267,10 +270,13 @@ public class PatternEffectWindow : EditorWindow
         return (min, Mathf.Max(max, min + 0.2f));
     }
 
-    /// <summary>프리팹이 화면에 남아 있는 대략의 길이. 배속이 지속시간을 함께 줄인다.</summary>
+    /// <summary>
+    /// 이 큐가 시간축을 차지하는 대략의 길이. 배속이 지속시간을 함께 줄인다.
+    /// <b>소리 전용 큐는 클립 길이를 쓴다</b> — 0을 돌려주면 타임라인에 길이 0 막대로 떠서 안 보인다.
+    /// </summary>
     private static float EffectDuration(PatternEffectCue cue)
     {
-        if (cue.Prefab == null) return 0f;
+        if (cue.Prefab == null) return cue.Sfx != null ? cue.Sfx.length : 0f;
 
         float longest = 0f;
         foreach (var ps in cue.Prefab.GetComponentsInChildren<ParticleSystem>(true))
@@ -453,6 +459,16 @@ public class PatternEffectWindow : EditorWindow
             EditorGUILayout.PropertyField(element.FindPropertyRelative("rotationOffset"));
 
             EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField("소리", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(element.FindPropertyRelative("sfx"));
+            EditorGUILayout.PropertyField(element.FindPropertyRelative("sfxVolume"));
+            EditorGUILayout.PropertyField(element.FindPropertyRelative("sfxPitch"));
+            EditorGUILayout.HelpBox(
+                "소리는 2D로 재생되고 앵커를 쓰지 않습니다 — 프리팹 없이 이것만 채우면 '소리 전용 큐'입니다.\n" +
+                "프리뷰는 소리를 내지 않습니다(스크럽 되감기가 오디오에는 없어 저작을 방해합니다).",
+                MessageType.None);
+
+            EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField("재생", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(element.FindPropertyRelative("scale"));
             EditorGUILayout.PropertyField(element.FindPropertyRelative("speed"));
@@ -504,7 +520,7 @@ public class PatternEffectWindow : EditorWindow
 
         if (!cue.IsUsable)
         {
-            EditorGUILayout.HelpBox("프리팹이 비어 있습니다 — 이 큐는 예약조차 되지 않습니다(정상적인 '무연출').", MessageType.None);
+            EditorGUILayout.HelpBox("프리팹도 소리도 비어 있습니다 — 이 큐는 예약조차 되지 않습니다(정상적인 '무연출').", MessageType.None);
             return;
         }
 
@@ -518,7 +534,8 @@ public class PatternEffectWindow : EditorWindow
                 MessageType.Error);
         }
 
-        if (cue.Prefab.GetComponentInChildren<ParticleSystem>(true) == null)
+        // ⚠ 소리 전용 큐에서는 오탐이다 — 프리팹이 없는 것이 정상 상태다.
+        if (cue.Prefab != null && cue.Prefab.GetComponentInChildren<ParticleSystem>(true) == null)
             EditorGUILayout.HelpBox("프리팹에 ParticleSystem이 없습니다 — 아무것도 보이지 않습니다.", MessageType.Warning);
 
         if (cue.Anchor == EffectAnchor.PlayerWeapon && !cue.Follow)
@@ -1080,6 +1097,10 @@ public class PatternEffectWindow : EditorWindow
 
     private GameObject EnsurePreviewEffect(PatternEffectCue cue)
     {
+        // ⚠ 소리 전용 큐는 프리뷰에 띄울 것이 없다(그리고 프리뷰는 소리를 내지 않는다 —
+        // 스크럽 되감기가 오디오에는 없어 매 프레임 소리가 튀면 저작을 방해한다).
+        if (cue.Prefab == null) return null;
+
         if (previewEffects.TryGetValue(cue, out var existing) && existing != null) return existing;
 
         var instance = Instantiate(cue.Prefab);

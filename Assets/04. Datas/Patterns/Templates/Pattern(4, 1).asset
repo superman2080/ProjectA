@@ -15,11 +15,6 @@ MonoBehaviour:
   patternDatas:
   - index: 4
   - index: 1
-  successAnimationClip: {fileID: 7400000, guid: d106fbbbd9cfa9f41ab63cd1223975ea, type: 2}
-  animationStartOffset: 0
-  animationDuration: 0.43367934
-  animationImpactTime: 0.38016146
-  animationSpeed: 1.5
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}
@@ -27,25 +22,91 @@ MonoBehaviour:
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerParry:
     clip: {fileID: 0}
     startOffset: 0
     duration: 0
     impactTime: 0
     speed: 1
+    extraImpactTimes: []
   playerAttack:
     clip: {fileID: 7400000, guid: d106fbbbd9cfa9f41ab63cd1223975ea, type: 2}
     startOffset: 0
     duration: 0.43367934
     impactTime: 0.38016146
     speed: 1.5
+    extraImpactTimes: []
+  enemyFeint:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
   enemyDeath:
     clip: {fileID: 7400000, guid: ba3aea449950e0249b2cf236dd7b7c00, type: 2}
     startOffset: 0
     duration: 1
     impactTime: 0.07175955
     speed: 1
-  sliceTarget: {fileID: 11400000, guid: 8af6377bc96d2bc429724c450249b05c, type: 2}
-  sliceTargetOffset: {x: 0, y: 0}
+    extraImpactTimes: []
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  effectCues:
+  - label: 
+    prefab: {fileID: 0}
+    condition: 1
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 7cbd6cd765888ff418d01d98bd1ce9c2, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
+  - label: 
+    prefab: {fileID: 0}
+    condition: 2
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 0
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 1
+    speed: 1
+    poolSize: 0
+    sfx: {fileID: 8300000, guid: 4e7a9f408abdba8459fdccbeaea95215, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2

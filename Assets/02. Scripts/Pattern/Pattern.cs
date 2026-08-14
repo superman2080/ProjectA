@@ -188,6 +188,28 @@ namespace PatternSpace
         /// </summary>
         public IReadOnlyList<PatternEffectCue> EffectCues => effectCues;
 
+        /// <summary>
+        /// 이 패턴이 <b>자기 소리</b>를 들고 있는가. <c>EffectManager</c>의 공용 임팩트음
+        /// (<c>SfxTrigger.PatternImpact</c>)이 겹치지 않게 물러나는 근거다 —
+        /// 폴백은 "소리를 저작하지 않은 패턴"만 위한 것이다.
+        ///
+        /// <para><b>⚠ 큐의 타이밍이 <c>Impact</c>인지까지는 보지 않는다.</b> <c>PatternStart</c>에
+        /// 칼 뽑는 소리만 저작해도 폴백이 물러난다 — <b>"소리를 직접 설계한 패턴"이라는 사실 하나</b>로
+        /// 가르는 것이 규칙으로 단순하고, 임팩트음이 필요하면 그 큐를 만들면 된다.</para>
+        /// </summary>
+        public bool HasSfxCue
+        {
+            get
+            {
+                if (effectCues == null) return false;
+
+                for (int i = 0; i < effectCues.Count; i++)
+                    if (effectCues[i] != null && effectCues[i].Sfx != null) return true;
+
+                return false;
+            }
+        }
+
         public NodeType GetNodeType(int position)
         {
             if (position == 0) return NodeType.Start;
@@ -270,7 +292,9 @@ namespace PatternSpace
                 var cue = effectCues[i];
                 if (cue == null || !cue.IsUsable) continue;
 
-                if (cue.Prefab.GetComponentInChildren<ParticleSystem>(true) == null)
+                // ⚠ IsUsable이 '소리만 있어도 true'라 Prefab이 null일 수 있다.
+                // 소리 전용 큐에서는 프리팹이 없는 것이 정상 상태이므로 경고 대상이 아니다.
+                if (cue.Prefab != null && cue.Prefab.GetComponentInChildren<ParticleSystem>(true) == null)
                 {
                     Debug.LogWarning(
                         $"[Pattern] '{name}'의 이펙트 큐 {i}('{cue.Label}') 프리팹에 ParticleSystem이 없습니다. " +

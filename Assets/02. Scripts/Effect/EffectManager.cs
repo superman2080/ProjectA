@@ -71,6 +71,9 @@ public class EffectManager : MonoBehaviour
         }
 
         if (enemyDirector != null) enemyDirector.OnEnemyKilled -= HandleEnemyKilled;
+
+        // 곡 중단·비활성으로 여기 들어오면 예약이 남는다 — 다음에 켜질 때 뜬금없이 울린다(잔존물 규율).
+        pendingImpactSfx = null;
     }
 
     /// <summary>적이 갈라지는 자리에 처치 이펙트. 카탈로그가 비면 무연출이라 배선 없이도 안전하다.</summary>
@@ -141,6 +144,40 @@ public class EffectManager : MonoBehaviour
             : (overlayLayer != null ? overlayLayer.position : transform.position);
 
         Play(info.AllCorrect ? EffectTrigger.PatternCompleteFull : EffectTrigger.PatternComplete, worldPosition);
+
+        // ⚠ 임팩트 효과음은 여기서 바로 울리면 안 된다. 완료 = 마지막 노드 입력이고,
+        // 칼이 닿는 것은 거기서 goodWindow(0.1초) + ImpactOffset 뒤다 — 그 시각은 식 하나로 모여 있다.
+        //
+        // ⚠ 패턴이 자기 소리를 들고 있으면(PatternEffectCue.Sfx) 공용 임팩트음은 물러난다.
+        // 안 그러면 둘 다 임팩트 시각이라 한 소리로 뭉쳐 들리고, 저작자는 "내 클립이 이상하다"로 오진한다.
+        if (info.AllCorrect && (info.Template == null || !info.Template.HasSfxCue))
+            pendingImpactSfx = info.ImpactTime();
+    }
+
+    // ─────────────────────────── 임팩트 효과음 ───────────────────────────
+
+    /// <summary>
+    /// 임팩트 효과음의 예약 시각(<c>Deadline + ImpactOffset</c>). <b>최대 하나면 된다</b> —
+    /// 패턴 완료는 순차적이고 A의 Deadline보다 B의 완료가 최소 0.4초 뒤라 겹치지 않는다
+    /// (<c>CameraDirector</c>의 "예약은 최대 하나"와 같은 근거).
+    /// </summary>
+    private float? pendingImpactSfx;
+
+    /// <summary>
+    /// 예약된 임팩트 효과음을 쏜다.
+    ///
+    /// <para><b>히트스톱과 시계가 안 어긋난다</b>: 예약은 <c>Time.time</c>이고 히트스톱은
+    /// <c>Time.timeScale</c>을 쓰지 않는다(Animator Speed Multiplier만 만진다). 정지 창 안에서도
+    /// 제때 울리며, 타격감 관점에서도 <b>멈추는 그 순간</b>에 나는 것이 맞다.</para>
+    ///
+    /// <para>카탈로그에 클립이 없으면 <see cref="SfxManager.Play"/>가 조용히 무시한다 — 배선 전까지 무음.</para>
+    /// </summary>
+    void Update()
+    {
+        if (!pendingImpactSfx.HasValue || Time.time < pendingImpactSfx.Value) return;
+
+        pendingImpactSfx = null;
+        SfxManager.Instance.Play(SfxTrigger.PatternImpact);
     }
 
     // ─────────────────────────── 앰비언트 ───────────────────────────
