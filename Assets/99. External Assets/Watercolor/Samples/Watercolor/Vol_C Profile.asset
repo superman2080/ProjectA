@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: Vol_C Profile
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: 3590564632967745172}
+--- !u!114 &3590564632967745172
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9beef4823ea82d24783b48d3cafb4d53, type: 3}
+  m_Name: FlowVol
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.FlowVol
+  active: 1
+  m_Fade:
+    m_OverrideState: 1
+    m_Value: 0.76
+  m_Strain:
+    m_OverrideState: 1
+    m_Value: 0.556
+  m_Samples:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Angle:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Flow:
+    m_OverrideState: 1
+    m_Value: {x: 0, y: 0, z: -0.04}
+  m_Tint:
+    m_OverrideState: 1
+    m_Value: {r: 0.36320752, g: 0.7476861, b: 1, a: 0.07058824}
+  m_Print:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Adaptive:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Focus:
+    m_OverrideState: 1
+    m_Value: 0.462
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 60
+  m_MotionTex:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: b87b6e5c91e9d8642895f24df9f8e85a, type: 3}
+  m_MotionPower:
+    m_OverrideState: 1
+    m_Value: 0.075
+  m_MotionMove:
+    m_OverrideState: 1
+    m_Value: 0

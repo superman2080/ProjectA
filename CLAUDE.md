@@ -39,6 +39,8 @@ Assets/
 │   │   ├── PatternLineRenderer.cs   # 입력 라인 / 가이드 캡슐 렌더러
 │   │   ├── FocusRingView.cs         # 포커스 링 뷰 — Point 자리에서 줄어든다(IPoolable)
 │   │   ├── DodgePointView.cs        # 기습 회피 입력 지점 — 화면 우하단 고정(§11-8)
+│   │   ├── ScoreHudView.cs          # 점수·콤보 HUD(순수 표시, §12)
+│   │   ├── ComboPostFxView.cs       # 콤보 단계 포스트FX 볼륨 웨이트(§12)
 │   │   └── Editor/
 │   │       └── PatternHandlerEditor.cs # 디버그 입력 커스텀 인스펙터(에디터 전용)
 │   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
@@ -75,17 +77,29 @@ Assets/
 │   │   ├── EffectCatalog.cs         # EffectTrigger enum + EffectEntry(트리거→프리팹 매핑)
 │   │   ├── CanvasEffectView.cs      # 개별 이펙트 뷰
 │   │   └── AmbientEffectController.cs # 배경 앰비언트 강도 조절
+│   ├── HitStop/
+│   │   └── HitStopDirector.cs       # 히트스톱 유일 관리 지점(§7-3)
+│   ├── Score/
+│   │   ├── ScoreDirector.cs         # 채점 유일 관리 지점(§12)
+│   │   ├── Core/                    # ScoreMath, ScoreResult(asmdef)
+│   │   └── Tests/                   # 채점 코어 유닛테스트(asmdef)
+│   ├── Audio/
+│   │   └── SoundManager.cs          # SfxTrigger 요청만 받는 싱글톤(게임플레이를 모른다)
+│   ├── Props/Editor/                # 배경 프롭·스테이지 배치 에디터 툴(§13, 에디터 전용)
 │   ├── Pool/
 │   │   ├── Pool.cs                  # PoolKey 기반 오브젝트 풀(Singleton)
 │   │   └── IPoolable.cs             # OnSpawn/OnDespawn 인터페이스
 │   ├── Util/
 │   │   └── Singleton.cs             # MonoBehaviour 싱글톤 베이스
 │   ├── GameSession.cs               # 씬 간 SelectedChart 전달(DontDestroyOnLoad 싱글톤)
+│   ├── PlayerHealth.cs              # 목숨(§7-6)
 │   └── SongSelectManager.cs         # 곡 선택 → GameSession 등록 → 씬 전환
+├── 03. Prefabs/StoryProps/          # 배경 프롭 낱개 프리팹(툴 산출물, §13)
 ├── 04. Datas/
 │   ├── Patterns/Templates/          # Pattern 에셋(모양 원본)
 │   └── Song/                        # SongChart 에셋
-└── docs/                            # Research/Plan 설계 문서(주제별) + !Guides(사용 가이드)
+├── 06. Models/Props/                # 배경 프롭 FBX(Blender 산출물, §13)
+└── docs/                            # Research/Plan 설계 문서(주제별) + !Guides(사용 가이드) + Story(서사 설계)
 ```
 
 ---
@@ -295,7 +309,7 @@ Assets/
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**
 - **`EffectCatalog`**: `EffectTrigger` enum(Perfect/Good/Miss/PatternCompleteFull/PatternComplete/NodeConnected) + `EffectEntry`(트리거→프리팹+풀 크기). **이펙트 추가 = 카탈로그에 한 줄 추가**(코드 수정 없음). 프리팹 비면 무연출.
-- **효과음도 여기서 낸다** — `SfxManager`는 게임플레이를 모르고(어느 씬에도 놓이는 싱글톤) `Play(SfxTrigger)` 요청만 받는다. 판정음(`Perfect`/`Good`/`Miss`)은 `OnFocusRingResolved`에서 즉시, **`PatternImpact`는 `Deadline + ImpactOffset`에 예약해서** 낸다(§6·§11과 같은 `info.ImpactTime()`).
+- **효과음도 여기서 낸다** — `SoundManager`는 게임플레이를 모르고(어느 씬에도 놓이는 싱글톤) `Play(SfxTrigger)` 요청만 받는다. 판정음(`Perfect`/`Good`/`Miss`)은 `OnFocusRingResolved`에서 즉시, **`PatternImpact`는 `Deadline + ImpactOffset`에 예약해서** 낸다(§6·§11과 같은 `info.ImpactTime()`).
   - **⚠ 패턴 완료 순간에 울리면 안 된다.** 완료 = 마지막 노드 입력이고 칼이 닿는 것은 거기서 `goodWindow`(0.1초) + 보정만큼 뒤다. **예약은 최대 하나**(§7-1과 같은 근거), `OnDisable`에서 회수한다.
   - **⚠ 히트스톱과 시계가 안 어긋난다.** 예약이 `Time.time`이고 히트스톱은 `timeScale`을 안 쓰므로(§7-3) 정지 창 안에서도 제때 울린다 — 타격감 관점에서도 **멈추는 그 순간**에 나는 것이 맞다.
   - **⚠ 소리 층은 소리 층이 든다.** `HitStopDirector`가 이미 같은 시각에 예약하고 있어 거기 한 줄이 더 짧지만, §7-3의 층 분리("`HitStopDirector`는 카메라를 안 만지고 `CameraDirector`는 애니메이터를 안 만진다")를 깬다.
@@ -304,7 +318,7 @@ Assets/
 
 ### 7-6. 목숨 (PlayerHealth)
 - **`PlayerHealth`**(플레이어 프리팹): `CharacterActionPlayer.OnPlayerHit`만 구독한다. 그 이벤트가 **적 칼이 실제로 닿는 시각**에만, 그것도 `Attacker.Enemy` 패턴에서만 나오므로 "적 공격을 못 막았을 때만 깎인다"는 규칙이 이벤트 하나로 이미 표현돼 있다(§6).
-- **⚠ `OnDepleted`는 아직 구독자가 없다** — 목숨이 0이 돼도 화면에서 아무 일도 일어나지 않는다. 버그가 아니라 **사망 연출이 미구현**인 것이며, 그 연출이 붙을 진입점이 이 이벤트다. `OnDamaged`(남은 수치)도 UI가 붙기 전까지 같은 상태다.
+- **⚠ `OnDepleted`는 아직 구독자가 없다** — 목숨이 0이 돼도 화면에서 아무 일도 일어나지 않는다. 버그가 아니라 **사망 연출이 미구현**인 것이며, 그 연출이 붙을 진입점이 이 이벤트다. `OnDamaged`(남은 수치)도 UI가 붙기 전까지 같은 상태다. (점수·콤보 쪽 HUD는 `ScoreHudView`로 이미 붙어 있다 — §12.)
 
 ### 8. 디버그 입력 (에디터 전용)
 - `PatternHandler`의 `#if UNITY_EDITOR` 블록 + `PatternHandlerEditor` 커스텀 인스펙터. **빌드에는 포함되지 않는다.**
@@ -315,6 +329,16 @@ Assets/
 ### 9. 씬 전환 / 곡 선택
 - **`SongSelectManager`**: 곡 선택 씬에서 버튼으로 `SelectChart(chart)` → `GameSession.SelectedChart`에 등록 후 `BattleScene` 로드. 씬 이름은 `gameplaySceneName` 인스펙터 값이 진실의 원천이다(코드 기본값은 새 인스턴스용 폴백).
 - **`GameSession`**(Singleton, DontDestroyOnLoad): 씬을 넘어 `SelectedChart`를 전달. `ChartPlayer`가 읽어 사용.
+
+#### ⚠ 이 구조는 스토리 모드에서 폐기된다 (설계 확정 · 코드 미구현)
+
+**`곡 선택 씬 → 전투 씬 → 종료 → 다시 곡 선택 씬`은 스토리 모드에 존재하지 않는다.** 플레이어는 **심상세계를 3인칭으로 직접 걸어 다니고**, 괴물이 고여 있는 무대에 들어서면 **그 자리에서** 곡이 시작되며, 끝나면 그 자리에 선 채 세계가 이어진다. 근거와 서사 규율은 `docs/Story/Story_Overview.md` §1-1·§2-4에 있다.
+
+- **모드가 둘로 갈린다**(`GameMode`) — **Story**(심상세계, 곡 선택 없음) / **FreePlay**(해금된 곡만 다시 치기). **`SongSelectScene`·`SongSelectManager`는 삭제하지 않는다** — FreePlay 전용으로 소속만 바뀐다. ⚠ **FreePlay 결과는 파편·등급 기록·엔딩 판정 어디에도 쌓이지 않는다**(쌓이면 서사가 성적표의 부산물이 된다).
+- **곡은 고르는 것이 아니라 자리에 딸린다** — 무대 하나가 `Encounter` 컴포넌트로 자기 `SongChart`를 들고, `EncounterDirector`가 진입 감지 → 곡 시작 → 종료 후 탐색 복귀를 맡는다. **`ChartPlayer`·`PatternHandler`·`EnemyDirector`는 한 줄도 안 고친다** — `GameSession.SelectedChart` 경로가 그대로 살아 있고 FreePlay가 계속 쓴다.
+- **⚠ 재도전은 UI가 아니라 장소다.** 그 곡을 `SSS`로 못 낸 자리는 **아직 얕게 일렁이고**, 다시 들어서면 같은 곡이 다시 시작된다. 재도전 메뉴·확인 창이 없다 — "들어서면 시작된다"는 규칙이 처음과 재도전에서 똑같이 작동할 뿐이라 **새로 배울 규칙이 0이다**. 등급은 **최고 기록으로만 갱신**되고, 트루 엔딩(전 곡 `SSS`)으로 가는 세계는 **일렁임이 하나도 없는 세계**라 진행도 UI가 필요 없다.
+- **무대 하나 = 씬 하나 = 곡 하나**이며, 씬 안에 전투 원(`stageRadius` 8m)과 그 주위 탐색 영역이 함께 있다. **무대 중심은 여전히 월드 원점**이라 §11-2의 배치·이격·프레이밍, §13의 배치표 좌표, 라이트맵이 전부 그대로다 — **이 개편은 무대 안을 건드리지 않는다.** 씬 경계는 골목·계단참 같은 **좁고 시야가 막힌 통로**에만 둔다.
+- **⚠ 이 개편의 유일한 위험 지점은 플레이어 위치의 소유권이다** — §11-2 참조.
 
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
@@ -357,6 +381,7 @@ Assets/
 - **⚠ 결투 간격은 상수가 아니라 패턴이 든 시간 함수다**(`Pattern.duelDistanceCurve`, §11-9).
 - **⚠ `EnemyDirector.PlayerPosition`은 결투 앵커가 아니라 그 부모(플레이어 루트)다.** 앵커의 역할은 **기준 간격을 정하는 것**이지 플레이어의 자리가 아니다 — 앵커는 플레이어보다 그 간격만큼 **앞**(적 쪽)에 있어서, **현재 간격이 그보다 좁아지면 `BuildDuelPlan`의 `toEnemy`가 부호를 뒤집어 목표가 적 반대편에 잡힌다**(물러나야 할 때 **적을 관통해 건너간다**). 예전에는 결투 간격 = 앵커 거리라 경계값에 딱 붙어 증상이 안 났고, **거리 커브(§11-9)가 그 전제를 깼다**(임팩트 간격 0.4m로 저작하면 매 패턴 그 구간에 들어간다).
 - **⚠ 플레이어 회전은 이동과 별개 스케줄이다**(`PlayerCombatMover.turnDuration` 0.15초). 한 벌로 묶으면 회전이 이동 시간(평균 1.5초)에 끌려가 **무대를 가로지르는 내내 목을 천천히 돌린다.** 예전엔 `OnOpponentChanged`의 회전이 같은 프레임 `OnDuelScheduled`에 통째로 덮여 `turnDuration`이 한 번도 안 쓰였다. 지금은 **먼저 상대를 보고 그 다음에 달린다.**
+- **⚠ 탐색 이동(`PlayerExploreMover`, §9 · 미구현)과 전투 이동은 배타적으로만 켜진다.** 전투 중 플레이어 위치의 주인은 `PlayerCombatMover`(수렴)와 `Pattern.duelDistanceCurve`(§11-9)이고 둘 다 `transform.position`을 **대입**한다 — 탐색 컨트롤러가 같은 프레임에 살아 있으면 대입이 서로를 덮어 **간격 커브·도착 시각 계약(§6 임팩트 정렬)이 통째로 깨진다.** 배타성의 경계는 곡 시작/종료가 아니라 **`EncounterDirector`가 무대 진입을 확정하는 순간**이며(카운트다운 3초 동안 이미 결투 계획이 선다), 반대로 곡 종료 후에는 **마지막 액션의 복귀가 끝난 뒤에** 탐색으로 넘긴다.
 - **⚠ 몸이 겹치는 것은 콜라이더로 못 막는다.** 플레이어·적 둘 다 `transform.position`을 **대입**한다(닫힌 보간·커브 구동) — 물리가 밀어낸 값은 다음 프레임에 소멸하고, 이동을 물리로 옮기면 도착 시각 계약(§6 임팩트 정렬)이 깨진다. 이격은 위치 계산 층에서 한다.
 - **불가침 영역은 원이 아니라 캡슐이다** — 플레이어 원 ∪ 현재 상대 원 ∪ **둘을 잇는 통로**(`EnemyRing.SeparationPush`, `separationRadius` 1m). 통로가 곧 대시 경로이자 칼이 지나가는 선이라, 비우면 겹친 뒤 밀어내는 게 아니라 **닿기 전에 비켜서 있다**. 상대가 없으면 두 끝점이 같아져 **그대로 원**이 된다(분기 없음).
 - **⚠ 미는 것은 적뿐이고, 그것도 `IsIdle`인 적뿐이다.** 플레이어는 도착 시각과 거리 커브가 위치를 소유하고, 이동 중인 적은 `Destination`이 결투 계획의 입력이다(§11-1) — 밀면 플레이어가 밀린 자리로 달려간다. **현재 상대는 캡슐의 끝점이라 애초에 위반자가 아니다**(거리 커브의 음수 = 관통은 의도다, §11-9).
@@ -408,7 +433,7 @@ Assets/
 - **역할이 갈린다 — 아웃라인 = 누가·어디서 / 닷지 포인트 = 지금.** 링이 자리를 못 말하게 된 대신 기습자에게 아웃라인을 켠다(`EnemyView.SetHighlight`). 배선은 `Fire()`(= 텔레그래프 시작 = 카메라·소리와 같은 순간)이고 끄는 곳은 `Finish()`·`Abort()` **양쪽**이며 `ResetState`도 끈다(안 끄면 **다음 대여가 빛나는 적으로 나온다**).
   - 구현은 **레이어 스왑 하나**다 — URP `RenderObjects` 피처(`AmbushOutline` 레이어 → `AmbushOutlineMaterial`)가 그 레이어만 한 번 더 그린다. 프리팹·머티리얼·셰이더를 안 건드리고 튜닝은 머티리얼 한 곳(`_OutlineColor`·`_OutlineWidth`)에 모인다.
   - **⚠ 깊이 상태를 건드리면 안 된다.** `CelOutline`은 메쉬를 부풀려 **뒷면만**(`Cull Front`) 그리는 셸 방식이라 **깊이 테스트가 겹치는 부분을 잘라내야 테두리만 남는다.** `depthCompareFunction = Always`로 열면 셸이 앞면 위에 그려져 **적 표면 전체가 칠해진다.**
-- **소리는 `SfxManager.Play(SfxTrigger)`만 부른다**(`AmbushTelegraph`/`DodgeSuccess`/`DodgeFail` — 각각 `Fire()`·`Succeed()`·`Fail()`). `DodgeDirector`가 오디오를 직접 만지지 않는다(카탈로그 조회·풀은 매니저 관할). ⚠ **클립이 아직 카탈로그에 미배선이라 지금은 무음**이다 — 버그가 아니라 에셋이 안 꽂힌 상태이며, 넣으면 코드 변경 없이 난다.
+- **소리는 `SoundManager.Play(SfxTrigger)`만 부른다**(`AmbushTelegraph`/`DodgeSuccess`/`DodgeFail` — 각각 `Fire()`·`Succeed()`·`Fail()`). `DodgeDirector`가 오디오를 직접 만지지 않는다(카탈로그 조회·풀은 매니저 관할). ⚠ **클립이 아직 카탈로그에 미배선이라 지금은 무음**이다 — 버그가 아니라 에셋이 안 꽂힌 상태이며, 넣으면 코드 변경 없이 난다.
 - **회피 착지점은 구르기 <b>시작</b> 시각에 비운다**(`EnemyDirector.ClearSpot` — 캡슐이 점으로 무너진 특수해). 원호 중심이 현재 상대라 착지점은 통로 **밖**이고, 그래서 §11-2의 매 프레임 이격에 안 걸린다. `ScoreSpot`이 좌/우 중 빈 쪽을 고르지만 그건 점수일 뿐 보장이 아니다. **도착이 아니라 출발 시각인 것이 핵심** — 도착 후에 밀면 겹친 프레임이 이미 나온 뒤다. **기습자에게 예외 처리가 없다**: `Fire()`의 `AssignAttack` 이후 `hasPendingAttack`이라 `IsIdle`이 false로 자동 제외되고, 사전 접근 중에는 `"이동 중"`으로 걸린다.
 - 상세: `docs/EnemyAmbushDodge/` · `docs/AmbushVisibility/` · 측정 기록과 폐기된 대안(예보·슬롯 저작): `docs/AmbushSlot/` · `docs/AmbushLookahead/`
 
@@ -448,14 +473,24 @@ Assets/
 - 상세: `docs/PatternChain/`
 
 ### 11-3. 적 사망 클립과 절단 시점
+- **⚠ 어느 각도로 갈라지는가는 패턴의 스윙이 정한다.** `EnemyDefinition.deathSliceSets[]`가 각도별 세트를 들고, 패턴은 자기 `playerAttack` 임팩트 프레임에서 유도된 평면(`Pattern.BladePlane`) 하나만 든다 — `ResolveDeathSet`이 `SliceMatch`로 **가장 비슷한 각도로 구워진 세트**를 고른다.
+  - **세트를 키가 아니라 기하로 고른다.** 인덱스·enum으로 고르면 패턴마다 키를 정해야 하고 새 각도마다 enum이 늘지만, 평면으로 고르면 **저작 필드가 0개**고 근처 각도가 이미 구워져 있으면 **굽기 0회로 재사용**된다. 굽는 횟수가 패턴 수(계속 증가)가 아니라 **서로 다른 각도 수**(포화)를 따라간다.
+  - **⚠ 좌표계가 둘이고 섞으면 안 된다.** `SliceSet.BakedPlanes`는 **메쉬 로컬**(실제로 메쉬를 자르는 값), `Pattern.BladePlane`·`SliceSet.BakedBladePlane`은 **적 루트 로컬**(canonical — 비교 전용). 메쉬 로컬은 리그 구조에 종속이라 적 종류를 넘나들며 비교하면 조용히 헛것을 비교한다. 적 루트는 발바닥이라 휴머노이드끼리 의미가 같다.
+  - **⚠ 절단 평면에는 부호가 없다** — `n`과 `−n`은 같은 절단면이다. 유도 법선은 칼의 진행 방향이 정하므로 같은 각도라도 좌우가 반대면 뒤집혀 나온다. `SliceMatch`가 두 부호를 함께 보지 않으면 그 둘이 180° 차이로 읽혀 **재사용이 전부 실패한다**(유닛테스트가 지키는 지점).
+  - **⚠ 프리웜은 배열 전체를 돈다.** 하나만 채우면 나머지 각도가 뽑힐 때 곡 도중 `Instantiate`가 나고 그 히치가 그대로 판정 손실이다(§5).
+  - **패턴은 여전히 `SliceSet`을 참조하지 않는다** — 시체 프리팹에 그 적의 스켈레톤 사본이 들어 있어 세트는 적 모델을 넘나들 수 없다. 패턴이 세트를 들면 "세트는 패턴이 고르고 죽는 적은 링에서 고른다"가 되어 **엉뚱한 몸이 갈라지는 상태가 표현 가능**해진다. 소유자는 `EnemyDefinition` 그대로고 **개수만 늘었다**.
+  - 패턴에 평면이 없거나 후보가 없으면 **기존 단일 필드(`deathSliceSet`) 그대로** — 어느 한쪽만 이관해도 안전하다.
+  - 저작: `Tools/Mesh Slice Baker`의 **`패턴 감사` 탭** — `스캔` 한 번이 전 패턴의 평면을 유도·기입하고 기존 세트와 매칭해 `재사용 / 굽기 필요`를 판정한다. 굽기가 필요한 것만 체크해 일괄 굽기.
 - **`Pattern.EnemyDeath`는 런타임에 재생된다.** 임팩트 프레임이 플레이어 공격과 **같은 절대 시각**(`Deadline + ImpactOffset`)에 오도록 배속을 역산한다(§6의 두 배우 규칙).
 - **절단(시체 교체·폭발)은 임팩트 프레임**이다 — 칼이 지나가는 그 순간 갈라진다. 사망 클립 유무와 무관하게 `burstTime = impactTime`이며(`EnemyView.AssignDeath`), 사망 클립은 처치 확정~임팩트 구간에만 보인다. (예전엔 트림 끝이라 쓰러지는 걸 다 본 뒤 갈라졌다.)
 - **재생은 처치 확정 즉시 시작한다.** 그보다 이른 시각은 알 수 없다(성패가 마지막 노드에서 정해진다). 그래서 임팩트까지 남는 실시간은 `goodWindow`(0.1초) + `impactOffset`뿐이고, **사망 클립의 `ImpactTime`은 트림 시작 근처에 찍어야 한다.** 죽는 모션은 원래 '맞는 순간'이 시작점이라 자연스럽게 맞는다. 뒤에 찍으면 정렬이 깨지기 전에 **쓰러지는 속도부터 빨라진다**(§6의 배속 경고).
 - **슬롯은 `Attack`과 나눈다**(`Death` 스테이트 + `DeathSlot_Placeholder` + `DeathSpeed`). 적이 공격 도중 죽을 때 같은 슬롯을 덮으면 진행 중인 클립이 튄다.
 - **죽는 적은 결투 위치를 비켜 준다**(`deathClearOffset` 0.6m). 승격은 확정 즉시 일어나 다음 상대가 같은 자리로 들어오기 때문 — 예전엔 임팩트에 사라져 문제가 없었다. 루트 모션이 있는 사망 클립이면 0으로 끈다.
 - **이벤트가 둘로 갈린다.** `OnEnemyKilled`는 **확정**(승격·링 보충과 같은 시점, 화면에는 아직 아무 일도 없다), `OnEnemyBurst`는 **절단 = 임팩트**(화면에서 사건이 일어나는 순간). **카메라 쉐이크는 `OnEnemyBurst`를 듣는다** — 확정에 걸면 칼이 닿기도 전에 화면이 흔들린다.
-- **굽기 포즈도 트림 끝**이다(`MeshSliceBakerWindow.BakePoseTime`). 터지는 순간의 포즈로 구울수록 관절 뒤틀림이 준다.
-- 상세: `docs/EnemyDeathClip/`
+- **굽기 포즈는 사망 클립의 임팩트 프레임**이다(`MeshSliceBakerWindow.BakePoseTime`). 터지는 순간의 포즈로 구울수록 관절 뒤틀림이 준다 — 절단 시각이 트림 끝 → 임팩트로 옮겨졌으므로 굽기 포즈도 같이 옮겨야 한다.
+  - **⚠ 평면을 유도하는 포즈와 메쉬를 자르는 포즈가 같아야 한다.** `TryDerivePlanes`는 적을 굽기와 **같은 포즈로 샘플링한 뒤** 좌표를 옮긴다 — 포즈를 안 잡으면 FBX 바인드 포즈(서 있지도 않다, 몸통 중심 y ≈ −0.09)를 기준으로 평면이 만들어져 **몸을 통째로 빗나간다**.
+  - **⚠ 빗나간 평면은 굽기를 실패시키지 않는다** — `MeshSliceBaker`가 '원래 떨어져 있던 메쉬 섬들'을 그대로 돌려주므로 조각 수가 0이 아니고, 툴은 성공으로 끝나며 런타임은 멀쩡한 시체를 세운다(**몸통이 안 갈라진다**). 그래서 `TryDerivePlanes`가 유도 직후 **평면이 포즈 메쉬를 실제로 가르는지** 검사하고 아니면 그 행을 실패로 찍는다.
+- 상세: `docs/EnemyDeathClip/` · 각도 매칭: `docs/PatternSliceAngle/`
 
 
 ---
@@ -535,3 +570,52 @@ Assets/
 2. Research 기반 → `docs/{주제폴더}/Plan_{주제}.md` 생성 (단계별로 분리)
 3. 사용자가 Plan에 `>>>` 피드백 남김 → Plan 재작성 → 반복
 4. "구현해줘" 요청 → 확정된 Plan 기준으로 전 단계 끝까지 구현, 각 단계 완료 여부(`[x]`/`[ ]`)를 Plan 문서에 계속 갱신, 새로운 문제 유발 금지
+
+---
+
+### 14. 마무리 실루엣 (FinaleSilhouette)
+- **곡의 마지막 패턴을 성공으로 끝내면 칼이 닿는 그 프레임에 화면이 뒤집힌다** — 배경은 빨갛게, 배우들만 검은 실루엣으로, 그리고 그 순간이 슬로우모션으로 늘어난다. 레퍼런스는 킬 빌.
+- **`FinaleSilhouetteDirector`**(`Effect/`): `CameraDirector`·`HitStopDirector`와 같은 관례 — **기존 이벤트만 구독하는 순수 소비자**이고 판정에 개입하지 않으며 배선이 비면 조용히 비활성된다. `PatternHandler`·`ChartPlayer`·`ScoreDirector`를 한 줄도 안 고친다.
+- **"마지막"은 채보를 직접 읽어 센다** — `ChartPlayer.ActiveChart.entries.Length`와 완료 횟수를 비교한다(`ScoreDirector`가 총량을 잡는 것과 같은 방식). ⚠ **`ChartPlayer.OnSongEnded`는 트리거로 못 쓴다** — 그것은 `audioSource.isPlaying`이 false가 돼야 나오므로 **아웃트로 길이만큼 늦다**. 카운터 리셋 지점은 `OnCountdownStarted`다.
+- **터지는 시각은 `info.ImpactTime()`** — §6·§7-1·§7-3과 **같은 확장 메서드**다. 그래야 히트스톱·쉐이크·절단·임팩트음과 한 프레임에 붙는다.
+- **⚠ 이 클래스만이 `Time.timeScale`을 건드린다.** §7-3의 금지 근거는 "판정·클립 정렬은 `Time.time`인데 채보는 `audioSource.time`으로 돌고 오디오는 timeScale 밖이라 차이가 **영구 누적**된다"인데, **여기서만 그 근거가 성립하지 않는다** — 마지막 노드가 이미 입력됐고 **판정할 패턴이 남아 있지 않아** 누적될 곳이 없다. 예외가 아니라 규칙의 경계다:
+  - **`Time.timeScale`은 판정이 남아 있는 동안 못 쓴다. 곡의 마지막 판정이 끝난 뒤에는 쓸 수 있고, 되돌리는 책임만 남는다.**
+  - 그래서 **트리거 조건(마지막 엔트리 + `AllCorrect`)이 곧 안전 조건**이다. 실패로 끝나면 시계도 안 건드린다.
+  - ⚠ **복구 경로가 셋이다** — 노출 종료 · `OnAllPatternsCleared`(곡 중단) · `OnDisable`. 하나라도 빠지면 **게임이 0.1배속으로 굳는다.**
+- **⚠ 마지막 일격의 히트스톱을 억제한다**(`HitStopDirector.SuppressNextMainImpact`). 해제 시각이 `Time.time + hitStopDuration`인데 **`Time.time`은 스케일된 시계**라 0.1초 정지가 **실시간 1초**가 되어 노출 창 전체를 먹는다 — 그러면 슬로우모션이 아니라 **정지 컷**이 된다. 슬로우가 타격감 강조를 대신하므로 여기서는 물러난다. 추가 스톱(`OnExtraImpact`)은 마지막 베기 *이전*이라 안 막는다.
+- **⚠ 노출 타이머는 `Time.unscaledDeltaTime`이다.** `deltaTime`으로 재면 0.1배속에서 10배로 늘어난다. **프로젝트 안에서 unscaled 시간을 쓰는 유일한 곳**이다.
+- **그림은 `RenderObjects` 피처 2장**(`FinaleBackground` 빨강 / `FinaleActors` 검정, 둘 다 `AfterRenderingOpaques`, 배경 → 배우 순서). §11-8의 레이어 스왑 관용구와 같다. ⚠ **깊이 상태를 건드리지 않는다**(`overrideDepthState = false`) — §11-8이 정확히 그걸로 데였다.
+  - **레이어는 `Silhouette`(10)** 이고 배우 서브트리를 통째로 올린다. ⚠ **원래 레이어를 오브젝트별로 기록해서 그 기록으로만 되돌린다** — 일괄로 0을 대입하면 `AmbushOutline`(9)에 있던 기습자가 강조를 잃는다. 적은 풀에서 나오므로 원복이 어긋나면 **다음 대여가 검은 채로 나온다**(§11-8과 같은 함정).
+  - **⚠ 절단 조각은 스왑 대상이 아니다.** `SlicePiece.Launch`가 부모에서 떼면서 `pieceLayer`(8)로 올리므로 **이미 전용 레이어에 있다** — `FinaleActors`의 LayerMask가 `Silhouette | SlicePiece`인 이유이고, 그래서 흩어진 조각을 되짚을 필요가 없다(그 목록은 아무도 안 든다).
+  - 실루엣 대상은 `EnemyDirector.CollectActorRoots`가 준다 — **적이 어디에 몇이나 있는지는 그 클래스만 안다**는 규율 유지.
+  - ⚠ **`SetActive`는 렌더러 <b>에셋</b>의 상태를 바꾼다.** 플레이 종료 시 반드시 false로 되돌린다(안 그러면 에디터 세션에 빨간 화면이 남는다).
+- **HUD는 감춘다** — 루트 Canvas가 `ScreenSpaceOverlay`라(§7-5) 그냥 두면 점수판이 실루엣 위에 그대로 남는다. `ScoreHudView.SetHidden(bool)`이 `CanvasGroup` 알파만 민다. ⚠ **오브젝트를 끄지 않는다** — `OnDisable`이 구독을 풀어 감춘 사이의 점수 변화를 놓친다. 감출지 말지는 여전히 부르는 쪽이 정한다(표시 계층은 게임플레이를 모른다).
+- **오디오는 안 느려진다**(timeScale 밖). `audioPitchScale` 노브가 있으나 기본 1 — ⚠ 내리면 `ChartPlayer`가 `audioSource.isPlaying`을 보므로 **곡 종료가 그만큼 늦어진다**.
+- **`OnFinaleBegan`/`OnFinaleEnded`** — 결과 화면(§12의 `GameSession.LastResult`)·서사 연출이 붙을 진입점. 지금은 구독자가 없다.
+- 상세: `docs/FinaleSilhouette/`
+
+### 13. 서사와 배경 프롭 (Story · StoryProps)
+- **서사 설계의 진실의 원천은 `docs/Story/`의 다섯 문서다** — `Story_Overview.md`(구조: 층·엔딩·시스템 연결) / `Story_Narrative.md`(인물·장소·사건) / `Story_Script.md`(대사·이미지·샷·자산) / `Story_Music.md`(곡) / `Story_Playthrough.md`(**처음부터 끝까지의 시간 순서 — 전체 흐름을 볼 때 여기부터 읽는다**). **CLAUDE.md는 "어떻게 보이는가", Story 문서는 "왜 그렇게 보이는가"**를 다룬다 — 둘이 겹치면 성질에 맞는 쪽으로 보낸다. (설계 과정의 Research/Plan 문서들은 확정 후 폐기했다.)
+- ⚠ **서사의 제1원칙은 `Story_Overview.md` §0이다** — 플레이어는 이곳이 심상세계라는 것을 모르고, **어떤 NPC도 세계를 설명하지 않는다.** 적은 기억이 아니라 세계를 무너뜨리는 괴물이고, 최종 보스의 얼굴은 **참수 순간 한 프레임**에만 드러난다. 연출을 붙일 때 이 셋을 먼저 확인한다.
+- **가짜 흑막이 있다** — 「면을 쓴 자」(`Story_Overview.md` §4-3). 4스테이지 씬 **안의 두 번째 무대(4-b)**에서 그를 베지만 아무것도 끝나지 않는다. 그가 요구하는 신규 코드는 **`Encounter.clusterSizeOverride` 필드 하나뿐**이며(한 씬에 `Encounter`가 둘이라 `EnemyDirector.clusterSize`를 씬 단위로 못 둔다), 나머지는 전부 기존 파라미터(`killOnSuccess` 사슬 · `DeathSliceSet` 조각 교체 · 이격 규칙)다. ⚠ **그에게 목소리·발광·아웃라인·전용 스팅어를 주지 않는다.**
+- **⚠ 서사 진행과 전투는 같은 공간·같은 흐름 안에 있다**(`Story_Overview.md` §1-1) — 곡 선택 씬과 전투 씬을 오가던 구조는 스토리 모드에서 폐기됐다. **§9가 그 구조를, §11-2가 그 유일한 위험 지점(위치 소유권)을 다룬다.** 여기서는 그것이 서사에 요구하는 것만 적는다:
+  - 튜토리얼·결과·수집·엔딩 **씬 4개가 폐기됐다** — 각각 1스테이지 시작 구간 / 무대 위 오버레이 / 오버레이 / 5스테이지 씬 안에서의 연속으로 흡수. **신규 씬은 심상세계 5 + 병실 1**뿐이다.
+  - **카시마의 브리핑은 화면이 아니라 자리다** — 무대로 가는 통로 옆에 서서 한 줄 하고 물러난다. ⚠ **그 장소를 처음 열 때만 재생된다**(되돌아가면 없다 — 반복되면 대사가 환경음이 되고 태도 곡선이 죽는다).
+  - **⚠ 「등을 보인 사람」의 "다가갈 수 없다"는 근거가 바뀌었다.** 예전 근거(무대 원 8m 밖 = 구조적 도달 불가)는 탐색이 생기며 무효다. 지금은 **다가가면 페이드 아웃하고 다시 안 나타난다** — ⚠ 벽·프롬프트로 막지 않는다(막으면 "게임이 아껴 둔 캐릭터"가 된다).
+  - **⚠ 「닫힌 문」과 모든 배경 도상 앞에 상호작용 프롬프트를 두지 않는다.** 이제 걸어가서 들여다볼 수 있지만 **가까이 가도 아무 일이 없어야** 한다. 콜라이더는 이때 처음 필요해지지만 **무대 원 안에는 여전히 두지 않는다**(전투 이동이 물리를 안 본다).
+  - **⚠ 탐색 구간에 목표 마커·미니맵·퀘스트 로그가 없다.** 길은 "괴물이 있는 쪽만 무너져 있다"가 정한다.
+- **서사가 요구하는 신규 코드는 이것이 전부다**(전부 미구현, 근거는 `Story_Overview.md` §9):
+  0. **`PlayerExploreMover` · `EncounterDirector` + `Encounter` · 자리별 최고 등급 저장 · 일렁임 VFX on/off · `GameMode`(Story/FreePlay)** — §9의 개편분. 전부 작은 소비자이고 기존 전투 코드를 수정하지 않는다.
+  1. `SongChart.stageIndex` — 적·무대·파편·힌트·배경이 전부 이 한 필드에서 파생된다.
+  2. **`DodgeDirector.OnDodgeSucceeded`** — 지금 `DodgeDirector`는 이벤트를 하나도 안 내보낸다. `Succeed()`에서 한 줄 발행.
+  3. **`SilentWitnessDirector`** — 위 이벤트만 구독해 「등을 보인 사람」(§Overview 4-2)을 무대 밖에 세웠다 지우는 순수 소비자. **`CameraDirector`·`HitStopDirector`와 같은 관례**(판정에 개입 없음, 배선이 비면 조용히 비활성). ⚠ 그녀는 **적이 아니다** — `EnemyDirector`의 타겟·이격·판정 어디에도 들어가면 안 되고, **소리·발광·아웃라인이 금지**다(아웃라인은 이미 기습자 강조가 쓰고 있어 겹치면 "공격해 오는 것"으로 읽힌다, §11-8).
+  4. 보스 참수 후 **머리 조각 교체** — 기존 `SliceSet` 파이프라인(§11)에 인간 머리 프리팹 1개.
+  5. 기습 보이스 1줄(`Fire()`에서 `SoundManager.Play` + 쿨다운) · 「마지막 선택」 결과 bool 1개 · 닫힌 문 프롭.
+- ⚠ **새 연출은 판정을 방해하면 안 된다** — 그녀의 페이드 인은 포커스 링 수축 중에는 시작하지 않는다(§Overview 4-2). 콤보 포스트FX 색수차 규율(§12)과 같은 근거.
+- **아직 런타임 코드가 없다.** 지금 있는 것은 **에디터 전용 파이프라인 셋**(`Assets/02. Scripts/Props/Editor/`, 네임스페이스 `StoryProps.EditorTools`)이고 빌드에 들어가지 않는다. 순서대로 쓴다:
+  1. `Tools/Story Props/Setup Materials` — `06. Models/Props`의 FBX 임포트 설정 + URP/Lit 머티리얼(`07. Materials/Props`) 생성·리맵. **멱등**(재실행해도 값만 갱신).
+  2. `Tools/Story Props/Extract Prefabs` — FBX 하나에 여러 프롭이 든 경우를 낱개 프리팹(`03. Prefabs/StoryProps`)으로 분해. **이미 있는 프리팹은 안 건드린다**(씬 배치의 참조가 끊기면 안 되므로).
+  3. `Tools/Story Props/Build Stage Layout/…` — 스테이지별 배치표를 현재 씬에 세운다(스테이지 1~5 + 트루 엔딩 병실). ⚠ **배치표의 진실의 원천은 `StageLayoutBuilder.cs`의 좌표 테이블**이다(설계 문서는 폐기됨) — 무대가 무엇을 뜻하는지는 `Story_Overview.md` §5, 놓이는 물건의 근거는 `Story_Narrative.md` §3-3에 있다.
+- **⚠ 무대 원 안은 반드시 평면이다**(반경 8m, 5스테이지는 3.5m). 플레이어·적 이동이 전부 `transform.position` **대입**이라 경사면을 못 탄다(§11-2) — 경사·계단·단차는 **무대 원 밖 배경으로만** 놓는다.
+- 무대 중심은 월드 원점이고 씬의 `Stage` 오브젝트가 거기 있다(§11-2) — 배치표도 그 전제 위에서 좌표를 적는다.
+- 상세: `docs/Story/`

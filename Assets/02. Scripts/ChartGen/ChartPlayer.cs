@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -10,6 +10,12 @@ namespace ChartGen
     {
         [SerializeField] private SongChart debugChart;
         [SerializeField] private AudioSource audioSource;
+
+        /// <summary>
+        /// 곡이 흐르는 오디오 소스. <b>읽기 전용</b>이다 — 연출이 배속·볼륨을 만질 때
+        /// <c>GetComponent</c>로 추측하지 않게 하려고 연다(같은 오브젝트에 있는 것은 배선의 우연이다).
+        /// </summary>
+        public AudioSource SongSource => audioSource;
         [SerializeField] private PatternHandler patternHandler;
 
         [Tooltip("전투 연출. 비우면 적 없이 패턴만 재생된다(기존 동작).")]

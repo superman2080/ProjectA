@@ -101,6 +101,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  bladePlane:
+    normal: {x: -0.17955108, y: 0.96535265, z: -0.18935609}
+    distance: -0.38858557
+  hasBladePlane: 1
   effectCues:
   - label: 
     prefab: {fileID: 0}

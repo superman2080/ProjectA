@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: fc19e62e642497f468f59ece44513a71
+timeCreated: 1698824667
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Runtime/Common/RenderTargetFlip.cs
+  uploadId: 975416

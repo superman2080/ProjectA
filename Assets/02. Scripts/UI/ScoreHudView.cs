@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -38,10 +38,25 @@ public class ScoreHudView : MonoBehaviour
     private double shownScore;   // ⚠ double이다 — long에 직접 보간하면 1점 단위에서 굴러가지 않는다
     private float punchUntil;
     private RectTransform comboRect;
+    private CanvasGroup group;
 
     void Awake()
     {
         comboRect = comboLabel != null ? comboLabel.rectTransform : null;
+        group = GetComponent<CanvasGroup>();
+    }
+
+    /// <summary>
+    /// HUD를 통째로 감춘다/되돌린다. <b>누가 언제 감출지는 이 클래스가 정하지 않는다</b> —
+    /// 여전히 순수 표시이고, 판단은 부르는 쪽(<see cref="FinaleSilhouetteDirector"/>)이 든다.
+    ///
+    /// <para><c>CanvasGroup</c>이 없으면 조용히 아무 일도 안 한다(기존 배선 누락 규율).
+    /// 오브젝트를 끄지 않는 이유는 <c>OnDisable</c>이 구독을 풀어 <b>감춘 사이의 점수 변화를 놓치기</b> 때문이다.</para>
+    /// </summary>
+    public void SetHidden(bool hidden)
+    {
+        if (group == null) return;
+        group.alpha = hidden ? 0f : 1f;
     }
 
     void OnEnable()

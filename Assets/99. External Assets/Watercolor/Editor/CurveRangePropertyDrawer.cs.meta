@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 84c90be4f36237544bbedd101c62e3db
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Editor/CurveRangePropertyDrawer.cs
+  uploadId: 975416

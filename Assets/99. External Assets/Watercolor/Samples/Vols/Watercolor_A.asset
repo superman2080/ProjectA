@@ -1,0 +1,265 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-6430031030397992727
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0faa963e8883e145805da46bed83f45, type: 3}
+  m_Name: WatercolorVol
+  m_EditorClassIdentifier: 
+  active: 1
+  m_Strength:
+    m_OverrideState: 1
+    m_Value: 0.339
+  m_Contour:
+    m_OverrideState: 1
+    m_Value: 0.257
+  m_Saturation:
+    m_OverrideState: 1
+    m_Value: 0.263
+  m_ColorNotes:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Density:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Focus:
+    m_OverrideState: 1
+    m_Value:
+      _curve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      _pixels:
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 3
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0.045
+  m_Smooth:
+    m_OverrideState: 1
+    m_Value: 1
+  m_ContourDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_StrengthDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_ColorNotesDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Splatters:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_Paper:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_ContourThickness:
+    m_OverrideState: 1
+    m_Value: 0.5
+  m_Blending:
+    m_OverrideState: 1
+    m_Value: 0.1
+  m_FramesLerp:
+    m_OverrideState: 1
+    m_Value: 3
+--- !u!114 &-5797424677582096429
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d8d6c0101010c74683c14e3d7d0337e, type: 3}
+  m_Name: WatercolorVol
+  m_EditorClassIdentifier: 
+  active: 1
+  m_Strength:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Contour:
+    m_OverrideState: 1
+    m_Value: 0.353
+  m_Saturation:
+    m_OverrideState: 1
+    m_Value: 0.44
+  m_ColorNotes:
+    m_OverrideState: 1
+    m_Value: -0.111
+  m_Density:
+    m_OverrideState: 1
+    m_Value: 1.44
+  m_Granulation:
+    m_OverrideState: 1
+    m_Value: 0.138
+  m_Focus:
+    m_OverrideState: 1
+    m_Value:
+      _curve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0.06686783
+          value: 0
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 0
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      _pixels:
+      - {r: 0.014669317, g: 0.014669317, b: 0.014669317, a: 0.014669317}
+      - {r: 0.0040249396, g: 0.0040249396, b: 0.0040249396, a: 0.0040249396}
+      - {r: 0.000019023522, g: 0.000019023522, b: 0.000019023522, a: 0.000019023522}
+      - {r: 0.0030156593, g: 0.0030156593, b: 0.0030156593, a: 0.0030156593}
+      - {r: 0.012722988, g: 0.012722988, b: 0.012722988, a: 0.012722988}
+      - {r: 0.02864532, g: 0.02864532, b: 0.02864532, a: 0.02864532}
+      - {r: 0.0502869, g: 0.0502869, b: 0.0502869, a: 0.0502869}
+      - {r: 0.07715197, g: 0.07715197, b: 0.07715197, a: 0.07715197}
+      - {r: 0.10874478, g: 0.10874478, b: 0.10874478, a: 0.10874478}
+      - {r: 0.14456958, g: 0.14456958, b: 0.14456958, a: 0.14456958}
+      - {r: 0.18413061, g: 0.18413061, b: 0.18413061, a: 0.18413061}
+      - {r: 0.22693211, g: 0.22693211, b: 0.22693211, a: 0.22693211}
+      - {r: 0.2724783, g: 0.2724783, b: 0.2724783, a: 0.2724783}
+      - {r: 0.3202735, g: 0.3202735, b: 0.3202735, a: 0.3202735}
+      - {r: 0.36982188, g: 0.36982188, b: 0.36982188, a: 0.36982188}
+      - {r: 0.4206277, g: 0.4206277, b: 0.4206277, a: 0.4206277}
+      - {r: 0.4721953, g: 0.4721953, b: 0.4721953, a: 0.4721953}
+      - {r: 0.5240289, g: 0.5240289, b: 0.5240289, a: 0.5240289}
+      - {r: 0.5756326, g: 0.5756326, b: 0.5756326, a: 0.5756326}
+      - {r: 0.62651074, g: 0.62651074, b: 0.62651074, a: 0.62651074}
+      - {r: 0.6761675, g: 0.6761675, b: 0.6761675, a: 0.6761675}
+      - {r: 0.7241073, g: 0.7241073, b: 0.7241073, a: 0.7241073}
+      - {r: 0.76983416, g: 0.76983416, b: 0.76983416, a: 0.76983416}
+      - {r: 0.8128526, g: 0.8128526, b: 0.8128526, a: 0.8128526}
+      - {r: 0.8526666, g: 0.8526666, b: 0.8526666, a: 0.8526666}
+      - {r: 0.8887806, g: 0.8887806, b: 0.8887806, a: 0.8887806}
+      - {r: 0.9206986, g: 0.9206986, b: 0.9206986, a: 0.9206986}
+      - {r: 0.9479251, g: 0.9479251, b: 0.9479251, a: 0.9479251}
+      - {r: 0.9699643, g: 0.9699643, b: 0.9699643, a: 0.9699643}
+      - {r: 0.9863203, g: 0.9863203, b: 0.9863203, a: 0.9863203}
+      - {r: 0.9964974, g: 0.9964974, b: 0.9964974, a: 0.9964974}
+      - {r: 1, g: 1, b: 1, a: 1}
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 2
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Smooth:
+    m_OverrideState: 1
+    m_Value: 0
+  m_ContourDeviation:
+    m_OverrideState: 1
+    m_Value: 0.189
+  m_StrengthDeviation:
+    m_OverrideState: 1
+    m_Value: 0.335
+  m_ColorNotesDeviation:
+    m_OverrideState: 1
+    m_Value: 0.665
+  m_Splatters:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: b87b6e5c91e9d8642895f24df9f8e85a, type: 3}
+    dimension: 1
+  m_Paper:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: 76f2cb6849805f04da7b6b810b154bb5, type: 3}
+    dimension: 1
+  m_ContourThickness:
+    m_OverrideState: 1
+    m_Value: 0.995
+  m_Blending:
+    m_OverrideState: 1
+    m_Value: 0.101
+  m_FramesLerp:
+    m_OverrideState: 1
+    m_Value: 4.43
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: Watercolor_A
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: -5797424677582096429}

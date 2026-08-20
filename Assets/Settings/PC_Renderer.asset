@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-7827042190313872461
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fd0b6c4cbc6d194ca28e475380a9186, type: 3}
+  m_Name: WatercolorFx
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.WatercolorFx
+  m_Active: 1
+  _event: 600
+  _pass: {fileID: -5508547785467120857}
+  _blitShader: {fileID: 4800000, guid: c17132b1f77d20942aa75f8429c0f8bc, type: 3}
+--- !u!114 &-5508547785467120857
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30016e43bba376444b9a67af55156385, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.WatercolorPass
+  _shader: {fileID: 4800000, guid: 0df733e3d2c29b342ace5044cc131c85, type: 3}
+  _motionTexDefault: {fileID: 2800000, guid: b87b6e5c91e9d8642895f24df9f8e85a, type: 3}
+  _paperTexDefault: {fileID: 2800000, guid: d9f9959633441d1409a85bd2889ccb03, type: 3}
 --- !u!114 &-3054197004743720012
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -23,6 +54,64 @@ MonoBehaviour:
         m_Bits: 256
       PassNames: []
     overrideMaterial: {fileID: 2100000, guid: 7fd5777fb0e24d31a27ec7e7cf859e3a, type: 2}
+    overrideMaterialPassIndex: 0
+    overrideShader: {fileID: 0}
+    overrideShaderPassIndex: 0
+    overrideMode: 1
+    overrideDepthState: 0
+    depthCompareFunction: 4
+    enableWrite: 1
+    stencilSettings:
+      overrideStencilState: 0
+      stencilReference: 0
+      stencilCompareFunction: 8
+      passOperation: 0
+      failOperation: 0
+      zFailOperation: 0
+    cameraSettings:
+      overrideCamera: 0
+      restoreCamera: 1
+      offset: {x: 0, y: 0, z: 0, w: 0}
+      cameraFieldOfView: 60
+--- !u!114 &-2842708013911481800
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b247578015234874a931cabd3884ad14, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.FlowPass
+  _shader: {fileID: 4800000, guid: c798fab7b2242c64cbe9bcaf557f2318, type: 3}
+  _fps: 60
+  _scale: 0.5
+  _hdr: 0
+--- !u!114 &-200732028447463826
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b3d386ba5cd94485973aee1479b272e, type: 3}
+  m_Name: FinaleActors
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.RenderObjects
+  m_Active: 0
+  settings:
+    passTag: FinaleActors
+    Event: 300
+    filterSettings:
+      RenderQueueType: 0
+      LayerMask:
+        serializedVersion: 2
+        m_Bits: 1280
+      PassNames: []
+    overrideMaterial: {fileID: 2100000, guid: 2f89949ddca53c543b990263120ef527, type: 2}
     overrideMaterialPassIndex: 0
     overrideShader: {fileID: 0}
     overrideShaderPassIndex: 0
@@ -70,7 +159,11 @@ MonoBehaviour:
   - {fileID: 7833122117494664109}
   - {fileID: -3054197004743720012}
   - {fileID: 3129231911068169864}
-  m_RendererFeatureMap: ad6b866f10d7b46c
+  - {fileID: -7827042190313872461}
+  - {fileID: 5056448797074111942}
+  - {fileID: 1931847733029277974}
+  - {fileID: -200732028447463826}
+  m_RendererFeatureMap: ad6b866f10d7b46cb443308a01509dd588f608ffd7436d2bb3a358ec98c26093c6bd8d06641d2c4616915a1f474dcf1a6e66589d48db36fd
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -99,6 +192,48 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 0
+--- !u!114 &1931847733029277974
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b3d386ba5cd94485973aee1479b272e, type: 3}
+  m_Name: FinaleBackground
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.RenderObjects
+  m_Active: 0
+  settings:
+    passTag: FinaleBackground
+    Event: 300
+    filterSettings:
+      RenderQueueType: 0
+      LayerMask:
+        serializedVersion: 2
+        m_Bits: 4294966015
+      PassNames: []
+    overrideMaterial: {fileID: 2100000, guid: 4e68bbf58c5cb4447a44063b60da0215, type: 2}
+    overrideMaterialPassIndex: 0
+    overrideShader: {fileID: 0}
+    overrideShaderPassIndex: 0
+    overrideMode: 1
+    overrideDepthState: 0
+    depthCompareFunction: 4
+    enableWrite: 1
+    stencilSettings:
+      overrideStencilState: 0
+      stencilReference: 0
+      stencilCompareFunction: 8
+      passOperation: 0
+      failOperation: 0
+      zFailOperation: 0
+    cameraSettings:
+      overrideCamera: 0
+      restoreCamera: 1
+      offset: {x: 0, y: 0, z: 0, w: 0}
+      cameraFieldOfView: 60
 --- !u!114 &3129231911068169864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -141,6 +276,22 @@ MonoBehaviour:
       restoreCamera: 1
       offset: {x: 0, y: 0, z: 0, w: 0}
       cameraFieldOfView: 60
+--- !u!114 &5056448797074111942
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec04b35f15f10a944b6894becd282c66, type: 3}
+  m_Name: FlowFx
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.FlowFx
+  m_Active: 1
+  _event: 600
+  _pass: {fileID: -2842708013911481800}
+  _blitShader: {fileID: 4800000, guid: c17132b1f77d20942aa75f8429c0f8bc, type: 3}
 --- !u!114 &7833122117494664109
 MonoBehaviour:
   m_ObjectHideFlags: 0

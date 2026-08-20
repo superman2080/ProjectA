@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ec04b35f15f10a944b6894becd282c66
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Runtime/FlowFx.cs
+  uploadId: 975416

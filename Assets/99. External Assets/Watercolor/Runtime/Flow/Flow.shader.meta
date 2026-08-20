@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: c798fab7b2242c64cbe9bcaf557f2318
+timeCreated: 1698823799
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Runtime/Flow/Flow.shader
+  uploadId: 975416

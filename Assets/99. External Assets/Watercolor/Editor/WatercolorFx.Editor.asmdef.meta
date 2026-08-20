@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: c9d5e6f06598ec6478b10b565c10f385
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Editor/WatercolorFx.Editor.asmdef
+  uploadId: 975416

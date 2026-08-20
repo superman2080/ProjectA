@@ -1,0 +1,16 @@
+{
+  "name": "www.nulltale.watercolorfx",
+  "displayName": "WatercolorFx",
+  "version": "2.0.9",
+  "unity": "2022.1",
+  "description": "Artistic painting visual effect for Unity Urp",
+  "author": {
+    "name": "NullTale",
+    "email": "nulltale@gmail.com",
+    "url": "https://x.com/NullTale"
+  },
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "10.10.6"
+  },
+  "hideInEditor": false
+}

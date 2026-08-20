@@ -19,6 +19,10 @@ MonoBehaviour:
   bakedPlanes:
   - normal: {x: -0.9956452, y: 0.09214205, z: 0.014160877}
     distance: 0.16345061
+  bakedBladePlane:
+    normal: {x: 0.061513554, y: -0.76536876, z: 0.6406456}
+    distance: 0.8537842
+  hasBakedBladePlane: 1
   shape: 5
   skinned: 1
   corpsePrefab: {fileID: 9086103191076048480, guid: e6c5ce5f667b06a4cabbc60c2635ee56, type: 3}

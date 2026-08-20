@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace SliceSpace
 {
@@ -24,8 +24,15 @@ namespace SliceSpace
         [Tooltip("조각별 바깥 방향(무게중심 − 원본 중심). 런타임 흩뿌림의 1차 방향원.")]
         [SerializeField] private Vector3[] pieceScatterDirs;
 
-        [Tooltip("이 세트를 구울 때 사용한 절단 평면. 굽기 툴이 재굽기 때 프리셋 대신 이 값을 로드한다.")]
+        [Tooltip("이 세트를 구울 때 사용한 절단 평면(메쉬 로컬). 굽기 툴이 재굽기 때 프리셋 대신 이 값을 로드한다.")]
         [SerializeField] private SlicePlane[] bakedPlanes;
+
+        [Tooltip("같은 절단면을 적 루트 로컬로 옮긴 값(canonical). ⚠ 위 bakedPlanes와 사는 좌표계가 다르다 —\n" +
+                 "저쪽은 메쉬를 자르는 용도, 이쪽은 '어느 패턴의 스윙과 비슷한가'를 비교하는 용도다.\n" +
+                 "비어 있으면 이 세트는 매칭 후보에서 빠지고 기본 세트로만 쓰인다.")]
+        [SerializeField] private SlicePlane bakedBladePlane;
+
+        [SerializeField, HideInInspector] private bool hasBakedBladePlane;
 
         [Tooltip("어떤 프리셋에서 출발했는지 나타내는 라벨. 런타임 조회에는 쓰지 않는다.")]
         [SerializeField] private SliceShape shape = SliceShape.Custom;
@@ -57,6 +64,15 @@ namespace SliceSpace
         public Vector3[] PieceLocalOffsets => pieceLocalOffsets;
         public Vector3[] PieceScatterDirs => pieceScatterDirs;
         public SlicePlane[] BakedPlanes => bakedPlanes;
+
+        /// <summary>
+        /// 매칭용 절단면(적 루트 로컬). <see cref="BakedPlanes"/>와 <b>좌표계가 다르다</b> —
+        /// 섞어 쓰면 비교가 조용히 헛것을 비교한다.
+        /// </summary>
+        public SlicePlane BakedBladePlane => bakedBladePlane;
+
+        /// <summary>매칭 후보로 쓸 수 있는가. 획만 그어 구운 세트는 false다.</summary>
+        public bool HasBakedBladePlane => hasBakedBladePlane;
         public SliceShape Shape => shape;
         public int InitialPoolSize => Mathf.Max(0, initialPoolSize);
         public int MaxPoolSize => Mathf.Max(1, maxPoolSize);
@@ -107,7 +123,8 @@ namespace SliceSpace
         /// </summary>
         public void EditorAssignSkinned(
             GameObject sourcePrefab, GameObject corpse, int rootPiece,
-            SlicePlane[] planes, AnimationClip poseClip, float poseTime)
+            SlicePlane[] planes, AnimationClip poseClip, float poseTime,
+            SlicePlane? bladePlane = null)
         {
             originalPrefab = sourcePrefab;
             corpsePrefab = corpse;
@@ -118,10 +135,28 @@ namespace SliceSpace
             bakedPoseTime = poseTime;
             skinned = true;
 
+            // 유도 없이 획만 그어 구우면 매칭 후보가 아니다 — 기존 값을 지우지 않고 그대로 둔다
+            // (평면만 다시 기입하는 경로가 조각을 재굽지 않고 이 필드만 채운다).
+            if (bladePlane.HasValue)
+            {
+                bakedBladePlane = bladePlane.Value;
+                hasBakedBladePlane = true;
+            }
+
             // 정적 경로 필드는 비워 둔다 — 남아 있으면 어느 쪽이 산출물인지 모호해진다.
             piecePrefabs = new GameObject[0];
             pieceLocalOffsets = new Vector3[0];
             pieceScatterDirs = new Vector3[0];
+        }
+
+        /// <summary>
+        /// 매칭용 평면만 기입한다. <b>조각을 다시 굽지 않는다</b> — 이미 구워진 세트를
+        /// 매칭 후보로 편입시키는 이관 경로다(조각 프리팹 수십 장을 다시 만들 이유가 없다).
+        /// </summary>
+        public void EditorAssignBladePlane(SlicePlane plane)
+        {
+            bakedBladePlane = plane;
+            hasBakedBladePlane = true;
         }
 #endif
     }

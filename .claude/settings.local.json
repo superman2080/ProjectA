@@ -138,7 +138,16 @@
       "mcp__blender__get_scene_info",
       "mcp__blender__execute_blender_code",
       "mcp__blender__get_viewport_screenshot",
-      "Bash(xargs grep -l \"Vignette\")"
+      "Bash(xargs grep -l \"Vignette\")",
+      "Bash(xargs grep -h guid)",
+      "Bash(xargs grep -n \"public\\\\|Parameter\")",
+      "Read(//c/Users/tw.kim/Downloads/**)",
+      "Bash(unzip -l \"/c/Users/tw.kim/Downloads/_NIKKE__Scarlet_Racer_sHigh_b1.0.zip\")",
+      "Bash(mkdir -p \"/c/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/31083c72-4cc8-4505-a3f9-747c36f11ca5/scratchpad/scarlet\")",
+      "Bash(unzip -o -q \"/c/Users/tw.kim/Downloads/_NIKKE__Scarlet_Racer_sHigh_b1.0.zip\" -d \"/c/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/31083c72-4cc8-4505-a3f9-747c36f11ca5/scratchpad/scarlet\")",
+      "Read(//c/Users/tw.kim/AppData/Local/Temp/claude/C--Unity-KatanaRush-BeatOverdrive/31083c72-4cc8-4505-a3f9-747c36f11ca5/scratchpad/**)",
+      "Bash(grep -nB3 -A3 \"m_Focus\\\\|Focus\" WatercolorVol.cs)",
+      "Bash(grep -icE \"\\\\.\\(fbx|obj\\)$\")"
     ]
   }
 }

@@ -75,6 +75,14 @@ namespace PatternSpace
                  "저작은 Tools/Animation Clip Trimmer. 구동 구간은 플레이어 클립 재생 구간이다.")]
         [SerializeField] private AnimationCurve duelDistanceCurve = new AnimationCurve();
 
+        [Header("Slice")]
+        [Tooltip("이 스윙이 만드는 절단면(canonical = 적 루트 로컬). 굽기 툴이 playerAttack의 임팩트 프레임에서\n" +
+                 "유도해 기입한다 — 손으로 적지 않는다(Tools/Mesh Slice Baker의 '패턴 감사' 탭).\n" +
+                 "런타임은 이 평면으로 적 정의의 절단 세트 중 가장 비슷한 것을 고른다. 비면 정의의 기본 세트.")]
+        [SerializeField] private SliceSpace.SlicePlane bladePlane;
+
+        [SerializeField, HideInInspector] private bool hasBladePlane;
+
         [Header("World Effects")]
         [Tooltip("이 패턴이 재생할 월드 이펙트들. 큐 하나가 '언제·어디에·어떤 조건에서'를 스스로 든다.\n" +
                  "개수 제한이 없으므로 칼날·플레이어·적·임팩트 지점에 각각 붙일 수 있다.\n" +
@@ -186,6 +194,29 @@ namespace PatternSpace
         /// 이 패턴이 재생할 월드 이펙트 큐들. <b>슬롯이 아니라 리스트인 이유</b>는
         /// 개수와 시점이 코드가 아니라 저장 단계에서 정해지기 때문이다(<see cref="PatternEffectCue"/>).
         /// </summary>
+        /// <summary>
+        /// 이 스윙이 만드는 절단면. <b>좌표계는 적 루트 로컬</b>(표준 결투 배치에서 유도한 canonical 평면)이라
+        /// 적 종류를 넘나들며 비교할 수 있다 — 굽기에 쓰는 메쉬 로컬 평면과 사는 공간이 다르다.
+        ///
+        /// <para><b>패턴은 <see cref="SliceSpace.SliceSet"/>을 직접 참조하지 않는다.</b> 시체 프리팹 안에는
+        /// 그 적의 스켈레톤 사본이 들어 있어 세트는 원리적으로 적 모델을 넘나들 수 없다 — 패턴이 세트를 들면
+        /// "세트는 패턴이 고르고 죽는 적은 링에서 고른다"가 되어 <b>엉뚱한 몸이 갈라지는 상태가 표현 가능</b>해진다.
+        /// 패턴이 말할 수 있는 것은 '어느 각도'까지이고, 세트의 소유자는 <c>EnemyDefinition</c>으로 남는다.</para>
+        /// </summary>
+        public SliceSpace.SlicePlane BladePlane => bladePlane;
+
+        /// <summary>칼 평면이 유도돼 있는가. 없으면 런타임이 적 정의의 기본 세트로 폴백한다.</summary>
+        public bool HasBladePlane => hasBladePlane;
+
+#if UNITY_EDITOR
+        /// <summary>굽기 툴 전용 기입 경로. 런타임 코드는 호출하지 않는다.</summary>
+        public void EditorAssignBladePlane(SliceSpace.SlicePlane plane)
+        {
+            bladePlane = plane;
+            hasBladePlane = true;
+        }
+#endif
+
         public IReadOnlyList<PatternEffectCue> EffectCues => effectCues;
 
         /// <summary>

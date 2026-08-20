@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: d549a58c1a2860e4c8776ef819c84f81
+timeCreated: 1697620992
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Editor/PassDrawer.cs
+  uploadId: 975416

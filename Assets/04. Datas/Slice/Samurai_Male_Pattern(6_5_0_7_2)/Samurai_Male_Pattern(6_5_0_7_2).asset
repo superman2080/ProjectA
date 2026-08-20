@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: Samurai_Male_Pattern(6_5_0_7_2)
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 7891724665517407530, guid: 0b6c0dc99f690d6448862df79bfe876c, type: 3}
+  piecePrefabs: []
+  pieceLocalOffsets: []
+  pieceScatterDirs: []
+  bakedPlanes:
+  - normal: {x: -0.3472799, y: -0.93457264, z: -0.07726962}
+    distance: -0.2690211
+  bakedBladePlane:
+    normal: {x: -0.3472799, y: -0.93457264, z: -0.07726978}
+    distance: 0.89925754
+  hasBakedBladePlane: 1
+  shape: 5
+  skinned: 1
+  corpsePrefab: {fileID: 8878968290370621737, guid: 24353192947f40a4087ed695d7545c31, type: 3}
+  rootPieceIndex: 0
+  bakedPoseClip: {fileID: 7400000, guid: 681b322cea2d3b146bebfcace0bd4fbc, type: 2}
+  bakedPoseTime: 0.079734184
+  initialPoolSize: 2
+  maxPoolSize: 8

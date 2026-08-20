@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: 50662d5661603a54d956432e7bae40c3
+timeCreated: 1697614508
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Runtime/Common/ShaderNameAttribute.cs
+  uploadId: 975416

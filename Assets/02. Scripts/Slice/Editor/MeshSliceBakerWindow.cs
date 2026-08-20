@@ -32,9 +32,9 @@ namespace SliceSpace.EditorTools
         /// <summary>칼 본 이름. <c>WeaponBoneBake</c>가 커브를 굽는 그 본이다.</summary>
         private const string WeaponBoneName = "add_weapon_r";
 
-        private enum BakeMode { StaticMesh, Humanoid }
+        private enum BakeMode { StaticMesh, Humanoid, PatternAudit }
 
-        private static readonly string[] ModeLabels = { "일반 메쉬", "휴머노이드" };
+        private static readonly string[] ModeLabels = { "일반 메쉬", "휴머노이드", "패턴 감사" };
 
         [SerializeField] private BakeMode mode = BakeMode.StaticMesh;
 
@@ -75,6 +75,36 @@ namespace SliceSpace.EditorTools
         private float DuelDistance =>
             targetPattern != null ? targetPattern.DuelGapAt(0f, duelBaseDistance) : duelBaseDistance;
 
+        // ── 패턴 감사 ───────────────────────────────────────────────────────────
+        [SerializeField] private string patternFolder = "Assets/04. Datas/Patterns/Templates";
+        [SerializeField] private float reuseThreshold = 15f;
+        [SerializeField] private float auditPositionWeight = 60f;
+        private readonly List<AuditRow> auditRows = new List<AuditRow>();
+        private Vector2 auditScroll;
+        private string auditSummary;
+
+        /// <summary>감사 표 한 행 = 패턴 하나. 굽지 않고도 "재사용되는가"를 답한다.</summary>
+        private sealed class AuditRow
+        {
+            public Pattern pattern;
+            public SlicePlane meshLocal;
+            public SlicePlane canonical;
+            public bool derived;
+            public string error;
+
+            public SliceSet nearest;
+            public float angle;
+            public float offset;
+            public float score;
+
+            /// <summary>문턱 안에 드는 세트가 있는가. 있으면 굽기 0회로 끝난다.</summary>
+            public bool reused;
+
+            public bool selected;
+
+            public bool NeedsBake => derived && !reused;
+        }
+
         // 프리뷰
         private PreviewRenderUtility previewUtil;
         private float yaw = 130f;
@@ -101,7 +131,8 @@ namespace SliceSpace.EditorTools
 
         // 유도된 칼 평면(휴머노이드). 획 목록에 넣기 전까지는 오버레이로만 보인다.
         private bool hasBladePlane;
-        private SlicePlane bladePlane;
+        private SlicePlane bladePlane;            // 메쉬 로컬 — 실제로 자르는 값
+        private SlicePlane canonicalBladePlane;   // 적 루트 로컬 — 매칭용(SliceMatch)
 
         [MenuItem("Tools/Mesh Slice Baker")]
         public static void Open() => GetWindow<MeshSliceBakerWindow>("Mesh Slice Baker");
@@ -119,6 +150,13 @@ namespace SliceSpace.EditorTools
         void OnGUI()
         {
             DrawModeTabs();
+
+            if (mode == BakeMode.PatternAudit)
+            {
+                DrawAuditTab();
+                return;
+            }
+
             DrawPreview();
 
             scroll = EditorGUILayout.BeginScrollView(scroll);
@@ -333,16 +371,20 @@ namespace SliceSpace.EditorTools
         }
 
         /// <summary>
-        /// 굽는 포즈의 클립 시각 = <b>트림 끝</b>.
+        /// 굽는 포즈의 클립 시각 = <b>사망 클립의 임팩트 프레임</b>.
         ///
-        /// <para>임팩트 프레임이 아니다 — 적은 임팩트에 맞고 <b>사망 클립이 끝난 뒤에</b> 갈라진다.
-        /// 조각이 스키닝을 유지하므로 어떤 포즈든 따라가지만, <b>터지는 순간의 포즈로 구울수록</b>
-        /// 관절 뒤틀림이 준다.</para>
+        /// <para><b>터지는 순간의 포즈로 구울수록 관절 뒤틀림이 준다</b>는 규칙은 그대로고, 바뀐 것은
+        /// '터지는 순간'이 어디냐다 — §11-3에서 절단 시각을 <b>트림 끝 → 임팩트 프레임</b>으로 옮겼는데
+        /// 이 함수만 트림 끝에 남아 있었다. 사망 클립은 루트 모션을 들고 있어 그 차이가 최대 1.3m이고,
+        /// 그만큼 <b>평면 유도와 절단이 서로 다른 자리의 몸을 본다</b>.</para>
+        ///
+        /// <para>임팩트가 오서링되지 않았으면 <see cref="PatternSpace.ClipAlignment.ResolvedImpactSpan"/>이
+        /// 트림 끝으로 폴백한다 — 기존 데이터는 예전 값 그대로다.</para>
         /// </summary>
         private static float BakePoseTime(PatternSpace.ClipAlignment death)
         {
             if (death == null || death.Clip == null) return 0f;
-            return death.StartOffset + death.ResolvedDuration;
+            return death.StartOffset + death.ResolvedImpactSpan;
         }
 
         private void DrawPoseInfo()
@@ -359,7 +401,7 @@ namespace SliceSpace.EditorTools
                 return;
             }
 
-            EditorGUILayout.LabelField("굽기 포즈", $"{death.Clip.name} @ {BakePoseTime(death):0.000}s (트림 끝)");
+            EditorGUILayout.LabelField("굽기 포즈", $"{death.Clip.name} @ {BakePoseTime(death):0.000}s (임팩트 프레임)");
         }
 
         // ── 획 목록 ─────────────────────────────────────────────────────────────
@@ -1076,16 +1118,69 @@ namespace SliceSpace.EditorTools
         /// </summary>
         private void DeriveBladePlane()
         {
-            var attack = targetPattern != null ? targetPattern.PlayerAttack : null;
-            if (attack?.Clip == null || playerPrefab == null || enemyPrefab == null) return;
+            if (!TryDerivePlanes(targetPattern, enemyPrefab, playerPrefab, enemyRendererIndex, duelBaseDistance,
+                                 out SlicePlane meshLocal, out SlicePlane canonical, out string error))
+            {
+                if (!string.IsNullOrEmpty(error)) Debug.LogWarning($"[MeshSliceBaker] {error}");
+                return;
+            }
 
-            var player = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab);
-            var enemy = (GameObject)PrefabUtility.InstantiatePrefab(enemyPrefab);
+            bladePlane = meshLocal;
+            canonicalBladePlane = canonical;
+            hasBladePlane = true;
+            Repaint();
+        }
+
+        /// <summary>
+        /// 한 번의 샘플링에서 <b>평면을 둘</b> 뽑는다. 같은 월드 평면을 변환만 달리한 것이다.
+        ///
+        /// <list type="bullet">
+        /// <item><paramref name="meshLocal"/> — <c>SkinnedMeshRenderer</c> 로컬. <b>실제로 메쉬를 자르는</b> 값.</item>
+        /// <item><paramref name="canonical"/> — <b>적 루트 로컬</b>. "어느 패턴의 스윙과 비슷한가"를
+        /// 비교하는 값(<see cref="SliceMatch"/>). 메쉬 로컬은 리그 구조에 종속이라 적 종류를 넘나들며
+        /// 비교하면 헛것을 비교하게 되므로, 발바닥 기준인 루트 로컬로 따로 뽑는다.</item>
+        /// </list>
+        ///
+        /// <para>씬을 안 만진다 — 프리팹 둘을 임시로 세웠다 지우므로 감사 탭이 패턴 수십 개에 대해
+        /// 반복 호출해도 안전하다.</para>
+        /// </summary>
+        private static bool TryDerivePlanes(
+            Pattern pattern, GameObject enemyPrefabAsset, GameObject playerPrefabAsset,
+            int rendererIndex, float duelBaseDistance,
+            out SlicePlane meshLocal, out SlicePlane canonical, out string error)
+        {
+            meshLocal = default;
+            canonical = default;
+            error = null;
+
+            var attack = pattern != null ? pattern.PlayerAttack : null;
+            if (attack?.Clip == null)
+            {
+                error = "패턴에 playerAttack 클립이 없습니다.";
+                return false;
+            }
+
+            if (attack.ImpactTime <= 0f)
+            {
+                error = $"'{pattern.name}'의 playerAttack ImpactTime이 지정되지 않았습니다(0 이하). " +
+                        "Tools/Animation Clip Trimmer로 임팩트를 먼저 찍으세요.";
+                return false;
+            }
+
+            if (playerPrefabAsset == null || enemyPrefabAsset == null)
+            {
+                error = "플레이어/적 프리팹이 지정되지 않았습니다.";
+                return false;
+            }
+
+            var player = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefabAsset);
+            var enemy = (GameObject)PrefabUtility.InstantiatePrefab(enemyPrefabAsset);
             if (player == null || enemy == null)
             {
                 if (player != null) DestroyImmediate(player);
                 if (enemy != null) DestroyImmediate(enemy);
-                return;
+                error = "프리팹 인스턴스를 만들지 못했습니다.";
+                return false;
             }
 
             try
@@ -1093,13 +1188,31 @@ namespace SliceSpace.EditorTools
                 player.hideFlags = HideFlags.HideAndDontSave;
                 enemy.hideFlags = HideFlags.HideAndDontSave;
 
+                // 표준 결투 배치 — canonical 평면의 정의가 이 배치다.
                 // 플레이어는 원점에서 +Z를 보고, 적은 결투 거리(기준선 + 패턴 보정) 앞에서 마주 본다.
+                float duelDistance = pattern.DuelGapAt(0f, duelBaseDistance);
                 player.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-                enemy.transform.SetPositionAndRotation(Vector3.forward * DuelDistance, Quaternion.Euler(0f, 180f, 0f));
+                enemy.transform.SetPositionAndRotation(Vector3.forward * duelDistance, Quaternion.Euler(0f, 180f, 0f));
+
+                // ⚠ 유도 포즈는 굽기 포즈와 같아야 한다. BakeHumanoid가 자르는 것은 GetPosedSkinnedMesh()가
+                // 사망 클립 포즈에서 뜬 메쉬인데, 여기서 포즈를 안 잡으면 FBX 바인드 포즈를 기준으로 평면을
+                // 만들게 된다 -- 그 포즈는 서 있지도 않아(몸통 중심 y = -0.09) 평면이 몸을 통째로 빗나간다.
+                var deathPose = pattern.EnemyDeath;
+                if (deathPose?.Clip != null)
+                {
+                    deathPose.Clip.SampleAnimation(enemy, BakePoseTime(deathPose));
+                    // SampleAnimation이 루트를 클립 값으로 덮는다 -- 배치를 되돌린다(SampleWeapon과 같은 이유).
+                    enemy.transform.SetPositionAndRotation(Vector3.forward * duelDistance, Quaternion.Euler(0f, 180f, 0f));
+                }
 
                 float dt = 1f / Mathf.Max(attack.Clip.frameRate > 0f ? attack.Clip.frameRate : 30f, 1f);
 
-                if (!SampleWeapon(player, attack.Clip, attack.ImpactTime, out Vector3 at, out Vector3 axis)) return;
+                if (!SampleWeapon(player, attack.Clip, attack.ImpactTime, out Vector3 at, out Vector3 axis))
+                {
+                    error = "플레이어 프리팹에서 칼 본을 찾지 못했습니다.";
+                    return false;
+                }
+
                 SampleWeapon(player, attack.Clip, Mathf.Max(attack.ImpactTime - dt, 0f), out Vector3 before, out _);
                 SampleWeapon(player, attack.Clip, Mathf.Min(attack.ImpactTime + dt, attack.Clip.length), out Vector3 after, out _);
 
@@ -1109,26 +1222,76 @@ namespace SliceSpace.EditorTools
                 Vector3 normal = Vector3.Cross(axis, travel);
                 if (normal.sqrMagnitude < 1e-8f)
                 {
-                    Debug.LogWarning("[MeshSliceBaker] 칼날 장축과 진행 방향이 나란해 평면을 만들 수 없습니다. 획을 직접 그으세요.");
-                    return;
+                    error = $"'{pattern.name}': 칼날 장축과 진행 방향이 나란해 평면을 만들 수 없습니다. 획을 직접 그으세요.";
+                    return false;
                 }
 
-                // 월드 평면 → 적 메쉬 로컬. 같은 포즈 공간이라 강체 변환 하나로 정확히 옮겨진다.
+                // 월드 평면 → 각 좌표계. 같은 포즈 공간이라 강체 변환 하나로 정확히 옮겨진다.
                 var skinned = enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-                int index = Mathf.Clamp(enemyRendererIndex, 0, skinned.Length - 1);
-                var meshTransform = skinned[index].transform;
+                if (skinned.Length == 0)
+                {
+                    error = "적 프리팹에 SkinnedMeshRenderer가 없습니다.";
+                    return false;
+                }
 
-                Vector3 localPoint = meshTransform.InverseTransformPoint(at);
-                Vector3 localNormal = meshTransform.InverseTransformDirection(normal).normalized;
+                var meshRenderer = skinned[Mathf.Clamp(rendererIndex, 0, skinned.Length - 1)];
+                var meshTransform = meshRenderer.transform;
+                meshLocal = SlicePlane.FromPointNormal(
+                    meshTransform.InverseTransformPoint(at),
+                    meshTransform.InverseTransformDirection(normal).normalized);
 
-                bladePlane = SlicePlane.FromPointNormal(localPoint, localNormal);
-                hasBladePlane = true;
-                Repaint();
+                var rootTransform = enemy.transform;
+                canonical = SlicePlane.FromPointNormal(
+                    rootTransform.InverseTransformPoint(at),
+                    rootTransform.InverseTransformDirection(normal).normalized);
+
+                // ⚠ 빗나간 평면은 굽기를 실패시키지 않는다 — MeshSliceBaker가 '원래 떨어져 있던 메쉬 섬들'을
+                // 그대로 돌려주므로 조각 수가 0이 아니고, 툴은 성공으로 끝나고 몸통은 통째로 남는다.
+                // 런타임도 조용하다(멀쩡한 시체를 세울 뿐이다). 여기서 안 잡으면 아무도 안 잡는다.
+                if (!PlaneCrossesMesh(meshRenderer, meshLocal))
+                {
+                    error = $"'{pattern.name}': 유도된 절단면이 적 몸통을 빗나갑니다(결투 간격 {duelDistance:0.00}m). " +
+                            "playerAttack의 ImpactTime과 패턴의 duelDistanceCurve(임팩트 시점 간격)를 확인하세요.";
+                    return false;
+                }
+
+                return true;
             }
             finally
             {
                 DestroyImmediate(player);
                 DestroyImmediate(enemy);
+            }
+        }
+
+        /// <summary>
+        /// 평면이 이 렌더러의 <b>지금 포즈</b> 메쉬를 실제로 가르는지. 버텍스를 직접 훑는다 —
+        /// 바운즈로 보면 팔을 벌린 자세에서 겨드랑이 빈칸을 지나는 평면도 통과한다.
+        /// </summary>
+        private static bool PlaneCrossesMesh(SkinnedMeshRenderer renderer, SlicePlane plane)
+        {
+            if (renderer == null) return true; // 판단 근거가 없으면 막지 않는다
+
+            var baked = new Mesh();
+            try
+            {
+                renderer.BakeMesh(baked);
+
+                bool front = false, back = false;
+
+                foreach (var v in baked.vertices)
+                {
+                    if (plane.SignedDistance(v) >= 0f) front = true;
+                    else back = true;
+
+                    if (front && back) return true;
+                }
+
+                return false;
+            }
+            finally
+            {
+                DestroyImmediate(baked);
             }
         }
 
@@ -1256,14 +1419,16 @@ namespace SliceSpace.EditorTools
         /// 휴머노이드 굽기 — 산출물은 <b>시체 프리팹 하나</b>다(조각 프리팹 N개가 아니라).
         /// 시체가 자기 스켈레톤 사본을 가져야 교체 시 산 적을 풀로 반납할 수 있다.
         /// </summary>
-        private void BakeHumanoid()
+        private void BakeHumanoid(bool interactive = true)
         {
             var mesh = GetSourceMesh();
             var pieces = MeshSliceBaker.Slice(mesh, planes, BuildOptions(), out int discarded);
 
             if (pieces.Count == 0)
             {
-                EditorUtility.DisplayDialog("Bake 실패", "조각이 하나도 나오지 않았습니다. 평면 위치를 확인하세요.", "확인");
+                const string failure = "조각이 하나도 나오지 않았습니다. 평면 위치를 확인하세요.";
+                if (interactive) EditorUtility.DisplayDialog("Bake 실패", failure, "확인");
+                else Debug.LogError($"[MeshSliceBaker] '{setName}' 굽기 실패 — {failure}");
                 return;
             }
 
@@ -1274,6 +1439,11 @@ namespace SliceSpace.EditorTools
             string folder = EnsureFolder();
             var pieceMaterials = BuildMaterialSlots(sourceMaterials, capMat);
 
+            // ⚠ 저장보다 먼저 골라야 한다. 재굽기(에셋이 이미 있는 경우)에서는 SaveMeshPreservingGuid가
+            // 기존 에셋에 데이터를 옮겨 담고 pieces[i].mesh를 파기한다 — 뒤에서 고르면 파기된 메쉬의
+            // boneWeights를 읽어 MissingReferenceException이 난다(첫 굽기에서는 파기가 없어 안 났다).
+            int rootPiece = FindRootPiece(pieces);
+
             var savedMeshes = new Mesh[pieces.Count];
             for (int i = 0; i < pieces.Count; i++)
             {
@@ -1283,15 +1453,22 @@ namespace SliceSpace.EditorTools
             }
 
             CleanupRemovedPieces(folder, pieces.Count);
-
-            int rootPiece = FindRootPiece(pieces);
             var corpsePrefab = BuildCorpsePrefab(savedMeshes, pieceMaterials, rootPiece, $"{folder}/{setName}_Corpse.prefab");
             if (corpsePrefab == null) return;
 
             var death = targetPattern != null ? targetPattern.EnemyDeath : null;
 
             var set = SaveSetPreservingGuid(SetAssetPath());
-            set.EditorAssignSkinned(enemyPrefab, corpsePrefab, rootPiece, planes.ToArray(), death?.Clip, BakePoseTime(death));
+            // canonical 평면은 유도했을 때만 넘긴다 — 획만 그어 구운 세트는 매칭 후보가 아니다.
+            set.EditorAssignSkinned(enemyPrefab, corpsePrefab, rootPiece, planes.ToArray(), death?.Clip, BakePoseTime(death),
+                                    hasBladePlane ? canonicalBladePlane : (SlicePlane?)null);
+
+            // 굽는 순간 패턴에도 같은 값을 남긴다 — 저작자가 두 곳을 맞출 일이 없어진다.
+            if (hasBladePlane && targetPattern != null)
+            {
+                targetPattern.EditorAssignBladePlane(canonicalBladePlane);
+                EditorUtility.SetDirty(targetPattern);
+            }
             EditorUtility.SetDirty(set);
 
             WireToDefinition(set);
@@ -1390,26 +1567,368 @@ namespace SliceSpace.EditorTools
         /// 굽기 결과를 <b>적 정의에</b> 자동 배선한다. 이미 다른 세트가 물려 있으면 확인을 받는다.
         /// 세트는 그 정의의 프리팹에서 구워졌으므로 여기 말고 갈 곳이 없다.
         /// </summary>
+        /// <summary>
+        /// 구운 세트를 적 정의에 물린다. <b>배열에 덧붙인다</b> — 각도별로 여러 벌이 공존하는 것이
+        /// 정상이므로 교체가 아니다. 이미 들어 있으면 아무것도 안 한다(재굽기 경로).
+        ///
+        /// <para>단일 필드(<c>deathSliceSet</c>)는 <b>비어 있을 때만</b> 채운다 — 그것은 폴백이고,
+        /// 폴백을 매번 갈아치우면 매칭이 안 걸리는 패턴의 절단 각도가 굽는 순서에 따라 흔들린다.</para>
+        /// </summary>
         private void WireToDefinition(SliceSet set)
         {
-            if (enemyDefinition == null) return;
+            if (enemyDefinition == null || set == null) return;
 
             var so = new SerializedObject(enemyDefinition);
-            var prop = so.FindProperty("deathSliceSet");
-            if (prop == null) return;
 
-            var current = prop.objectReferenceValue as SliceSet;
-            if (current != null && current != set)
+            var array = so.FindProperty("deathSliceSets");
+            if (array != null)
             {
-                if (!EditorUtility.DisplayDialog("적 정의 배선 교체",
-                        $"'{enemyDefinition.name}'에 이미 '{current.name}'이 물려 있습니다. '{set.name}'으로 바꿀까요?",
-                        "교체", "유지"))
-                    return;
+                bool present = false;
+                for (int i = 0; i < array.arraySize; i++)
+                    if (array.GetArrayElementAtIndex(i).objectReferenceValue == set) { present = true; break; }
+
+                if (!present)
+                {
+                    array.InsertArrayElementAtIndex(array.arraySize);
+                    array.GetArrayElementAtIndex(array.arraySize - 1).objectReferenceValue = set;
+                }
             }
 
-            prop.objectReferenceValue = set;
+            var fallback = so.FindProperty("deathSliceSet");
+            if (fallback != null && fallback.objectReferenceValue == null)
+                fallback.objectReferenceValue = set;
+
             so.ApplyModifiedProperties();
             EditorUtility.SetDirty(enemyDefinition);
+        }
+
+        // ── 패턴 감사 탭 ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// <b>굽기 횟수를 패턴 수에서 각도 수로 바꾸는 화면.</b>
+        ///
+        /// <para>스캔 한 번이 세 가지를 한다 — ① 폴더의 모든 패턴에서 칼 평면을 유도해
+        /// <see cref="Pattern.EditorAssignBladePlane"/>으로 기입하고(멱등), ② 적 정의가 이미 든 세트들과
+        /// 비교해 ③ "재사용 / 굽기 필요"를 판정한다. 대부분의 새 패턴은 여기서 끝난다.</para>
+        /// </summary>
+        private void DrawAuditTab()
+        {
+            auditScroll = EditorGUILayout.BeginScrollView(auditScroll);
+
+            EditorGUILayout.LabelField("입력", EditorStyles.boldLabel);
+            patternFolder = EditorGUILayout.TextField(
+                new GUIContent("패턴 폴더", "이 폴더 아래의 모든 Pattern 에셋을 훑습니다."), patternFolder);
+            enemyDefinition = (EnemySpace.EnemyDefinition)EditorGUILayout.ObjectField(
+                "적 정의", enemyDefinition, typeof(EnemySpace.EnemyDefinition), false);
+            playerPrefab = (GameObject)EditorGUILayout.ObjectField("플레이어 프리팹", playerPrefab, typeof(GameObject), false);
+            duelBaseDistance = EditorGUILayout.FloatField(
+                new GUIContent("결투 기준 거리", "씬 EnemyDirector의 기준 간격. 유도 평면의 위치가 여기에 달려 있습니다."),
+                duelBaseDistance);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("판정", EditorStyles.boldLabel);
+            auditPositionWeight = EditorGUILayout.FloatField(
+                new GUIContent("높이 가중치", "점수 = 각도차(도) + 이 값 × 거리차(m). 씬 EnemyDirector의 slicePositionWeight와 맞추세요."),
+                auditPositionWeight);
+            reuseThreshold = EditorGUILayout.FloatField(
+                new GUIContent("재사용 문턱", "이 점수 이하면 기존 세트를 그대로 씁니다(굽기 0회)."), reuseThreshold);
+
+            EditorGUILayout.Space();
+
+            using (new EditorGUI.DisabledScope(enemyDefinition == null || playerPrefab == null))
+            {
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("스캔", GUILayout.Height(26))) ScanPatterns();
+                using (new EditorGUI.DisabledScope(auditRows.Count == 0))
+                {
+                    if (GUILayout.Button($"선택 항목 일괄 굽기 ({auditRows.FindAll(r => r.selected).Count})", GUILayout.Height(26)))
+                        BakeSelectedRows();
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            using (new EditorGUI.DisabledScope(enemyDefinition == null))
+            {
+                if (GUILayout.Button(new GUIContent("기존 세트에 canonical 평면 기입",
+                        "이미 구워진 세트를 매칭 후보로 편입시킵니다. 조각을 다시 굽지 않습니다 — " +
+                        "저장된 메쉬 로컬 평면을 적 루트 로컬로 변환할 뿐입니다.")))
+                    BackfillCanonicalPlanes();
+            }
+
+            if (!string.IsNullOrEmpty(auditSummary)) EditorGUILayout.HelpBox(auditSummary, MessageType.None);
+
+            EditorGUILayout.Space();
+            DrawAuditRows();
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawAuditRows()
+        {
+            if (auditRows.Count == 0) return;
+
+            EditorGUILayout.LabelField($"패턴 {auditRows.Count}개", EditorStyles.boldLabel);
+
+            foreach (var row in auditRows)
+            {
+                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+
+                using (new EditorGUI.DisabledScope(!row.NeedsBake))
+                    row.selected = EditorGUILayout.Toggle(row.selected, GUILayout.Width(18));
+
+                EditorGUILayout.ObjectField(row.pattern, typeof(Pattern), false, GUILayout.Width(180));
+
+                if (!row.derived)
+                {
+                    EditorGUILayout.LabelField(new GUIContent("⚠ " + row.error, row.error), GUILayout.MinWidth(200));
+                }
+                else if (row.nearest == null)
+                {
+                    EditorGUILayout.LabelField("후보 세트 없음 — 굽기 필요", GUILayout.MinWidth(200));
+                }
+                else
+                {
+                    EditorGUILayout.LabelField(row.nearest.name, GUILayout.Width(180));
+                    EditorGUILayout.LabelField($"{row.angle:0.0}°", GUILayout.Width(50));
+                    EditorGUILayout.LabelField($"{row.offset * 100f:0.0}cm", GUILayout.Width(60));
+                    EditorGUILayout.LabelField(row.reused ? "재사용" : "굽기 필요", GUILayout.Width(80));
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>
+        /// 폴더의 모든 패턴에서 칼 평면을 유도해 기입하고, 정의의 세트들과 매칭한다.
+        /// <b>멱등</b> — 몇 번을 돌려도 값만 갱신된다.
+        /// </summary>
+        private void ScanPatterns()
+        {
+            auditRows.Clear();
+            auditSummary = null;
+
+            var guids = AssetDatabase.FindAssets("t:Pattern", new[] { patternFolder });
+            var candidates = CollectCandidatePlanes(out List<SliceSet> candidateSets);
+
+            int derived = 0, reused = 0, failed = 0;
+
+            try
+            {
+                for (int i = 0; i < guids.Length; i++)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                    var pattern = AssetDatabase.LoadAssetAtPath<Pattern>(path);
+                    if (pattern == null) continue;
+
+                    // 적이 베어지는 건 플레이어가 공격자일 때뿐이다 — Enemy 역할은 감사 대상이 아니다.
+                    if (pattern.Attacker == EnemySpace.Attacker.Enemy) continue;
+
+                    EditorUtility.DisplayProgressBar("패턴 감사", pattern.name, (float)i / Mathf.Max(guids.Length, 1));
+
+                    var row = new AuditRow { pattern = pattern };
+
+                    row.derived = TryDerivePlanes(pattern, enemyPrefab, playerPrefab, enemyRendererIndex, duelBaseDistance,
+                                                  out row.meshLocal, out row.canonical, out row.error);
+
+                    if (row.derived)
+                    {
+                        derived++;
+                        pattern.EditorAssignBladePlane(row.canonical);
+                        EditorUtility.SetDirty(pattern);
+
+                        int best = SliceMatch.Pick(row.canonical, candidates, auditPositionWeight);
+                        if (best >= 0)
+                        {
+                            row.nearest = candidateSets[best];
+                            row.score = SliceMatch.Score(row.canonical, candidates[best], auditPositionWeight);
+                            SliceMatch.Compare(row.canonical, candidates[best], out row.angle, out row.offset);
+                            row.reused = row.score <= reuseThreshold;
+                            if (row.reused) reused++;
+                        }
+
+                        row.selected = row.NeedsBake;
+                    }
+                    else failed++;
+
+                    auditRows.Add(row);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            AssetDatabase.SaveAssets();
+
+            auditSummary =
+                $"패턴 {auditRows.Count}개 · 평면 유도 {derived}개 · 재사용 {reused}개 · 굽기 필요 {derived - reused}개" +
+                (failed > 0 ? $" · 유도 실패 {failed}개(임팩트 미오서링 등)" : "");
+        }
+
+        /// <summary>매칭 후보 = 정의가 든 세트 중 canonical 평면을 가진 것들.</summary>
+        private List<SlicePlane> CollectCandidatePlanes(out List<SliceSet> sets)
+        {
+            var planeList = new List<SlicePlane>();
+            sets = new List<SliceSet>();
+
+            var owned = enemyDefinition != null ? enemyDefinition.DeathSliceSets : null;
+            if (owned == null) return planeList;
+
+            foreach (var set in owned)
+            {
+                if (set == null || !set.HasBakedBladePlane) continue;
+
+                planeList.Add(set.BakedBladePlane);
+                sets.Add(set);
+            }
+
+            return planeList;
+        }
+
+        /// <summary>
+        /// 이미 구워진 세트를 매칭 후보로 편입시킨다. <b>조각을 다시 굽지 않는다</b> —
+        /// 저장된 메쉬 로컬 평면을 적 루트 로컬로 변환할 뿐이다.
+        ///
+        /// <para>두 좌표계 모두 프리팹 안의 <b>정적 트랜스폼</b>이라(스킨드 메쉬 렌더러는 본이 아니다)
+        /// 변환이 포즈·배치와 무관하게 정확하다. 그래서 "어느 패턴으로 구웠는지"를 몰라도 된다.</para>
+        /// </summary>
+        private void BackfillCanonicalPlanes()
+        {
+            var owned = enemyDefinition != null ? enemyDefinition.DeathSliceSets : null;
+            if (owned == null || owned.Count == 0)
+            {
+                auditSummary = "정의의 deathSliceSets가 비어 있습니다.";
+                return;
+            }
+
+            if (enemyPrefab == null)
+            {
+                auditSummary = "적 정의에 프리팹이 배선되지 않았습니다.";
+                return;
+            }
+
+            var temp = (GameObject)PrefabUtility.InstantiatePrefab(enemyPrefab);
+            if (temp == null)
+            {
+                auditSummary = "적 프리팹 인스턴스를 만들지 못했습니다.";
+                return;
+            }
+
+            int filled = 0, skipped = 0;
+
+            try
+            {
+                temp.hideFlags = HideFlags.HideAndDontSave;
+
+                var renderers = temp.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                if (renderers.Length == 0)
+                {
+                    auditSummary = "적 프리팹에 SkinnedMeshRenderer가 없습니다.";
+                    return;
+                }
+
+                var meshTransform = renderers[Mathf.Clamp(enemyRendererIndex, 0, renderers.Length - 1)].transform;
+                var root = temp.transform;
+
+                foreach (var set in owned)
+                {
+                    if (set == null || set.HasBakedBladePlane) { skipped++; continue; }
+
+                    var baked = set.BakedPlanes;
+                    if (baked == null || baked.Length == 0) { skipped++; continue; }
+
+                    // 메쉬 로컬 → 월드 → 적 루트 로컬. 여러 장이면 첫 장이 대표 각도다.
+                    Vector3 worldPoint = meshTransform.TransformPoint(baked[0].PointOnPlane);
+                    Vector3 worldNormal = meshTransform.TransformDirection(baked[0].normal);
+
+                    set.EditorAssignBladePlane(SlicePlane.FromPointNormal(
+                        root.InverseTransformPoint(worldPoint),
+                        root.InverseTransformDirection(worldNormal).normalized));
+
+                    EditorUtility.SetDirty(set);
+                    filled++;
+                }
+            }
+            finally
+            {
+                DestroyImmediate(temp);
+            }
+
+            AssetDatabase.SaveAssets();
+            auditSummary = $"canonical 평면 기입 {filled}개 · 건너뜀 {skipped}개(이미 있거나 저장된 평면이 없음).";
+        }
+
+        /// <summary>
+        /// 체크된 행만 순서대로 굽는다. 실패한 항목은 <b>어느 패턴이 왜 실패했는지 찍고 건너뛴다</b> —
+        /// 조용히 잘못된 세트를 남기는 것보다 낫다(굽기 툴 공통 규율).
+        /// </summary>
+        private void BakeSelectedRows()
+        {
+            var targets = auditRows.FindAll(r => r.selected && r.NeedsBake);
+            if (targets.Count == 0)
+            {
+                auditSummary = "선택된 항목이 없습니다.";
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("일괄 굽기",
+                    $"{targets.Count}개 패턴에 대해 휴머노이드 굽기를 실행합니다. 패턴 하나당 조각 프리팹 수십 장이 생성됩니다.",
+                    "굽기", "취소"))
+                return;
+
+            var previousPattern = targetPattern;
+            var previousName = setName;
+            var previousPlanes = new List<SlicePlane>(planes);
+            var previousMode = mode;
+            int baked = 0;
+
+            try
+            {
+                // BakeHumanoid는 창 상태(targetPattern·planes·setName)를 읽으므로 행마다 그것을 세워 준다.
+                mode = BakeMode.Humanoid;
+
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    var row = targets[i];
+                    EditorUtility.DisplayProgressBar("일괄 굽기", row.pattern.name, (float)i / targets.Count);
+
+                    targetPattern = row.pattern;
+                    setName = $"{enemyDefinition.name}_{row.pattern.name}".Replace(" ", "").Replace(",", "_");
+                    bladePlane = row.meshLocal;
+                    canonicalBladePlane = row.canonical;
+                    hasBladePlane = true;
+
+                    planes.Clear();
+                    planes.Add(row.meshLocal);
+
+                    ClearPoseCache();
+
+                    string blocker = GetBlockingReason();
+                    if (blocker != null)
+                    {
+                        Debug.LogError($"[MeshSliceBaker] '{row.pattern.name}' 건너뜀 — {blocker}", row.pattern);
+                        continue;
+                    }
+
+                    BakeHumanoid(interactive: false);
+                    baked++;
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+
+                targetPattern = previousPattern;
+                setName = previousName;
+                planes.Clear();
+                planes.AddRange(previousPlanes);
+                mode = previousMode;
+                hasBladePlane = false;
+                ClearPoseCache();
+            }
+
+            auditSummary = $"일괄 굽기 완료 — {baked}/{targets.Count}개. 다시 스캔하면 재사용 판정이 갱신됩니다.";
+            ScanPatterns();
         }
 
         private Material[] BuildMaterialSlots(Material[] sourceMaterials, Material capMat)

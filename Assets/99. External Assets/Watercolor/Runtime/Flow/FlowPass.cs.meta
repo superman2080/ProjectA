@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: b247578015234874a931cabd3884ad14
+timeCreated: 1698823799
+AssetOrigin:
+  serializedVersion: 1
+  productId: 339380
+  packageName: Watercolor - Art Painting Stylization Effect
+  packageVersion: 2.0.9
+  assetPath: Assets/Watercolor/Runtime/Flow/FlowPass.cs
+  uploadId: 975416

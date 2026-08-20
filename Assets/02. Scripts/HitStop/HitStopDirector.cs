@@ -51,6 +51,8 @@ public class HitStopDirector : MonoBehaviour
     [Tooltip("전체 On/Off. 끄면 예약도 잡지 않는다.")]
     [SerializeField] private bool hitStopEnabled = true;
 
+    private bool suppressNextMain;
+
     [Tooltip("멈추는 시간(초). 배우·카메라가 공유하는 하나의 값이다.\n" +
              "적의 절단(시체 교체·폭발)도 이만큼 뒤로 밀린다.")]
     [SerializeField] private float hitStopDuration = 0.1f;
@@ -124,8 +126,27 @@ public class HitStopDirector : MonoBehaviour
     {
         if (!hitStopEnabled || !info.AllCorrect) return;
 
+        if (suppressNextMain)
+        {
+            suppressNextMain = false;
+            return;
+        }
+
         Schedule(info.ImpactTime(), isMainImpact: true);
     }
+
+    /// <summary>
+    /// 다음 <b>마지막 베기</b> 정지 하나를 건너뛴다. <see cref="FinaleSilhouetteDirector"/>가 부른다.
+    ///
+    /// <para><b>왜 필요한가:</b> 마무리 연출은 <c>Time.timeScale</c>을 0.1로 내리는데
+    /// 해제 시각이 <c>Time.time + hitStopDuration</c>이고 <b><c>Time.time</c>은 스케일된 시계</b>다 —
+    /// 0.1초 정지가 <b>실시간 1초</b>가 되어 노출 창 전체를 먹는다. 그러면 화면이 얼어붙어
+    /// <b>슬로우모션이 아니라 정지 컷</b>이 된다. 슬로우가 타격감 강조를 대신하므로 여기서는 물러난다.</para>
+    ///
+    /// <para>⚠ 추가 스톱(<c>OnExtraImpact</c>)은 막지 않는다 — 그것들은 마지막 베기 <i>이전</i>이라
+    /// 슬로우가 시작되기 전에 이미 끝나 있다.</para>
+    /// </summary>
+    public void SuppressNextMainImpact() => suppressNextMain = true;
 
     /// <summary>
     /// 마지막 베기 <b>이전</b>의 칼질. 순수 타격감이므로 <b>절단을 밀지 않고 적도 얼리지 않는다</b>(§Step 5).
@@ -145,7 +166,11 @@ public class HitStopDirector : MonoBehaviour
         pending.Add(new Reservation { fireTime = fireTime, isMainImpact = isMainImpact });
     }
 
-    private void HandleAllCleared() => pending.Clear();
+    private void HandleAllCleared()
+    {
+        pending.Clear();
+        suppressNextMain = false;   // 억제는 '다음 하나'뿐이다 — 곡이 끊기면 소진되지 않은 채 남는다
+    }
 
     void Update()
     {

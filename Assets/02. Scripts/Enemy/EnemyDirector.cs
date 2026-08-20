@@ -114,6 +114,11 @@ namespace EnemySpace
         [Tooltip("등장시킬 적 종류. 여러 종을 넣으면 같은 모델 반복이 티 나지 않는다.")]
         [SerializeField] private EnemyDefinition[] rosterPool;
 
+        [Tooltip("절단 세트 매칭에서 절단면 '높이' 차이에 매기는 가중치(도/m). 점수 = 각도차(도) + 이 값 × 거리차(m).\n" +
+                 "기본 60이면 1cm ≈ 0.6도 — 목이냐 허리냐가 각도만큼 중요하다고 보는 값이다.\n" +
+                 "올리면 높이를 더 따지고, 0이면 각도만 본다.")]
+        [SerializeField] private float slicePositionWeight = 60f;
+
         [Header("Duel")]
         [Tooltip("적 공격 클립의 자동 배속 상한. 넘으면 정렬이 깨지므로 경고가 뜬다.")]
         [SerializeField] private float maxAttackSpeed = 2.5f;
@@ -323,7 +328,7 @@ namespace EnemySpace
         {
             public int token;
             public EnemyCue cue;
-            public Pattern template;   // 패턴 전용 SliceSet 조회용
+            public Pattern template;   // 클립 슬롯·ImpactOffset·Attacker 조회용
             public EnemyView opponent;
             public float impactTime;
             public bool resolved;
@@ -742,7 +747,15 @@ namespace EnemySpace
 
                 pool.Prewarm(definition.Prefab, definition.InitialPoolSize, definition.MaxPoolSize);
 
+                // ⚠ 배열 전체를 돈다. 하나만 프리웜하면 나머지 각도가 뽑힐 때 곡 도중 Instantiate가 나고,
+                // 그 히치는 그대로 판정 손실이다(countdownDuration 프리웜의 존재 이유).
                 PrewarmSet(definition.DeathSliceSet, seen);
+
+                var sets = definition.DeathSliceSets;
+                if (sets == null) continue;
+
+                foreach (var set in sets)
+                    PrewarmSet(set, seen);
             }
         }
 
@@ -1599,12 +1612,54 @@ namespace EnemySpace
         /// 리그가 같고 메쉬만 다르면 경고도 안 뜨고 엉뚱한 몸이 갈라진다.
         /// 프리팹을 소유한 쪽에 두어 그 상태를 <b>표현 불가능</b>하게 만든다.</para>
         ///
-        /// <para><c>ponytail:</c> 절단 각도는 적 종류당 하나로 고정된다. 패턴별 각도가 필요해지면
-        /// 정의에 세트 배열을 두고 패턴이 인덱스로 고르게 올린다 — 전부 같은 프리팹에서 구워지므로
-        /// 모델 정합성은 그대로 유지된다.</para>
+        /// <para><b>어느 각도로 갈라지는가는 패턴의 스윙이 정한다.</b> 정의가 각도별 세트를 배열로 들고,
+        /// 패턴은 자기 <c>playerAttack</c> 임팩트 프레임에서 유도된 평면(<see cref="Pattern.BladePlane"/>)만
+        /// 든다 — 세트를 키가 아니라 <b>기하</b>로 고르므로 저작 필드가 0개이고, 근처 각도가 이미 구워져
+        /// 있으면 굽기 없이 재사용된다.</para>
+        ///
+        /// <para>패턴에 평면이 없거나 후보가 하나도 없으면 <b>기존 단일 필드 그대로</b>다 — 어느 한쪽만
+        /// 이관해도 안전하다.</para>
         /// </summary>
-        private static SliceSet ResolveDeathSet(Reservation r) =>
-            r.opponent != null && r.opponent.Definition != null ? r.opponent.Definition.DeathSliceSet : null;
+        private SliceSet ResolveDeathSet(Reservation r)
+        {
+            if (r.opponent == null || r.opponent.Definition == null) return null;
+
+            var definition = r.opponent.Definition;
+            var set = MatchDeathSet(definition, r.template);
+
+            return set != null ? set : definition.DeathSliceSet;
+        }
+
+        /// <summary>
+        /// 스윙에 가장 가까운 각도로 구워진 세트. 못 고르면 null(호출부가 폴백한다).
+        ///
+        /// <para><c>ponytail:</c> 처치마다 후보 배열을 선형 순회한다. 후보가 4~6개라 무시할 비용이고,
+        /// 수십 개로 늘면 정의별로 평면 배열을 캐시한다.</para>
+        /// </summary>
+        private SliceSet MatchDeathSet(EnemyDefinition definition, Pattern template)
+        {
+            if (template == null || !template.HasBladePlane) return null;
+
+            var sets = definition.DeathSliceSets;
+            if (sets == null || sets.Count == 0) return null;
+
+            SliceSet best = null;
+            float bestScore = float.MaxValue;
+
+            foreach (var candidate in sets)
+            {
+                // 평면이 없는 세트는 비교할 값이 없다 — 획만 그어 구운 것들이다.
+                if (candidate == null || !candidate.IsUsable || !candidate.HasBakedBladePlane) continue;
+
+                float score = SliceMatch.Score(template.BladePlane, candidate.BakedBladePlane, slicePositionWeight);
+                if (score >= bestScore) continue;
+
+                bestScore = score;
+                best = candidate;
+            }
+
+            return best;
+        }
 
         /// <summary>
         /// 처치. <b>죽는 연출을 기다리지 않는다</b> — 죽는 적은 그 자리에 버려두고 즉시 다음 상대로 넘어간다.
@@ -1767,6 +1822,38 @@ namespace EnemySpace
             pendingKills.Clear();
 
             DissolveAll();
+        }
+
+        /// <summary>
+        /// 지금 무대에 있는 <b>적 쪽 오브젝트 루트 전부</b>를 모은다 — 살아 있는 적 · 현재 상대 ·
+        /// 아직 안 터진 죽는 적 · 시체 · 흩어진 조각.
+        ///
+        /// <para>화면 전체를 다시 칠하는 연출(<see cref="FinaleSilhouetteDirector"/>)이 쓴다.
+        /// <b>적이 어디에 몇이나 있는지는 이 클래스만 안다</b>는 규율을 유지하기 위해 여기 둔다 —
+        /// 바깥에서 씬을 훑으면 풀에 잠들어 있는 인스턴스까지 걸린다.</para>
+        ///
+        /// <para>비우지 않고 <b>덧붙인다</b>(호출부가 플레이어를 먼저 넣는다). 중복은 안 거른다 —
+        /// 레이어 대입은 멱등이라 두 번 걸려도 결과가 같다.</para>
+        ///
+        /// <para><b>⚠ 흩어진 절단 조각은 여기 없다.</b> <c>SlicePiece.Launch</c>가 부모에서 떼면서
+        /// <c>pieceLayer</c>로 올리므로 <b>이미 전용 레이어에 있다</b> — 실루엣 패스의 LayerMask에
+        /// 그 레이어를 같이 넣으면 스왑 없이 따라온다. 여기서 모으려 하면 시체에서 떨어져 나온
+        /// 조각을 되짚어야 하고, 그 목록은 아무도 안 들고 있다.</para>
+        /// </summary>
+        public void CollectActorRoots(List<Transform> into)
+        {
+            if (into == null) return;
+
+            foreach (var e in ring) if (e != null) into.Add(e.transform);
+            if (currentOpponent != null) into.Add(currentOpponent.transform);
+
+            // 죽는 중이지만 아직 안 갈라진 적 — 화면에는 아직 온전한 몸으로 서 있다.
+            foreach (var pending in pendingKills)
+                if (pending.opponent != null) into.Add(pending.opponent.transform);
+
+            // 시체 루트. 날아간 조각은 위 이유로 제외되고, 남아 있는 조각은 이 서브트리에 있다.
+            foreach (var corpse in corpses)
+                if (corpse.view != null) into.Add(corpse.view.transform);
         }
 
         /// <summary>곡이 끝났을 때 남은 적을 소멸시킨다. <b>절단이 아니다</b> — 베지 않았으니 갈라지면 안 된다.</summary>

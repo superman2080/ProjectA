@@ -1,0 +1,293 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: Watercolor_C
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: 3296458654251226162}
+--- !u!114 &1326012675163301371
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b447969f02741db89b76840f68e7812, type: 3}
+  m_Name: DistortVol
+  m_EditorClassIdentifier: 
+  active: 0
+  m_Weight:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Value:
+    m_OverrideState: 1
+    m_Value: 0.023
+  m_Tiling:
+    m_OverrideState: 1
+    m_Value: 0.06
+  m_Angle:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0.27
+--- !u!114 &3296458654251226162
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d8d6c0101010c74683c14e3d7d0337e, type: 3}
+  m_Name: WatercolorVol
+  m_EditorClassIdentifier: 
+  active: 1
+  m_Strength:
+    m_OverrideState: 1
+    m_Value: 0.665
+  m_Contour:
+    m_OverrideState: 1
+    m_Value: 0.546
+  m_Saturation:
+    m_OverrideState: 1
+    m_Value: -0.055
+  m_ColorNotes:
+    m_OverrideState: 1
+    m_Value: 0.689
+  m_Density:
+    m_OverrideState: 1
+    m_Value: 0.84
+  m_Focus:
+    m_OverrideState: 1
+    m_Value:
+      _curve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0.4312439
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      _pixels:
+      - {r: 0.4312439, g: 0.4312439, b: 0.4312439, a: 0.4312439}
+      - {r: 0.43298122, g: 0.43298122, b: 0.43298122, a: 0.43298122}
+      - {r: 0.4380405, g: 0.4380405, b: 0.4380405, a: 0.4380405}
+      - {r: 0.44619256, g: 0.44619256, b: 0.44619256, a: 0.44619256}
+      - {r: 0.4572084, g: 0.4572084, b: 0.4572084, a: 0.4572084}
+      - {r: 0.47085884, g: 0.47085884, b: 0.47085884, a: 0.47085884}
+      - {r: 0.4869148, g: 0.4869148, b: 0.4869148, a: 0.4869148}
+      - {r: 0.5051472, g: 0.5051472, b: 0.5051472, a: 0.5051472}
+      - {r: 0.525327, g: 0.525327, b: 0.525327, a: 0.525327}
+      - {r: 0.547225, g: 0.547225, b: 0.547225, a: 0.547225}
+      - {r: 0.57061213, g: 0.57061213, b: 0.57061213, a: 0.57061213}
+      - {r: 0.5952593, g: 0.5952593, b: 0.5952593, a: 0.5952593}
+      - {r: 0.62093747, g: 0.62093747, b: 0.62093747, a: 0.62093747}
+      - {r: 0.6474174, g: 0.6474174, b: 0.6474174, a: 0.6474174}
+      - {r: 0.6744701, g: 0.6744701, b: 0.6744701, a: 0.6744701}
+      - {r: 0.7018665, g: 0.7018665, b: 0.7018665, a: 0.7018665}
+      - {r: 0.7293774, g: 0.7293774, b: 0.7293774, a: 0.7293774}
+      - {r: 0.75677377, g: 0.75677377, b: 0.75677377, a: 0.75677377}
+      - {r: 0.7838265, g: 0.7838265, b: 0.7838265, a: 0.7838265}
+      - {r: 0.81030643, g: 0.81030643, b: 0.81030643, a: 0.81030643}
+      - {r: 0.8359845, g: 0.8359845, b: 0.8359845, a: 0.8359845}
+      - {r: 0.86063176, g: 0.86063176, b: 0.86063176, a: 0.86063176}
+      - {r: 0.8840189, g: 0.8840189, b: 0.8840189, a: 0.8840189}
+      - {r: 0.9059169, g: 0.9059169, b: 0.9059169, a: 0.9059169}
+      - {r: 0.9260967, g: 0.9260967, b: 0.9260967, a: 0.9260967}
+      - {r: 0.944329, g: 0.944329, b: 0.944329, a: 0.944329}
+      - {r: 0.960385, g: 0.960385, b: 0.960385, a: 0.960385}
+      - {r: 0.9740355, g: 0.9740355, b: 0.9740355, a: 0.9740355}
+      - {r: 0.98505133, g: 0.98505133, b: 0.98505133, a: 0.98505133}
+      - {r: 0.9932034, g: 0.9932034, b: 0.9932034, a: 0.9932034}
+      - {r: 0.99826264, g: 0.99826264, b: 0.99826264, a: 0.99826264}
+      - {r: 1, g: 1, b: 1, a: 1}
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0.065
+  m_Smooth:
+    m_OverrideState: 1
+    m_Value: 1
+  m_ContourDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_StrengthDeviation:
+    m_OverrideState: 1
+    m_Value: 0.152
+  m_ColorNotesDeviation:
+    m_OverrideState: 1
+    m_Value: 0.11
+  m_Splatters:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: 3de6f4bc8b8d0cb43b0c357a09c54c02, type: 3}
+    dimension: 1
+  m_Paper:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_Granulation:
+    m_OverrideState: 1
+    m_Value: 0.39
+  m_ContourThickness:
+    m_OverrideState: 1
+    m_Value: 0.533
+  m_Blending:
+    m_OverrideState: 1
+    m_Value: 0.408
+  m_FramesLerp:
+    m_OverrideState: 1
+    m_Value: 3.79
+--- !u!114 &6915796520491042412
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0faa963e8883e145805da46bed83f45, type: 3}
+  m_Name: WatercolorVol
+  m_EditorClassIdentifier: 
+  active: 1
+  m_Strength:
+    m_OverrideState: 1
+    m_Value: 0.158
+  m_Contour:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Saturation:
+    m_OverrideState: 1
+    m_Value: -0.3
+  m_ColorNotes:
+    m_OverrideState: 1
+    m_Value: 0.13
+  m_Density:
+    m_OverrideState: 1
+    m_Value: 0.25
+  m_Focus:
+    m_OverrideState: 1
+    m_Value:
+      _curve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      _pixels:
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 7
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0.03
+  m_Smooth:
+    m_OverrideState: 1
+    m_Value: 1
+  m_ContourDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_StrengthDeviation:
+    m_OverrideState: 1
+    m_Value: 0.175
+  m_ColorNotesDeviation:
+    m_OverrideState: 1
+    m_Value: 0.452
+  m_Splatters:
+    m_OverrideState: 1
+    m_Value: {fileID: 2800000, guid: da858f1c8de8d9947a1d0657e60a2053, type: 3}
+    dimension: 1
+  m_Paper:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_ContourThickness:
+    m_OverrideState: 1
+    m_Value: 0.37
+  m_Blending:
+    m_OverrideState: 1
+    m_Value: 0.321
+  m_FramesLerp:
+    m_OverrideState: 1
+    m_Value: 0.63
