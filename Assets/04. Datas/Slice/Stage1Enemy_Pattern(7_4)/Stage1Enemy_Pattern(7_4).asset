@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 297f4fd10214bd14fb0b8fb0fbdf0d11, type: 3}
+  m_Name: Stage1Enemy_Pattern(7_4)
+  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.SliceSet
+  originalPrefab: {fileID: 474537936491080402, guid: 4315d2d15935c8b4db2df95582a5e393, type: 3}
+  piecePrefabs: []
+  pieceLocalOffsets: []
+  pieceScatterDirs: []
+  bakedPlanes:
+  - normal: {x: -0.7501012, y: 0.65893936, z: 0.056098964}
+    distance: -0.037104376
+  bakedBladePlane:
+    normal: {x: -0.75010127, y: 0.05609886, z: -0.6589393}
+    distance: 0.72559947
+  hasBakedBladePlane: 1
+  shape: 5
+  skinned: 1
+  corpsePrefab: {fileID: 7483780687808987345, guid: f941d5639314a204fb9273b481cbf8f3, type: 3}
+  rootPieceIndex: 2
+  bakedPoseClip: {fileID: 7400000, guid: 066cb670fedc04f45a0c7df208ce85e8, type: 2}
+  bakedPoseTime: 0.09
+  initialPoolSize: 2
+  maxPoolSize: 8

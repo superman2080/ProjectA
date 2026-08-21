@@ -113,3 +113,21 @@ MonoBehaviour:
     sfx: {fileID: 8300000, guid: 4e7a9f408abdba8459fdccbeaea95215, type: 3}
     sfxVolume: 0.3
     sfxPitch: 2
+  - label: BloodSplash
+    prefab: {fileID: 2547653176252853621, guid: 7ba73965ea003004da2c2a2c32b306f3, type: 3}
+    condition: 1
+    timing: 4
+    nodeIndex: 0
+    timeOffset: 0
+    anchor: 0
+    follow: 0
+    bladeT: 1
+    alignToBlade: 0
+    positionOffset: {x: 0, y: 1.15, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    scale: 1
+    speed: 1
+    poolSize: 4
+    sfx: {fileID: 0}
+    sfxVolume: 1
+    sfxPitch: 1

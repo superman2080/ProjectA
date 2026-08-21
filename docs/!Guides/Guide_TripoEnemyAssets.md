@@ -22,6 +22,8 @@ stylized anime game character, cel-shaded flat colors, clean silhouette, game re
 ```
 --no weapon, armor, horns, demon, skull, blood, gore, glowing eyes, emissive, transparent, particles, base plate, text, realistic photoreal skin
 ```
+> ⚠ **Tripo3D에는 네거티브 칸이 없다.** 위 줄은 **네거티브 칸이 있는 이미지 생성 툴 전용**이다. Tripo 텍스트→3D에 넣으면 그냥 프롬프트 텍스트로 읽혀 **`weapon`·`blood`·`horns`를 오히려 불러온다**(SD가 `no`를 무시하는 것과 같은 함정, §1-b).
+> Tripo에서는 **빼고 싶은 것을 긍정문으로 못박는다** — "무기 없음"이 아니라 `empty hands, nothing held`, "뿔 없음"이 아니라 `smooth rounded head`. 아래 §2 프롬프트의 `--no` 줄도 **Tripo에 붙여넣지 않는다.**
 
 ---
 
@@ -77,6 +79,31 @@ both feet fully visible, orthographic front view.
 >
 > 근육이 나오면 `rough clay sculpt` 에 가중치를 주거나 `mannequin` 이라는 단어를 피한다 — 그 단어는 **구체관절 인형** 쪽으로 끌고 간다.
 
+### 변형 — `Enemy_Symbiote` (심비오트형: 날카로운 눈 · 손과 일체화된 칼)
+> ⚠ **1단계 괴물이 아니다.** §4의 금지(무기·안광)는 1~5단계 괴물에 대한 규율이라, 이 디자인은 **별개 적 종류**로 취급한다. 1단계 자리에 넣으면 5단계 상승 곡선이 죽는다 — 중후반 적이나 정예 개체로 쓴다.
+```
+Full-body front view of a lean muscular humanoid creature made of glossy black living tissue,
+standing in A-pose with arms held out at 45 degrees, clear gap between the arms and the sides.
+Its body is one continuous seamless volume with a smooth wet-looking surface,
+long sinewy limbs, broad shoulders, a slightly hunched neck.
+The head is smooth with no nose and no mouth, only two long narrow sharp slit eyes,
+pale white and faintly luminous, angled downward in a menacing glare.
+Its bare hands have no gloves; the fingers taper and merge directly into a thick solid blade
+that grows out of each forearm as part of the body, chunky and wedge-shaped, not a held weapon.
+Soft 3D render with smooth shading gradients and subtle ambient occlusion,
+flat even studio lighting, plain solid mid grey background, sharp focus,
+both feet fully visible, orthographic front view.
+```
+네거티브 칸:
+```
+held sword, sword hilt, gloves, gauntlets, armor, clothing, cape, spikes, horns, thin flat blade,
+paper thin, dripping strands, tentacles, ball joints, joint seams, flat vector illustration,
+cel shading, pure black, strong rim light, depth of field, blurry, cropped, pedestal, text
+```
+> ⚠ **칼날은 두껍게 못박는다**(`thick solid`·`chunky wedge-shaped`). 얇은 날은 종잇장 판으로 복원돼 `MeshSliceBaker` 캡이 안 생기고 스킨 웨이트도 안 붙는다(위 표 2행).
+> ⚠ **칼날은 팔에서 자라야 한다**(`grows out of the forearm as part of the body`). `holding a sword`라고 하면 손과 분리된 별개 메쉬가 나와 오토리그가 손을 못 잡는다.
+> ⚠ **안광은 소스에서 약하게, 세게는 Unity에서** — `faintly luminous`까지만. 이미지에서 발광을 세게 주면 눈 주변 명암이 날아가 얼굴이 뭉개진다. 실제 안광은 머티리얼 emissive로 낸다.
+
 > 근육 정의가 또렷하게 나온 결과는 버리지 말고 **2단계 베이스로 돌린다**(팔만 더 길게, 팔꿈치에 마디 혹 추가). 1단계는 **가장 덜 사람이어야** 하고, 2단계는 이미 인체가 있어야 한다.
 
 ---
@@ -92,6 +119,25 @@ Body is one continuous smooth volume with vague suggestions of shoulders, arms a
 stylized anime game character, cel-shaded flat colors, clean silhouette, game ready, low poly, single closed mesh, symmetrical A-pose, feet on ground plane, neutral studio lighting, no base, no pedestal
 --no weapon, armor, horns, demon, skull, blood, gore, glowing eyes, emissive, transparent, particles, base plate, text, realistic photoreal skin, face
 ```
+
+### 변형 — `Enemy_Symbiote` (심비오트형: 날카로운 눈 · 손과 일체화된 칼)
+> ⚠ **1단계 괴물이 아니다** — §4의 무기·안광 금지는 1~5단계 괴물 규율이라 별개 적 종류로 쓴다.
+> ⚠ **공통 네거티브를 그대로 못 쓴다** — `weapon`·`glowing eyes`·`emissive`가 이 디자인과 정면충돌한다. 아래 전용 네거티브를 쓴다.
+```
+A lean muscular humanoid creature made of glossy black living tissue, standing upright in an A-pose with both arms held out and away from the body.
+Its body is one continuous seamless volume with a smooth wet-looking surface, long sinewy limbs, broad shoulders, a slightly hunched neck.
+The head is smooth and rounded with no nose and no mouth, only two long narrow sharp slit eyes, pale white, angled downward in a menacing glare.
+The left arm ends in a normal five-fingered bare hand.
+The right arm has no hand at all: the forearm narrows past the wrist and continues straight forward into a single long straight blade, as if the hand were replaced by a sword growing out of the arm.
+The blade points away from the body along the same line as the forearm, exactly where a sword blade would point if the creature were gripping a katana, angled toward the thumb side of the arm, with the flat of the blade facing sideways.
+The blade is a thick solid wedge of the same black tissue, heavy and chunky, seamlessly fused into the forearm rather than held.
+Its bare skin is completely nude with no clothing and no armor.
+stylized anime game character, clean silhouette, game ready, low poly, single closed mesh, feet on ground plane, neutral studio lighting, standing directly on the floor
+```
+> ⚠ **`symmetrical`을 뺐다** — 좌우가 다른 디자인이라 그 토큰이 남아 있으면 양팔에 똑같이 칼이 달리거나 양쪽 다 손이 된다.
+> ⚠ **칼날 방향은 애니메이션 재사용의 전제다.** 기존 적 공격 클립은 **오른손에 카타나를 쥔** 모션이라, 칼날이 팔뚝 연장선 + 엄지 쪽으로 뻗어야 그 클립의 궤적이 그대로 맞는다. 팔 뒤쪽으로 자라면(직전 결과가 그랬다) 모든 베기가 허공을 친다.
+> ⚠ 이 적 프리팹에서는 **손에 쥔 카타나 오브젝트를 뺀다**. 안 그러면 칼이 둘이 된다. 대신 `PatternEffectCue`의 `PlayerWeapon` 계열 앵커를 이 적에 쓸 일이 생기면 **칼날 노드를 팔의 칼 부분에 새로 배선**해야 한다.
+> ⚠ Tripo에는 네거티브 칸이 없다(§0) — 배제는 전부 긍정문(`thick solid`, `grows out of the forearm`, `no clothing`)으로 녹여 놨다. `--no ...` 줄을 만들어 붙이지 않는다.
 
 ### 2스테이지 — `Enemy_S2_Misjoint` (팔다리가 생겼지만 관절이 어긋난다)
 > ⚠ **골격은 사람 배치 그대로**. 어긋남은 **비율과 표면**으로 낸다(팔뚝이 지나치게 길다, 팔꿈치 자리에 마디가 둘인 것처럼 보이는 융기).

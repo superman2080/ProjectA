@@ -11192,7 +11192,7 @@ MonoBehaviour:
   orbitReverseInterval: {x: 3, y: 7}
   orbitJitter: 12
   rosterPool:
-  - {fileID: 11400000, guid: 717046d96ae1fdd48a90a1a922ee9cac, type: 2}
+  - {fileID: 11400000, guid: 96490b6e9479250438249733a0a768de, type: 2}
   slicePositionWeight: 60
   maxAttackSpeed: 2.5
   playerShare: 1
