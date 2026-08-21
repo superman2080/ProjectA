@@ -1,0 +1,160 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &744374237479982979
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8019749397230740579, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: 4300000, guid: 5714339ba0fbfb243b2a14b8c22fcc9a, type: 2}
+    - target: {fileID: 919132149155446097, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_Name
+      value: Enemy_Stage1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 0ac67e874a54af443aee39ba13b358dd, type: 2}
+    - target: {fileID: 5866666021909216657, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8674229766755549748, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.045261454
+      objectReference: {fileID: 0}
+    - target: {fileID: 8674229766755549748, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.0592348
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6827455812892311534}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4193007926118542899}
+  m_SourcePrefab: {fileID: 100100000, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+--- !u!1 &474537936491080402 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+  m_PrefabInstance: {fileID: 744374237479982979}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6827455812892311534
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 474537936491080402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87827fd1a6194c045839514c7351dd9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySpace.EnemyView
+  animator: {fileID: 6574720840698620434}
+  attackStateName: Attack
+  attackPlaceholder: {fileID: 7400000, guid: b286c5239db57e24aac24ca9f7e4dc2e, type: 2}
+  attackSpeedParam: AttackSpeed
+  deathStateName: Death
+  deathPlaceholder: {fileID: 7400000, guid: 89bedd3c3d69cdb408cd45639f767304, type: 2}
+  deathSpeedParam: DeathSpeed
+  deathClearOffset: 0.6
+  idleStateName: Idle
+  moveStateName: Run
+  minMoveDistance: 0.3
+  walkStateName: Walk
+  moveXParam: MoveX
+  moveYParam: MoveY
+  walkSpeedParam: WalkSpeed
+  walkClipSpeed: 1.297
+  maxWalkSpeedScale: 1.8
+  wanderBlendDamp: 0.15
+  speedSmoothing: 0.12
+  walkEnterSpeed: 0.3
+  walkExitSpeed: 0.12
+  upperBodyLayerName: Upper Body Layer
+  upperBodyStateName: UpperIdle
+  upperBodyPlaceholder: {fileID: 7400000, guid: 822a0587b5524dd419b0930465021ca6, type: 2}
+  upperBodyIdleClips:
+  - {fileID: 7400000, guid: 822a0587b5524dd419b0930465021ca6, type: 2}
+  - {fileID: 7400000, guid: 6c6efaacf48be9e43a6b5d4db993bb81, type: 2}
+  upperBodyBlendDuration: 0.18
+  moveSpeed: 3
+  reactionHoldDuration: 0.6
+  gazeTurnSpeed: 360
+  knockBackStateName: KnockBack
+  evadeStateName: Evade
+  parryStateName: Parry
+  parrySpeedParam: ParrySpeed
+  parrySpeed: 2
+  crossFadeDuration: 0.12
+  dissolveProperty: _Dissolve
+  highlightLayerName: AmbushOutline
+--- !u!114 &4193007926118542899
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 474537936491080402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55929824ad40a3d40ac459c868105d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Hovl.HS_SwordTrailAnimationEvents
+  swordTrails: []
+  workWithoutAnimation: 0
+--- !u!95 &6574720840698620434 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: 4b0fd9249637e494b89a4fed5dbe112b, type: 3}
+  m_PrefabInstance: {fileID: 744374237479982979}
+  m_PrefabAsset: {fileID: 0}

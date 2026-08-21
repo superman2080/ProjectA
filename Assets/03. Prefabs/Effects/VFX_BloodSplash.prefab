@@ -48,7 +48,7 @@ ParticleSystem:
   ringBufferMode: 0
   ringBufferLoopRange: {x: 0, y: 1}
   emitterVelocityMode: 1
-  looping: 1
+  looping: 0
   prewarm: 0
   playOnAwake: 1
   useUnscaledTime: 0
@@ -4905,7 +4905,7 @@ GameObject:
   - component: {fileID: 1703434320382314391}
   - component: {fileID: 5120775849323229907}
   - component: {fileID: 605288572563009627}
-  - component: {fileID: 3521291761361948945}
+  - component: {fileID: 1655362271709560763}
   m_Layer: 0
   m_Name: VFX_BloodSplash
   m_TagString: Untagged
@@ -9801,7 +9801,7 @@ ParticleSystemRenderer:
   m_MeshWeighting1: 1
   m_MeshWeighting2: 1
   m_MeshWeighting3: 1
---- !u!114 &3521291761361948945
+--- !u!114 &1655362271709560763
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -9810,10 +9810,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 2547653176252853621}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7963f87bd4e6dfb4ba19f4b7428da3c7, type: 3}
+  m_Script: {fileID: 11500000, guid: fe28fe81dedacbf4d93089de4c3f5880, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SliceSpace.AutoDestroyParticle
-  destroyOnFinish: 1
+  m_EditorClassIdentifier: Assembly-CSharp::CanvasEffectView
+  maxLifetime: 8
 --- !u!1 &3765556773772573184
 GameObject:
   m_ObjectHideFlags: 0
