@@ -27,6 +27,74 @@ namespace SliceSpace
 
         private readonly List<SlicePiece> launched = new List<SlicePiece>();
 
+        // ── 소멸 (docs/EnemyDissolve) ───────────────────────────────────────────
+        // 조각이 다 잠들면 그냥 회수해서 시체가 <b>한 프레임에 사라졌다</b>. 여기서 태워 없앤다.
+        // 진행을 미는 방식은 EnemyView와 같다 — 머티리얼을 갈아끼우고 _Dissolve를 민다.
+        private static readonly int DissolveId = Shader.PropertyToID("_Dissolve");
+
+        private readonly DissolveSwap dissolveSwap = new DissolveSwap();
+        private readonly List<Renderer> dissolveRenderers = new List<Renderer>();
+        private MaterialPropertyBlock propertyBlock;
+        private bool dissolving;
+        private float dissolveStart;
+        private float dissolveDuration;
+
+        /// <summary>소멸이 시작됐는지. 디렉터가 "시작할까 / 기다릴까"를 가르는 데 쓴다.</summary>
+        public bool Dissolving => dissolving;
+
+        /// <summary>소멸이 끝났는지. 디렉터가 회수 시점을 잡는 데 쓴다.</summary>
+        public bool DissolveFinished => dissolving && Time.time >= dissolveStart + dissolveDuration;
+
+        /// <summary>
+        /// 태워 없애기 시작. <b>흩어진 조각까지 전부 포함한다</b> —
+        /// 조각은 <see cref="SlicePiece.Launch"/>에서 부모를 떠나므로 계층을 훑어서는 못 찾는다.
+        /// </summary>
+        public void Dissolve(float duration, Material dissolveMaterial)
+        {
+            if (dissolving) return;
+
+            dissolving = true;
+            dissolveStart = Time.time;
+            dissolveDuration = Mathf.Max(duration, 0.01f);
+
+            if (propertyBlock == null) propertyBlock = new MaterialPropertyBlock();
+
+            dissolveRenderers.Clear();
+            if (pieces != null)
+            {
+                foreach (var piece in pieces)
+                {
+                    if (piece != null) piece.GetComponentsInChildren(true, cachedRenderers);
+                    foreach (var r in cachedRenderers) dissolveRenderers.Add(r);
+                }
+            }
+
+            dissolveSwap.Begin(dissolveRenderers, dissolveMaterial, propertyBlock);
+            SetDissolveAmount(0f);
+        }
+
+        private static readonly List<Renderer> cachedRenderers = new List<Renderer>();
+
+        void Update()
+        {
+            if (!dissolving) return;
+
+            SetDissolveAmount(Mathf.Clamp01((Time.time - dissolveStart) / dissolveDuration));
+        }
+
+        /// <summary><b>인스턴스별 진행.</b> 머티리얼을 공유하므로 프로퍼티 블록이 아니면 시체 전원이 같이 탄다.</summary>
+        private void SetDissolveAmount(float amount)
+        {
+            foreach (var r in dissolveRenderers)
+            {
+                if (r == null) continue;
+
+                r.GetPropertyBlock(propertyBlock);
+                propertyBlock.SetFloat(DissolveId, amount);
+                r.SetPropertyBlock(propertyBlock);
+            }
+        }
+
         /// <summary>
         /// 산 적의 포즈를 그대로 물려받는다.
         /// <b>본 배열 순서가 같다는 전제</b>가 성립하는 이유는 굽기 툴이 원본 리그의 본을 순서 그대로 복제하기 때문이다.
@@ -119,6 +187,13 @@ namespace SliceSpace
         /// <summary>풀 반납 직전 복구. 굳힘에 쓴 메쉬는 풀로 돌려준다.</summary>
         public void ResetState(Queue<Mesh> meshPool)
         {
+            // ⚠ 소멸 상태를 안 지우면 다음 대여가 타다 만 채로,
+            // 그것도 DissolveFinished가 이미 true라 즉시 회수 대상으로 나온다.
+            // pieces가 비어도 반드시 돌려야 하므로 조기 return보다 앞이다.
+            dissolveSwap.Restore();
+            dissolveRenderers.Clear();
+            dissolving = false;
+
             if (pieces == null) return;
 
             foreach (var piece in pieces)

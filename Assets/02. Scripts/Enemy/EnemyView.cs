@@ -117,6 +117,8 @@ namespace EnemySpace
         [Tooltip("소멸 셰이더의 노출 프로퍼티 이름. Assets/Shaders/Dissolve/Dissolve.shadergraph 기준.")]
         [SerializeField] private string dissolveProperty = "_Dissolve";
 
+        private readonly DissolveSwap dissolveSwap = new DissolveSwap();
+
         [Header("Highlight")]
         [Tooltip("강조(아웃라인) 중에 옮겨 놓을 레이어 이름. URP의 RenderObjects 피처가 이 레이어만 골라\n" +
                  "아웃라인 머티리얼로 한 번 더 그린다(Assets/Settings/PC_Renderer.asset).\n" +
@@ -942,10 +944,16 @@ namespace EnemySpace
         }
 
         /// <summary>곡이 끝날 때 남은 적을 없애는 연출. <b>절단이 아니다</b> — 베지 않았으니 갈라지면 안 된다.</summary>
-        public void Dissolve(float duration)
+        /// <param name="dissolveMaterial">
+        /// 소멸 동안만 입는 머티리얼. <b>없으면 진행을 밀어도 화면에 아무 일도 일어나지 않는다</b> —
+        /// 평소 입는 툰 머티리얼에는 <c>_Dissolve</c>가 없어서 시간만 흐르다 그냥 사라진다.
+        /// </param>
+        public void Dissolve(float duration, Material dissolveMaterial = null)
         {
             if (dissolving) return;
 
+            dissolveSwap.Begin(renderers, dissolveMaterial, propertyBlock);
+            SetDissolveAmount(0f);
             dissolving = true;
             dissolveStart = Time.time;
             dissolveDuration = Mathf.Max(duration, 0.01f);
@@ -1305,6 +1313,7 @@ namespace EnemySpace
             if (animator != null && upperBodyLayerIndex >= 0) animator.SetLayerWeight(upperBodyLayerIndex, 0f);
             transform.localScale = Vector3.one;
             SetHighlight(false);   // 안 끄면 다음 대여가 빛나는 적으로 나온다
+            dissolveSwap.Restore(); // ⚠ 안 되돌리면 다음 대여가 소멸 머티리얼을 입은 채 나온다
             SetDissolveAmount(0f);
             SetRenderersEnabled(true);
         }

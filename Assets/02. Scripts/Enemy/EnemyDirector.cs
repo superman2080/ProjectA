@@ -185,8 +185,10 @@ namespace EnemySpace
         [SerializeField] private bool keepRootSkinnedForRagdoll;
 
         [Header("Dissolve")]
-        [Tooltip("곡이 끝날 때 남은 적이 사라지는 시간(초).")]
+        [Tooltip("적·시체가 사라지는 시간(초).")]
         [SerializeField] private float dissolveDuration = 1.2f;
+        [Tooltip("소멸 동안만 입는 머티리얼(Assets/Shaders/Materials/EnemyDissolveMaterial.mat). 비면 소멸이 화면에 안 보인다 — 평소 툰 머티리얼에는 _Dissolve가 없어서 시간만 흐르다 그냥 사라진다(배선 누락 시 예전 동작).")]
+        [SerializeField] private Material dissolveMaterial;
 
 #if UNITY_EDITOR
         [Header("Debug (Editor Only)")]
@@ -1859,8 +1861,8 @@ namespace EnemySpace
         /// <summary>곡이 끝났을 때 남은 적을 소멸시킨다. <b>절단이 아니다</b> — 베지 않았으니 갈라지면 안 된다.</summary>
         public void DissolveAll()
         {
-            foreach (var e in ring) e?.Dissolve(dissolveDuration);
-            currentOpponent?.Dissolve(dissolveDuration);
+            foreach (var e in ring) e?.Dissolve(dissolveDuration, dissolveMaterial);
+            currentOpponent?.Dissolve(dissolveDuration, dissolveMaterial);
         }
 
         /// <summary>소멸 연출까지 전부 끝났는지. 스테이지 종료 신호를 낼 시점 판단에 쓴다.</summary>

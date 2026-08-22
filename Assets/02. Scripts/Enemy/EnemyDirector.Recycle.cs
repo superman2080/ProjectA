@@ -19,8 +19,18 @@ namespace EnemySpace
                 var corpse = corpses[i];
                 if (corpse.view == null) { corpses.RemoveAt(i); continue; }
 
-                bool expired = Time.time - corpse.time >= debrisLifetime;
-                if (!expired && !corpse.view.AllPiecesSettled) continue;
+                // 회수 조건이 곧 <b>소멸 시작</b> 조건이다 — 예전엔 여기서 바로 반납해서
+                // 조각이 잠든 다음 프레임에 시체가 통째로 사라졌다.
+                if (!corpse.view.Dissolving)
+                {
+                    bool expired = Time.time - corpse.time >= debrisLifetime;
+                    if (!expired && !corpse.view.AllPiecesSettled) continue;
+
+                    corpse.view.Dissolve(dissolveDuration, dissolveMaterial);
+                    continue;
+                }
+
+                if (!corpse.view.DissolveFinished) continue;
 
                 ReleaseCorpse(corpse);
                 corpses.RemoveAt(i);

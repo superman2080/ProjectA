@@ -1261,7 +1261,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 250229437}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.025524084, y: 0.44703144, z: -0.012762041, w: 0.89406294}
+  m_LocalRotation: {x: 0.026794102, y: 0.6479172, z: -0.022815721, w: 0.76089746}
   m_LocalPosition: {x: -7, y: 2, z: -20.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1504,8 +1504,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.11162932, y: -0.41009983, z: 0.050653838, w: 0.903765}
-  m_LocalPosition: {x: 3.117414, y: 2.3294146, z: -15.977737}
+  m_LocalRotation: {x: 0.121329986, y: -0.63034695, z: 0.100612506, w: 0.760144}
+  m_LocalPosition: {x: 2.4590216, y: 1.6503036, z: -13.713116}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3971,7 +3971,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690579358}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.22038545, y: 0.000000029964227, z: -0.0000000067701373, w: 0.9754129}
+  m_LocalRotation: {x: 0.5422731, y: -0.0000000028762834, z: 0.0000000018563774, w: 0.84020233}
   m_LocalPosition: {x: 0, y: 5, z: -23.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5002,7 +5002,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 937148012}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.11162932, y: -0.41009986, z: 0.05065384, w: 0.903765}
+  m_LocalRotation: {x: 0.121329986, y: -0.63034695, z: 0.100612506, w: 0.760144}
   m_LocalPosition: {x: 6, y: 3.5, z: -20.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -9497,8 +9497,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 37, y: 8.8, z: 37}
-  m_Center: {x: 0, y: 4.6, z: 0}
+  m_Size: {x: 29.48, y: 8, z: 29.12}
+  m_Center: {x: 0, y: 5, z: 0.18}
 --- !u!4 &1408226221
 Transform:
   m_ObjectHideFlags: 0
@@ -11171,7 +11171,7 @@ MonoBehaviour:
   duelAnchor: {fileID: 1923274461}
   viewCamera: {fileID: 330585545}
   projectileDirector: {fileID: 1621256090}
-  stageRadius: 13
+  stageRadius: 12
   ringCount: 6
   minSpacing: 2.5
   minPlayerDistance: 5
@@ -11213,6 +11213,7 @@ MonoBehaviour:
   maxActiveCorpses: 6
   keepRootSkinnedForRagdoll: 0
   dissolveDuration: 1.2
+  dissolveMaterial: {fileID: 2100000, guid: 0c8aa34338f4b1847b6e64f285ea6951, type: 2}
   debugCue:
     killOnSuccess: 1
     projectile: {fileID: 0}
