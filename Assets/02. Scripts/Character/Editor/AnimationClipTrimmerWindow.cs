@@ -54,12 +54,24 @@ public class AnimationClipTrimmerWindow : EditorWindow
         public Vector3 placement;
         public Quaternion facing;
 
+        /// <summary>
+        /// 이 배우 자리가 <b>리드인 원소</b>인가. 리드인은 정렬 앵커가 아니라서 <c>ImpactTime</c>을 저장하지 않고
+        /// (찍혀 있으면 <c>Pattern.OnValidate</c>가 경고한다) 트림 끝이 t 축의 <see cref="tOffset"/> 지점에 온다.
+        /// </summary>
+        public bool isLeadIn;
+
+        /// <summary>
+        /// 이 클립의 앵커(<see cref="clipImpact"/>)가 놓이는 t. 마지막 클립은 0이고, 리드인 원소는
+        /// <c>ClipSequence.AuthoredEndOffset</c>이 준 음수다 — 그래야 원소들이 타임라인에 <b>이어져</b> 보인다.
+        /// </summary>
+        public float tOffset;
+
         public bool HasClip => clip != null;
         public float Duration => clipEnd - clipStart;
 
         /// <summary>지금 t에서 이 배우가 서 있어야 할 클립 시각(트림으로 잘린 값).</summary>
         public float SampleTime(float t) => DuetTimeline.ClampToTrim(
-            DuetTimeline.ClipTimeOf(clipImpact, speed, t), clipStart, clipEnd);
+            DuetTimeline.ClipTimeOf(clipImpact, speed, t - tOffset), clipStart, clipEnd);
     }
 
     /// <summary>
@@ -105,6 +117,45 @@ public class AnimationClipTrimmerWindow : EditorWindow
     }
 
     private EnemyAuxSlot enemyAuxSlot = EnemyAuxSlot.Feint;
+
+    /// <summary>
+    /// 플레이어 자리에 열려 있는 클립의 <b>종류</b>. 셋 다 한 배우의 다른 구간이라 배우를 늘리지 않고
+    /// 슬롯만 갈아 끼운다(<see cref="EnemyAuxSlot"/>과 같은 관용구).
+    ///
+    /// <para>종류와 인덱스를 <b>한 정수에 인코딩하지 않는다</b> — 리드인과 연타 타격이 둘 다 리스트라
+    /// 음수/양수로 가르면 세 번째가 생기는 순간 무너진다.</para>
+    /// </summary>
+    private enum PlayerSlotKind
+    {
+        /// <summary>정렬 앵커(<c>playerAttack</c>/<c>playerParry</c>). 연타에서는 '마무리 일격'이다.</summary>
+        Anchor,
+
+        /// <summary>앵커 앞에 순서대로 붙는 리드인 원소.</summary>
+        LeadIn,
+
+        /// <summary>연타 타격 클립. <b>정렬 대상이 아니지만 ImpactTime은 의미가 있다</b> — 재생 시작점이다.</summary>
+        MashHit
+    }
+
+    private PlayerSlotKind playerSlotKind = PlayerSlotKind.Anchor;
+
+    /// <summary>리스트형 슬롯에서 몇 번째인지. <see cref="PlayerSlotKind.Anchor"/>면 쓰이지 않는다.</summary>
+    private int playerSlotIndex;
+
+    private int LeadInCount => targetPattern != null && targetPattern.PlayerLeadInClips != null
+        ? targetPattern.PlayerLeadInClips.Count
+        : 0;
+
+    private int MashClipCount => targetPattern != null && targetPattern.MashStrikes != null
+        ? targetPattern.MashStrikes.Count
+        : 0;
+
+    private bool IsMashTarget => targetPattern != null && targetPattern.IsMash;
+
+    /// <summary>지금 패턴의 정렬 앵커 슬롯(역할이 정한다).</summary>
+    private ClipAlignment AnchorAlignment => targetPattern == null
+        ? null
+        : (targetPattern.Attacker == EnemySpace.Attacker.Enemy ? targetPattern.PlayerParry : targetPattern.PlayerAttack);
 
     private static string AuxSlotPath(EnemyAuxSlot slot) => slot switch
     {
@@ -212,19 +263,233 @@ public class AnimationClipTrimmerWindow : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
+    /// <summary>
+    /// 플레이어 자리에 어느 클립을 열지 고르고, 리드인 리스트를 편집한다.
+    ///
+    /// <para><b>총 저작 시간을 같이 찍는다</b> — 그 값이 채보의 창을 넘으면 런타임이 시퀀스 전체를 압축한다.
+    /// 다만 경고하지 않는다: 창은 채보 길이로 해결하는 것이 이 기능의 전제라, 여기서 필요한 것은
+    /// <b>판단할 숫자</b>이지 금지가 아니다(<c>추가 칼질</c>의 정지 예산 표시와 같은 결).</para>
+    /// </summary>
+    private void DrawPlayerSlotSelector()
+    {
+        int leadIn = LeadInCount;
+        int mash = IsMashTarget ? MashClipCount : 0;
+
+        // 목록: [마지막] [리드인 0..N] [연타 타격 0..M]
+        var names = new string[1 + leadIn + mash];
+        names[0] = IsMashTarget ? "마지막 (마무리 일격)" : "마지막 (정렬 앵커)";
+        for (int i = 0; i < leadIn; i++) names[1 + i] = $"리드인 [{i}]";
+        for (int i = 0; i < mash; i++) names[1 + leadIn + i] = $"연타 타격 [{i}]";
+
+        int current = playerSlotKind switch
+        {
+            PlayerSlotKind.LeadIn => 1 + Mathf.Clamp(playerSlotIndex, 0, Mathf.Max(leadIn - 1, 0)),
+            PlayerSlotKind.MashHit => 1 + leadIn + Mathf.Clamp(playerSlotIndex, 0, Mathf.Max(mash - 1, 0)),
+            _ => 0
+        };
+
+        EditorGUI.BeginChangeCheck();
+        int picked = EditorGUILayout.Popup(
+            new GUIContent("플레이어 슬롯", "한 배우의 다른 구간이라 배우를 늘리지 않고 슬롯만 바꾼다.\n" +
+                                       "리드인 = 마지막 클립 '앞에' 순서대로 재생(ImpactTime 없음).\n" +
+                                       "연타 타격 = 입력마다 번갈아 재생(ImpactTime이 '재생 시작점'이다)."),
+            Mathf.Clamp(current, 0, names.Length - 1), names);
+        if (EditorGUI.EndChangeCheck() && picked != current && ConfirmBeforeReload())
+        {
+            if (picked == 0) { playerSlotKind = PlayerSlotKind.Anchor; playerSlotIndex = 0; }
+            else if (picked <= leadIn) { playerSlotKind = PlayerSlotKind.LeadIn; playerSlotIndex = picked - 1; }
+            else { playerSlotKind = PlayerSlotKind.MashHit; playerSlotIndex = picked - 1 - leadIn; }
+
+            LoadFromPattern();
+        }
+
+        if (IsMashTarget) DrawMashClipTools(mash);
+        else DrawLeadInTools(leadIn);
+    }
+
+    /// <summary>연타 타격 리스트 편집 + 이 슬롯의 뜻을 한 줄로 설명한다.</summary>
+    private void DrawMashClipTools(int count)
+    {
+        bool onMash = playerSlotKind == PlayerSlotKind.MashHit;
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("+ 타격 클립 추가", GUILayout.Width(130f)))
+                InsertListElement("mashStrikes", count, PlayerSlotKind.MashHit, count);
+
+            using (new EditorGUI.DisabledScope(!onMash))
+            {
+                if (GUILayout.Button("◀", GUILayout.Width(30f))) MoveListElement("mashStrikes", playerSlotIndex, -1, PlayerSlotKind.MashHit);
+                if (GUILayout.Button("▶", GUILayout.Width(30f))) MoveListElement("mashStrikes", playerSlotIndex, 1, PlayerSlotKind.MashHit);
+                if (GUILayout.Button("클립 삭제", GUILayout.Width(80f))) RemoveListElement("mashStrikes", playerSlotIndex);
+            }
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.LabelField($"연타 {targetPattern.MashTargetHits}타 · 클립 {count}개",
+                EditorStyles.miniLabel, GUILayout.Width(160f));
+        }
+
+        // 어느 타격이 자기 리액션을 들고 어느 타격이 공용 폴백을 쓰는지 한 줄로 보여 준다.
+        //
+        // ⚠ 이게 없으면 "저장이 안 된다"로 읽힌다 — 공용 Pattern.EnemyHit이 채워져 있으면
+        //   리액션을 하나만 꽂아도 나머지가 그 클립으로 폴백해 화면이 전혀 안 바뀌기 때문이다.
+        if (count > 0)
+        {
+            var owned = new System.Text.StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                var st = targetPattern.MashStrikes[i];
+                bool has = st != null && st.EnemyReaction != null && st.EnemyReaction.IsUsable;
+                owned.Append(i == 0 ? "" : "  ")
+                     .Append('[').Append(i).Append("] ")
+                     .Append(has ? st.EnemyReaction.Clip.name : "공용");
+            }
+
+            string shared = targetPattern.EnemyHit != null && targetPattern.EnemyHit.IsUsable
+                ? targetPattern.EnemyHit.Clip.name
+                : "없음(knockBack 스테이트)";
+
+            EditorGUILayout.LabelField("적 리액션", owned.ToString(), EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(" ", $"공용 폴백 = {shared}", EditorStyles.miniLabel);
+        }
+
+        if (onMash)
+        {
+            EditorGUILayout.HelpBox(
+                "연타 타격 클립입니다 — 입력마다 이 리스트를 번갈아 돕니다.\n" +
+                "⚠ Impact는 '칼이 닿는 시각'이 아니라 재생 시작점입니다. 런타임은 Impact보다 mashPreRoll만큼 " +
+                "앞에서 시작해 트림 끝까지 재생하므로, 여기서 t = 0 근처가 곧 화면에 보이는 구간입니다.\n" +
+                "⚠ 타격 간격이 0.15초 수준이라 보이는 것은 그 앞부분뿐입니다 — 베는 동작이 Impact 직후에 오게 잡으세요.",
+                MessageType.Info);
+        }
+        else if (count == 0)
+        {
+            EditorGUILayout.HelpBox("타격 클립이 없습니다 — 두들겨도 아무 모션이 안 나옵니다.", MessageType.Warning);
+        }
+
+        if (AnchorAlignment == null || !AnchorAlignment.IsUsable)
+        {
+            EditorGUILayout.HelpBox(
+                "마무리 일격(마지막 슬롯)이 비어 있습니다. 연타가 끝날 때 전용 마무리 모션 없이 절단만 일어납니다 — " +
+                "의도라면 그대로 두세요. 채우면 창 끝에 정렬돼 들어오고, 그만큼 연타 입력이 일찍 닫힙니다.",
+                MessageType.None);
+        }
+    }
+
+    private void DrawLeadInTools(int count)
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("+ 리드인 추가", GUILayout.Width(110f)))
+                InsertListElement("playerLeadInClips", count, PlayerSlotKind.LeadIn, count);
+
+            using (new EditorGUI.DisabledScope(playerSlotKind != PlayerSlotKind.LeadIn))
+            {
+                if (GUILayout.Button("◀", GUILayout.Width(30f))) MoveListElement("playerLeadInClips", playerSlotIndex, -1, PlayerSlotKind.LeadIn);
+                if (GUILayout.Button("▶", GUILayout.Width(30f))) MoveListElement("playerLeadInClips", playerSlotIndex, 1, PlayerSlotKind.LeadIn);
+                if (GUILayout.Button("원소 삭제", GUILayout.Width(80f))) RemoveListElement("playerLeadInClips", playerSlotIndex);
+            }
+
+            GUILayout.FlexibleSpace();
+
+            float authored = ClipSequence.AuthoredSpan(targetPattern.PlayerLeadInClips, AnchorAlignment);
+            EditorGUILayout.LabelField(
+                $"시퀀스 {count + 1}개 · 저작 {authored:0.00}s", EditorStyles.miniLabel, GUILayout.Width(180f));
+        }
+
+        if (count > 0 && (AnchorAlignment == null || !AnchorAlignment.IsUsable))
+        {
+            EditorGUILayout.HelpBox(
+                "리드인이 있는데 정렬 앵커(마지막 클립)가 비어 있습니다 — 시퀀스 전체가 무연출입니다.",
+                MessageType.Warning);
+        }
+    }
+
+    /* 아래 셋은 리드인과 연타 타격이 <b>공유</b>한다. 둘 다 ClipAlignment 리스트라
+     * 배열 이름만 다르고 조작이 같다 — 따로 두면 한쪽만 고쳐지는 날이 온다. */
+
+    private void InsertListElement(string arrayName, int index, PlayerSlotKind kind, int selectIndex)
+    {
+        // 배열을 건드리기 전에 묻는다 — 인덱스가 밀리면 슬롯 경로가 엉뚱한 원소를 가리킨다.
+        if (!ConfirmBeforeReload()) return;
+
+        var so = new SerializedObject(targetPattern);
+        var list = so.FindProperty(arrayName);
+        if (list == null || !list.isArray) return;
+
+        list.InsertArrayElementAtIndex(index);
+        so.ApplyModifiedProperties();
+        EditorUtility.SetDirty(targetPattern);
+
+        playerSlotKind = kind;
+        playerSlotIndex = selectIndex;
+        LoadFromPattern();
+    }
+
+    private void RemoveListElement(string arrayName, int index)
+    {
+        // 배열을 건드리기 전에 묻는다 — 인덱스가 밀리면 슬롯 경로가 엉뚱한 원소를 가리킨다.
+        if (!ConfirmBeforeReload()) return;
+
+        var so = new SerializedObject(targetPattern);
+        var list = so.FindProperty(arrayName);
+        if (list == null || !list.isArray || index < 0 || index >= list.arraySize) return;
+
+        list.DeleteArrayElementAtIndex(index);
+        so.ApplyModifiedProperties();
+        EditorUtility.SetDirty(targetPattern);
+
+        // 지운 자리를 계속 가리키면 범위 밖이 된다 — 앵커로 물러난다.
+        playerSlotKind = PlayerSlotKind.Anchor;
+        playerSlotIndex = 0;
+        LoadFromPattern();
+    }
+
+    private void MoveListElement(string arrayName, int index, int delta, PlayerSlotKind kind)
+    {
+        // 배열을 건드리기 전에 묻는다 — 인덱스가 밀리면 슬롯 경로가 엉뚱한 원소를 가리킨다.
+        if (!ConfirmBeforeReload()) return;
+
+        var so = new SerializedObject(targetPattern);
+        var list = so.FindProperty(arrayName);
+        if (list == null || !list.isArray) return;
+
+        int target = index + delta;
+        if (target < 0 || target >= list.arraySize) return;
+
+        list.MoveArrayElement(index, target);
+        so.ApplyModifiedProperties();
+        EditorUtility.SetDirty(targetPattern);
+
+        playerSlotKind = kind;
+        playerSlotIndex = target;
+        LoadFromPattern();
+    }
+
     private void DrawInputs()
     {
         EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
 
         EditorGUI.BeginChangeCheck();
-        targetPattern = (Pattern)EditorGUILayout.ObjectField("Pattern", targetPattern, typeof(Pattern), false);
-        if (EditorGUI.EndChangeCheck()) LoadFromPattern();
+        var pickedPattern = (Pattern)EditorGUILayout.ObjectField("Pattern", targetPattern, typeof(Pattern), false);
+        if (EditorGUI.EndChangeCheck() && pickedPattern != targetPattern)
+        {
+            if (ConfirmBeforeReload())
+            {
+                targetPattern = pickedPattern;
+                playerSlotKind = PlayerSlotKind.Anchor;
+                playerSlotIndex = 0;
+                LoadFromPattern();
+            }
+        }
 
         if (targetPattern == null) return;
 
         bool enemyIsAttacker = targetPattern.Attacker == EnemySpace.Attacker.Enemy;
         EditorGUILayout.LabelField("역할",
             enemyIsAttacker ? "Enemy — 적 공격 → 플레이어 패링" : "Player — 플레이어 공격 → 적 사망");
+
+        DrawPlayerSlotSelector();
 
         EditorGUI.BeginChangeCheck();
         enemyAuxSlot = (EnemyAuxSlot)EditorGUILayout.EnumPopup(
@@ -323,9 +588,22 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// 커브 구동이 시작되는 시각(임팩트 기준 상대초) = <b>플레이어 클립이 재생되기 시작하는 t</b>.
     /// 그보다 이른 키는 화면에 나타날 수 없다 — 그 구간에는 아직 수렴 이동이 진행 중이다.
     /// </summary>
-    private float CurveDriveStart => player.HasClip
-        ? -DuetTimeline.LeadOf(player.clipStart, player.clipImpact, player.speed)
-        : -0.5f;
+    /// <remarks>
+    /// ⚠ <b>선택된 원소가 아니라 시퀀스 전체의 시작</b>이다. 리드인이 있으면 재생은 그만큼 먼저 시작하므로
+    /// 앵커 클립만 보고 재면 구동 구간을 실제보다 짧게 잡아 멀쩡한 키에 경고가 뜬다.
+    /// </remarks>
+    private float CurveDriveStart
+    {
+        get
+        {
+            if (targetPattern == null) return player.HasClip
+                ? -DuetTimeline.LeadOf(player.clipStart, player.clipImpact, player.speed)
+                : -0.5f;
+
+            float authored = ClipSequence.AuthoredSpan(targetPattern.PlayerLeadInClips, AnchorAlignment);
+            return authored > 0f ? -authored : -0.5f;
+        }
+    }
 
     /// <summary>
     /// 키가 구동 구간 밖에 있으면 알린다. <b>이 창에서 가장 흔한 실수가 여기다</b> —
@@ -379,15 +657,67 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
         bool enemyIsAttacker = targetPattern.Attacker == EnemySpace.Attacker.Enemy;
 
-        player.slotPath = enemyIsAttacker ? "playerParry" : "playerAttack";
+        // 다른 패턴으로 갈아타면 리스트 길이가 달라진다 — 범위 밖이면 앵커로 되돌린다.
+        int slotCount = playerSlotKind switch
+        {
+            PlayerSlotKind.LeadIn => LeadInCount,
+            PlayerSlotKind.MashHit => IsMashTarget ? MashClipCount : 0,
+            _ => 0
+        };
+        if (playerSlotKind != PlayerSlotKind.Anchor && (playerSlotIndex < 0 || playerSlotIndex >= slotCount))
+        {
+            playerSlotKind = PlayerSlotKind.Anchor;
+            playerSlotIndex = 0;
+        }
+
+        string anchorPath = enemyIsAttacker ? "playerParry" : "playerAttack";
+
+        switch (playerSlotKind)
+        {
+            case PlayerSlotKind.LeadIn:
+                // ⚠ 리드인만 isLeadIn이다 — ImpactTime을 저장하지 않고 트림 끝이 t 축 앵커다.
+                player.isLeadIn = true;
+                player.slotPath = $"playerLeadInClips.Array.data[{playerSlotIndex}]";
+                player.label = $"플레이어 — 리드인 [{playerSlotIndex}] (앵커 앞 {LeadInCount - playerSlotIndex}번째)";
+                player.tOffset = ClipSequence.AuthoredEndOffset(targetPattern.PlayerLeadInClips, playerSlotIndex, AnchorAlignment);
+                break;
+
+            case PlayerSlotKind.MashHit:
+                // ⚠ 연타 타격은 정렬 대상이 아니지만 ImpactTime은 '재생 시작점'으로 살아 있다.
+                //    그래서 일반 슬롯과 똑같이 다룬다(저장도 하고 t=0 앵커로도 쓴다) — isLeadIn이 아니다.
+                player.isLeadIn = false;
+                player.slotPath = $"mashStrikes.Array.data[{playerSlotIndex}].playerClip";
+                player.label = $"플레이어 — 연타 타격 [{playerSlotIndex}] / {MashClipCount}개";
+                player.tOffset = 0f;
+                break;
+
+            default:
+                player.isLeadIn = false;
+                player.slotPath = anchorPath;
+                player.label = targetPattern.IsMash
+                    ? $"플레이어 — {anchorPath} (마무리 일격)"
+                    : $"플레이어 — {anchorPath} (정렬 앵커)";
+                player.tOffset = 0f;
+                break;
+        }
+
         enemy.slotPath = enemyIsAttacker ? "enemyAttack" : "enemyDeath";
-        player.label = enemyIsAttacker ? "플레이어 — playerParry" : "플레이어 — playerAttack";
         enemy.label = enemyIsAttacker ? "적 — enemyAttack" : "적 — enemyDeath (사망)";
 
-        // 견제는 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 enemyAttack이 채운다.
-        // 피격·패링은 역할과 무관하게 열어 둔다(적이 공격자여도 막힐 수는 있다).
-        feint.slotPath = enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Feint ? null : AuxSlotPath(enemyAuxSlot);
-        feint.label = AuxSlotLabel(enemyAuxSlot);
+        if (playerSlotKind == PlayerSlotKind.MashHit)
+        {
+            // 연타 타격을 고르면 <b>그 쌍의 적 리액션</b>이 자동으로 같이 열린다 —
+            // 둘은 짝이고, 짝을 나란히 보는 것이 이 슬롯 저작의 전부다(보조 슬롯 팝업을 덮는다).
+            feint.slotPath = $"mashStrikes.Array.data[{playerSlotIndex}].enemyReaction";
+            feint.label = $"적 — 연타 리액션 [{playerSlotIndex}] (이 타격의 짝)";
+        }
+        else
+        {
+            // 견제는 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 enemyAttack이 채운다.
+            // 피격·패링은 역할과 무관하게 열어 둔다(적이 공격자여도 막힐 수는 있다).
+            feint.slotPath = enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Feint ? null : AuxSlotPath(enemyAuxSlot);
+            feint.label = AuxSlotLabel(enemyAuxSlot);
+        }
 
         var so = new SerializedObject(targetPattern);
         LoadActor(so, player);
@@ -420,7 +750,8 @@ public class AnimationClipTrimmerWindow : EditorWindow
             : (actor.clip != null ? actor.clip.length : actor.clipStart);
 
         // 미오서링(0 이하)이면 런타임 폴백과 같게 트림 끝에 세운다.
-        float impact = so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
+        // ⚠ 리드인 원소는 언제나 트림 끝이 앵커다 — ImpactTime은 저장하지 않는다(§ClipSequence).
+        float impact = actor.isLeadIn ? 0f : (so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f);
         actor.clipImpact = impact > 0f ? impact : actor.clipEnd;
 
         actor.extraImpacts.Clear();
@@ -718,6 +1049,17 @@ public class AnimationClipTrimmerWindow : EditorWindow
             player.clipStart, player.clipImpact, player.clipEnd, player.speed,
             enemy.clipStart, enemy.clipImpact, enemy.clipEnd, enemy.speed);
 
+        // 리드인 원소는 임팩트보다 한참 앞에 산다 — 범위에서 빠지면 그 구간을 스크럽할 수가 없다.
+        if (player.HasClip && !Mathf.Approximately(player.tOffset, 0f))
+        {
+            min = Mathf.Min(min, player.tOffset - DuetTimeline.LeadOf(player.clipStart, player.clipImpact, player.speed));
+            max = Mathf.Max(max, player.tOffset);
+        }
+
+        // 앵커를 보고 있어도 시퀀스 전체를 훑을 수 있어야 한다(원소들이 이어지는지가 저작의 판단점이다).
+        min = Mathf.Min(min, ClipSequence.AuthoredEndOffset(
+            targetPattern != null ? targetPattern.PlayerLeadInClips : null, -1, AnchorAlignment));
+
         if (feint.HasClip)
         {
             min = Mathf.Min(min, -DuetTimeline.LeadOf(feint.clipStart, feint.clipImpact, feint.speed));
@@ -786,8 +1128,8 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         if (!actor.HasClip) return;
 
-        float startT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipStart);
-        float endT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipEnd);
+        float startT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipStart) + actor.tOffset;
+        float endT = DuetTimeline.RelativeOf(actor.clipImpact, actor.speed, actor.clipEnd) + actor.tOffset;
 
         DrawMarker(rect, Mathf.InverseLerp(min, max, startT), startColor, 2f);
         DrawMarker(rect, Mathf.InverseLerp(min, max, endT), endColor, 2f);
@@ -824,14 +1166,26 @@ public class AnimationClipTrimmerWindow : EditorWindow
         using (new EditorGUILayout.HorizontalScope())
         {
             if (GUILayout.Button("Mark Start")) actor.clipStart = CurrentClipTime(actor);
-            if (GUILayout.Button("Mark Impact")) MarkImpact(actor);
+            if (!actor.isLeadIn && GUILayout.Button("Mark Impact")) MarkImpact(actor);
             if (GUILayout.Button("Mark End")) actor.clipEnd = CurrentClipTime(actor);
         }
 
         // 입력 필드는 클립 시간이다 — 에셋에 들어갈 숫자를 그대로 보여 인스펙터와 눈으로 대조할 수 있게.
         actor.clipStart = Mathf.Max(EditorGUILayout.FloatField("Start (clip s)", actor.clipStart), 0f);
-        actor.clipImpact = Mathf.Max(EditorGUILayout.FloatField("Impact (clip s)", actor.clipImpact), 0f);
+
+        // ⚠ 리드인에는 Impact 필드가 없다. 정렬 앵커는 마지막 클립 하나뿐이라(§ClipSequence)
+        // 여기 값을 받으면 "여기서 칼이 닿는다"는 오해만 만든다 — 트림 끝이 곧 다음 원소의 시작이다.
+        if (!actor.isLeadIn)
+            actor.clipImpact = Mathf.Max(EditorGUILayout.FloatField("Impact (clip s)", actor.clipImpact), 0f);
+
         actor.clipEnd = EditorGUILayout.FloatField("End (clip s)", actor.clipEnd);
+
+        if (actor.isLeadIn)
+        {
+            actor.clipImpact = actor.clipEnd; // t 축 앵커. 저장되지 않는다.
+            EditorGUILayout.LabelField("타임라인 위치",
+                $"트림 끝이 t = {actor.tOffset:+0.000;-0.000;0.000}s (다음 원소가 시작하는 지점)");
+        }
 
         EditorGUILayout.LabelField("Duration", $"{actor.Duration:0.000}s   ·   speed {actor.speed:0.00}");
 
@@ -994,13 +1348,43 @@ public class AnimationClipTrimmerWindow : EditorWindow
         DrawSyncState();
     }
 
+    /// <summary>창의 값이 에셋과 같은가. 저장 여부 표시와 <see cref="ConfirmBeforeReload"/>가 같은 판단을 쓴다.</summary>
+    private bool IsSynced()
+    {
+        if (targetPattern == null) return true;
+
+        var so = new SerializedObject(targetPattern);
+        return ActorSynced(so, player) && ActorSynced(so, enemy) && ActorSynced(so, feint)
+               && Mathf.Approximately(so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f, duelDistanceOffset)
+               && CurveSynced(so);
+    }
+
+    /// <summary>
+    /// 창을 다시 읽기 <b>전에</b> 저장 안 된 편집을 어떻게 할지 묻는다. 계속해도 되면 true.
+    ///
+    /// <para><b>⚠ 이 가드가 없으면 편집이 조용히 사라진다.</b> <see cref="LoadFromPattern"/>은 창의 값을
+    /// 에셋 값으로 덮어쓰는데, 슬롯을 바꾸거나 리스트를 건드릴 때마다 그것이 불린다 —
+    /// 즉 <b>"클립을 꽂고 다른 슬롯으로 넘어가면" 그 편집이 없던 일이 된다</b>.
+    /// 슬롯이 여럿인 패턴(리드인·연타 타격)에서는 여러 개를 차례로 채우는 것이 정상 작업이라
+    /// 이 경로를 반드시 밟게 된다.</para>
+    /// </summary>
+    private bool ConfirmBeforeReload()
+    {
+        if (targetPattern == null || IsSynced()) return true;
+
+        int choice = EditorUtility.DisplayDialogComplex(
+            "저장 안 된 변경",
+            $"'{targetPattern.name}'의 창 값이 에셋과 다릅니다. 지금 이동하면 이 편집은 사라집니다.",
+            "저장하고 이동", "취소", "버리고 이동");
+
+        if (choice == 0) { ApplyToPattern(); return true; }
+        return choice == 2;
+    }
+
     /// <summary>창의 상태와 에셋이 같은지. 다르면 아직 저장 전이라는 뜻이다.</summary>
     private void DrawSyncState()
     {
-        var so = new SerializedObject(targetPattern);
-        bool synced = ActorSynced(so, player) && ActorSynced(so, enemy) && ActorSynced(so, feint)
-                      && Mathf.Approximately(so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f, duelDistanceOffset)
-                      && CurveSynced(so);
+        bool synced = IsSynced();
 
         EditorGUILayout.LabelField(" ",
             synced ? "✔ 저장됨 (창과 에셋이 일치)" : "● 저장 전 — 창의 값이 에셋과 다릅니다",
@@ -1032,7 +1416,10 @@ public class AnimationClipTrimmerWindow : EditorWindow
         var storedClip = so.FindProperty($"{actor.slotPath}.clip")?.objectReferenceValue as AnimationClip;
         float off = so.FindProperty($"{actor.slotPath}.startOffset")?.floatValue ?? 0f;
         float dur = so.FindProperty($"{actor.slotPath}.duration")?.floatValue ?? 0f;
-        float imp = so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
+        // 리드인은 ImpactTime을 저장하지 않으므로(0이 정상) 창의 시각 앵커와 대조하면 안 된다.
+        float imp = actor.isLeadIn
+            ? Mathf.Clamp(actor.clipImpact, actor.clipStart, actor.clipEnd)
+            : so.FindProperty($"{actor.slotPath}.impactTime")?.floatValue ?? 0f;
 
         return storedClip == actor.clip
                && Mathf.Approximately(off, actor.clipStart)
@@ -1094,7 +1481,10 @@ public class AnimationClipTrimmerWindow : EditorWindow
         clipProp.objectReferenceValue = actor.clip;
         offProp.floatValue = actor.clipStart;
         durProp.floatValue = actor.Duration;
-        impProp.floatValue = actor.clipImpact;
+
+        // ⚠ 리드인 원소에는 ImpactTime을 쓰지 않는다. 정렬 앵커는 마지막 클립 하나뿐이라 아무 일도 하지 않는데,
+        // 값이 남아 있으면 Pattern.OnValidate가 "오해의 진입점"으로 보고 경고한다.
+        impProp.floatValue = actor.isLeadIn ? 0f : actor.clipImpact;
 
         // 추가 칼질 — 트림 시작~마지막 베기 '사이'만 남긴다. 밖의 값은 런타임이 어차피 버리므로
         // 여기서 걸러야 "찍었는데 안 나온다"가 안 생긴다.

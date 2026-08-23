@@ -136,7 +136,7 @@ int   Pick(SlicePlane want, IReadOnlyList<SlicePlane> candidates, float position
 
 | 패턴 | 최근접 세트 | 각도차 | 높이차 | 판정 |
 |---|---|---|---|---|
-| `Pattern(0,4,8)` | `…_Diagonal` | 4.2° | 0.03m | ✅ 재사용 |
+| `Pattern(0,4,8)` | `…_Diagonal` | 4.2° | 0.03m | O 재사용 |
 | `Pattern(7,4)` | `…_Vertical` | 38.1° | 0.21m | ⚠ 굽기 필요 ☐ |
 
 - 판정 문턱은 상단 노브 하나(`reuseThreshold`, 기본 15점).
@@ -151,7 +151,7 @@ int   Pick(SlicePlane want, IReadOnlyList<SlicePlane> candidates, float position
 | 1 | 패턴 에셋 생성 | 패턴 에셋 생성 |
 | 2 | 클립 트림(임팩트 찍기) | 클립 트림(임팩트 찍기) |
 | 3 | 베이커 열고 6칸 채우기 | **감사 탭 `스캔`** |
-| 4 | `칼 평면 유도` → `이 평면 사용` | (대개 여기서 끝 — ✅ 재사용) |
+| 4 | `칼 평면 유도` → `이 평면 사용` | (대개 여기서 끝 — O 재사용) |
 | 5 | 프리뷰 확인 → `굽기`(조각 19장) | 새 각도일 때만 ☐ 체크 → 일괄 굽기 |
 | 6 | 정의에 세트 수동 배선 | (툴이 append) |
 

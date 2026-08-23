@@ -210,7 +210,10 @@ public class PatternEffectWindow : EditorWindow
         // 소리 뱃지 — 그림 없는 큐가 목록에서 빈 줄로 보이면 안 된다.
         if (cue.Sfx != null) EditorGUI.LabelField(sfxRect, "♪");
         EditorGUI.LabelField(condRect, cue.Condition.ToString());
-        EditorGUI.LabelField(timeRect, $"{cue.Timing}{(cue.Timing == EffectTiming.Node ? $"[{cue.NodeIndex}]" : "")} {Signed(cue.TimeOffset)}");
+        // 연타 타격 큐는 시각이 없다 — 사건에 붙으므로 오프셋도 배지도 의미가 없다.
+        EditorGUI.LabelField(timeRect, cue.IsEventDriven
+            ? "타격마다"
+            : $"{cue.Timing}{(cue.Timing == EffectTiming.Node ? $"[{cue.NodeIndex}]" : "")} {Signed(cue.TimeOffset)}");
         EditorGUI.LabelField(anchorRect, cue.Anchor + (cue.Follow ? " (follow)" : ""));
 
         GUI.color = color;
@@ -246,9 +249,21 @@ public class PatternEffectWindow : EditorWindow
         return times;
     }
 
-    private float ResolveCueTime(PatternEffectCue cue) => cue.ResolveTime(
-        StartTime(), FirstNodeTime(), LastNodeTime(), DeadlineTime(),
-        NodeTimes(), target != null ? target.ImpactOffset : 0f);
+    /// <summary>
+    /// 이 큐가 발사되는 시각(임팩트 기준 상대초).
+    ///
+    /// <para><b>⚠ 연타 타격 큐는 시각이 없다</b> — 사건에 붙기 때문이다. 그래도 <b>0(임팩트)을 돌려준다</b>:
+    /// "언제"는 못 보여 줘도 <b>"어디에 어떤 크기로 뜨는가"는 봐야 저작이 된다</b>. 3D 프리뷰가 이 값으로
+    /// 파티클을 세우고, t를 0 이후로 끌면 수명이 흐르는 모습이 보인다.</para>
+    ///
+    /// <para>타임라인 막대와 스크럽 범위에서는 여전히 제외된다 — 그쪽에 그리면 "임팩트에 한 번 뜬다"는
+    /// 거짓말이 되기 때문이다(<see cref="PatternEffectCue.IsEventDriven"/>).</para>
+    /// </summary>
+    private float ResolveCueTime(PatternEffectCue cue) => cue.IsEventDriven
+        ? 0f
+        : cue.ResolveTime(
+            StartTime(), FirstNodeTime(), LastNodeTime(), DeadlineTime(),
+            NodeTimes(), target != null ? target.ImpactOffset : 0f);
 
     private (float min, float max) ScrubRange()
     {
@@ -259,7 +274,7 @@ public class PatternEffectWindow : EditorWindow
         {
             foreach (var cue in target.EffectCues)
             {
-                if (cue == null || !cue.IsUsable) continue;
+                if (cue == null || !cue.IsUsable || cue.IsEventDriven) continue;
 
                 float time = ResolveCueTime(cue);
                 min = Mathf.Min(min, time);
@@ -524,6 +539,16 @@ public class PatternEffectWindow : EditorWindow
             return;
         }
 
+        if (cue.IsEventDriven)
+        {
+            EditorGUILayout.HelpBox(
+                "연타 타격마다 발사되는 큐입니다 — 시각이 아니라 사건에 붙으므로 timeOffset과 타임라인이 의미가 없습니다.\n" +
+                "⚠ 조건은 Always여야 합니다(타격 순간에는 성패가 아직 안 정해집니다).\n" +
+                "⚠ 풀 크기를 넉넉히: 초당 8타 × 이펙트 수명이 동시 인스턴스 수입니다.",
+                cue.NeedsOutcome ? MessageType.Error : MessageType.Info);
+            return;
+        }
+
         float time = ResolveCueTime(cue);
 
         if (!cue.IsTimingValid(time, LastNodeTime()))
@@ -613,7 +638,7 @@ public class PatternEffectWindow : EditorWindow
             for (int i = 0; i < target.EffectCues.Count; i++)
             {
                 var cue = target.EffectCues[i];
-                if (cue == null || !cue.IsUsable) continue;
+                if (cue == null || !cue.IsUsable || cue.IsEventDriven) continue;   // 놓을 자리가 없다
 
                 float time = ResolveCueTime(cue);
                 float x0 = X(time);

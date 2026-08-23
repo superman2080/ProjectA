@@ -42,6 +42,12 @@ namespace PatternSpace
         [Tooltip("무방비 적을 베는 플레이어 공격. Attacker.Player일 때 재생된다. 비우면 무연출.")]
         [SerializeField] private ClipAlignment playerAttack = new ClipAlignment();
 
+        [Tooltip("위 공격/패링 클립 '앞에' 순서대로 재생될 클립들. 비우면 예전 동작(클립 하나).\n" +
+                 "⚠ 정렬 앵커는 언제나 마지막 클립(playerAttack/playerParry) 하나다 — 여기 원소에는 ImpactTime을 찍지 말 것.\n" +
+                 "리드인 구간의 히트스톱은 그 원소의 extraImpactTimes에 찍는다.\n" +
+                 "창이 모자라면 시퀀스 전체가 같은 비율로 배속된다(원소가 잘리지 않는다).")]
+        [SerializeField] private List<ClipAlignment> playerLeadInClips = new List<ClipAlignment>();
+
         [Tooltip("표적이 된 순간부터 임팩트까지 적이 하는 동작(견제). Attacker.Player일 때만 재생된다. 비우면 기본 Idle.\n" +
                  "⚠ ImpactTime을 찍지 말 것 — 트림 끝이 임팩트에 붙는 것이 기본 동작이다.\n" +
                  "⚠ 트림 0.8초 이하 권장. 실측상 그 길이가 배속 없이 들어가는 비율이 97%다(docs/EnemyFeint).")]
@@ -75,6 +81,22 @@ namespace PatternSpace
                  "저작은 Tools/Animation Clip Trimmer. 구동 구간은 플레이어 클립 재생 구간이다.")]
         [SerializeField] private AnimationCurve duelDistanceCurve = new AnimationCurve();
 
+        [Header("Mash (연타)")]
+        [Tooltip("연타 패턴인가. 켜면 아무 노드나 눌러 타수를 채우는 구간이 된다(노드 순서를 보지 않는다).\n" +
+                 "⚠ patternDatas는 정확히 1칸이어야 한다 — 그 자리가 게이지(포커스 링)가 앉는 곳이다.\n" +
+                 "⚠ Attacker.Player 전용.")]
+        [SerializeField] private bool isMash;
+
+        [Tooltip("성공에 필요한 타수. 이 수까지는 입력마다 점수가 오르고, 그 이상은 애니메이션만 나온다.\n" +
+                 "⚠ 창 전체가 아니라 '입력 마감'까지 안에 들어가야 한다 — 마감은 마무리 일격(playerAttack)의 와인드업만큼 앞당겨진다.")]
+        [Min(1)]
+        [SerializeField] private int mashTargetHits = 10;
+
+        [Tooltip("타격마다 번갈아 쓰는 '베기 + 맞는 리액션' 쌍들. 각 클립은 ImpactTime '부터' 재생된다.\n" +
+                 "⚠ 정렬 대상이 아니다 — 타격 시각은 플레이어가 정하므로 역산할 시각이 없다.\n" +
+                 "비우면 무연출(아무 일도 안 일어난다). 저작은 Tools/Animation Clip Trimmer.")]
+        [SerializeField] private List<MashStrike> mashStrikes = new List<MashStrike>();
+
         [Header("Slice")]
         [Tooltip("이 스윙이 만드는 절단면(canonical = 적 루트 로컬). 굽기 툴이 playerAttack의 임팩트 프레임에서\n" +
                  "유도해 기입한다 — 손으로 적지 않는다(Tools/Mesh Slice Baker의 '패턴 감사' 탭).\n" +
@@ -106,6 +128,96 @@ namespace PatternSpace
 
         /// <summary>무방비 적을 베는 플레이어 공격(<c>Attacker.Player</c>).</summary>
         public ClipAlignment PlayerAttack => playerAttack;
+
+        /// <summary>
+        /// 활성 슬롯(<see cref="PlayerAttack"/> 또는 <see cref="PlayerParry"/>) <b>앞에</b> 순서대로 재생될 클립들.
+        ///
+        /// <para><b>슬롯을 리스트로 갈아엎지 않고 앞에 붙이는 이유</b>: 마지막 클립이 곧 정렬 앵커이고(§6),
+        /// 칼 평면 유도(<c>Tools/Mesh Slice Baker</c>)·이펙트 프리뷰가 전부 그 슬롯을 본다. 앵커를 제자리에 두면
+        /// <b>기존 데이터의 마이그레이션이 0이고 그 소비자들이 한 줄도 안 바뀐다</b>.</para>
+        ///
+        /// <para><b>리스트가 하나뿐인 이유</b>: "한 패턴은 한 역할만 갖는다"가 이미 참이므로
+        /// (<see cref="Attacker"/> · <c>WarnUnusedSlots</c>) 리드인은 <b>그 패턴의 활성 슬롯 앞</b>으로 정의된다.
+        /// 역할별로 리스트를 나누면 언제나 하나는 죽은 데이터다.</para>
+        /// </summary>
+        public IReadOnlyList<ClipAlignment> PlayerLeadInClips => playerLeadInClips;
+
+        /// <summary>
+        /// 연타 패턴인가. <b>노드의 나열이 아니라 타수를 세는 구간</b>이라 판정 규칙이 통째로 갈린다 —
+        /// 어느 인덱스든 유효타이고, 정해진 시각이 없고, 위치가 밀리지 않는다.
+        ///
+        /// <para><b>목표 타수를 <see cref="AllData"/>로 표현할 수 없어서</b> 별도 필드가 됐다 —
+        /// <see cref="OnValidate"/>가 중복 인덱스를 막고 노드는 9개뿐이라 20타를 20칸으로 적을 수 없다.
+        /// 여기서 <c>patternDatas</c>는 <b>게이지가 앉을 자리 하나</b>만 뜻한다.</para>
+        /// </summary>
+        public bool IsMash => isMash;
+
+        /// <summary>성공에 필요한 타수. 이 수까지가 점수 대상이고 그 이상은 연출만이다.</summary>
+        public int MashTargetHits => Mathf.Max(mashTargetHits, 1);
+
+        /// <summary>타격마다 번갈아 쓰는 '베기 + 리액션' 쌍들. 각 원소는 <c>ImpactTime</c>부터 재생된다(정렬 대상이 아니다).</summary>
+        public IReadOnlyList<MashStrike> MashStrikes => mashStrikes;
+
+        /// <summary>재생할 타격 클립이 하나라도 있는가. 없으면 연타가 무연출로 지나간다.</summary>
+        public bool HasMashStrikes
+        {
+            get
+            {
+                if (mashStrikes == null) return false;
+
+                for (int i = 0; i < mashStrikes.Count; i++)
+                    if (mashStrikes[i] != null && mashStrikes[i].IsUsable) return true;
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// <paramref name="hitNumber"/>번째 타격(1부터)이 쓸 쌍. 리스트를 순환한다.
+        ///
+        /// <para><b>⚠ 커서를 들지 않는 것이 핵심이다.</b> 이 값을 보는 곳이 셋인데
+        /// (플레이어 클립 · 적 리액션 · 월드 이펙트) 각자 커서를 돌리면 언젠가 어긋나
+        /// <b>다른 모션에 다른 리액션이 붙는다</b>. 누적 타수에서 유도하면 셋이 같은 답을 볼 수밖에 없다.</para>
+        ///
+        /// <para>빈 원소를 건너뛰지 않는다 — 그러면 순환 위치가 데이터에 따라 달라져 위 보장이 깨진다.
+        /// 빈 원소는 <b>그 타격이 무연출</b>이라는 뜻이고, <c>OnValidate</c>가 경고한다.</para>
+        /// </summary>
+        public MashStrike MashStrikeFor(int hitNumber)
+        {
+            if (mashStrikes == null || mashStrikes.Count == 0) return null;
+
+            int index = (Mathf.Max(hitNumber, 1) - 1) % mashStrikes.Count;
+            return mashStrikes[index];
+        }
+
+        /// <summary>
+        /// 연타 입력이 <b>Deadline보다 얼마나 일찍 닫히는가</b>(초). 마무리 일격(<see cref="PlayerAttack"/>)의
+        /// 와인드업과 같은 값이다.
+        ///
+        /// <para><b>⚠ 이 값이 없으면 마무리 일격이 매번 끊긴다.</b> 그 클립은 <c>임팩트 − 와인드업</c>에 시작하는데
+        /// 초과 타격은 계속 하도록 권장되고(연출만 나온다), 타격 하나하나가 새 <c>PlaySlot</c>이라
+        /// 마무리를 처음부터 다시 시작시킨다 → 와인드업이 완주하지 못한 채 임팩트가 도착해
+        /// <b>칼이 지나가지 않았는데 몸이 갈라진다</b>.</para>
+        ///
+        /// <para><b>저작 필드를 만들지 않고 유도하는 이유</b>: 와인드업은 이미 <c>playerAttack</c>의
+        /// 트림·임팩트·배속에 들어 있다. 손으로 한 번 더 적으면 두 값이 언젠가 갈라진다.
+        /// 슬롯이 비면 0 — 즉 <b>마무리 일격이 없는 연타</b>가 분기가 아니라 데이터로 표현된다.</para>
+        /// </summary>
+        public float MashInputDeadlineLead => ClipSequence.AuthoredImpactSpan(playerAttack);
+
+        /// <summary>재생할 리드인 원소가 하나라도 있는가. 없으면 예전의 단일 클립 경로와 완전히 같다.</summary>
+        public bool HasLeadInClips
+        {
+            get
+            {
+                if (playerLeadInClips == null) return false;
+
+                for (int i = 0; i < playerLeadInClips.Count; i++)
+                    if (playerLeadInClips[i] != null && playerLeadInClips[i].IsUsable) return true;
+
+                return false;
+            }
+        }
 
         /// <summary>
         /// 표적이 된 순간부터 임팩트까지 적이 하는 동작(<c>Attacker.Player</c>일 때만).
@@ -260,6 +372,8 @@ namespace PatternSpace
             // 굽기 포즈가 런타임 정합성 요구가 아니라 저작 보조이기 때문(Plan_HumanoidSlice 결정 1-1).
             enemyDeath?.ValidateImpactTime(this, "EnemyDeath");
             enemyFeint?.ValidateImpactTime(this, "EnemyFeint");
+            ValidateLeadInClips();
+            ValidateMash();
             WarnUnusedSlots();
             ValidateEffectCues();
 #endif
@@ -277,6 +391,117 @@ namespace PatternSpace
         }
 
 #if UNITY_EDITOR
+        /// <summary>
+        /// 리드인 리스트의 <b>배선 실수를 잡는 유일한 장치</b>. 셋을 본다 —
+        /// 트림 구간 검증, <b>정렬 의미가 없는 곳에 찍힌 ImpactTime</b>, 그리고 앵커가 비어 있는 상태다.
+        ///
+        /// <para>정렬 앵커는 마지막 클립 하나뿐이므로(§6) 리드인 원소의 <c>ImpactTime</c>은 아무 일도 하지 않는다 —
+        /// 저작자가 "여기서 칼이 닿는다"로 오해할 유일한 진입점이라 여기서 막는다.</para>
+        /// </summary>
+        private void ValidateLeadInClips()
+        {
+            if (playerLeadInClips == null || playerLeadInClips.Count == 0) return;
+
+            bool enemyIsAttacker = attacker == EnemySpace.Attacker.Enemy;
+            var anchor = enemyIsAttacker ? playerParry : playerAttack;
+            string anchorLabel = enemyIsAttacker ? "PlayerParry" : "PlayerAttack";
+
+            for (int i = 0; i < playerLeadInClips.Count; i++)
+            {
+                var element = playerLeadInClips[i];
+                if (element == null || element.Clip == null) continue;
+
+                element.ValidateImpactTime(this, $"LeadIn[{i}]");
+
+                if (element.ImpactTime > 0f)
+                {
+                    Debug.LogWarning(
+                        $"[Pattern] '{name}'의 리드인 원소 {i}('{element.Clip.name}')에 ImpactTime이 찍혀 있습니다. " +
+                        "정렬 앵커는 마지막 클립 하나뿐이라 이 값은 아무 일도 하지 않습니다 — " +
+                        "이 구간에서 멈추고 싶다면 같은 원소의 extraImpactTimes에 찍으세요.", this);
+                }
+            }
+
+            if (HasLeadInClips && (anchor == null || !anchor.IsUsable))
+            {
+                Debug.LogWarning(
+                    $"[Pattern] '{name}'에 리드인 클립이 있는데 {anchorLabel}(정렬 앵커)이 비어 있습니다. " +
+                    "앵커가 없으면 시퀀스 전체가 무연출입니다.", this);
+            }
+        }
+
+        /// <summary>
+        /// 연타 패턴의 <b>배선 실수를 잡는 유일한 장치</b>. 연타는 판정 규칙이 통째로 다른데
+        /// 인스펙터에서는 체크박스 하나 차이라 <b>잘못된 조합이 조용히 만들어지기 쉽다</b>.
+        /// </summary>
+        private void ValidateMash()
+        {
+            if (!isMash) return;
+
+            int nodeCount = patternDatas != null ? patternDatas.Length : 0;
+            if (nodeCount != 1)
+            {
+                Debug.LogError(
+                    $"[Pattern] 연타 '{name}'의 노드가 {nodeCount}개입니다. 정확히 1개여야 합니다 — " +
+                    "그 자리가 게이지(포커스 링)가 앉는 곳이고, 목표 타수는 mashTargetHits가 따로 듭니다.", this);
+            }
+
+            if (attacker != EnemySpace.Attacker.Player)
+            {
+                Debug.LogWarning(
+                    $"[Pattern] 연타 '{name}'의 attacker가 {attacker}입니다. 연타는 Attacker.Player 전용이라 " +
+                    "플레이어가 패링 클립을 고르고 적이 휘두르는 그림이 됩니다.", this);
+            }
+
+            if (HasLeadInClips)
+            {
+                Debug.LogWarning(
+                    $"[Pattern] 연타 '{name}'에 리드인 클립이 배선돼 있습니다. 타격 하나하나가 시퀀스를 끊으므로 " +
+                    "리드인은 재생될 수 없습니다 — 비우세요.", this);
+            }
+
+            if (!HasMashStrikes)
+            {
+                Debug.LogWarning(
+                    $"[Pattern] 연타 '{name}'에 타격 클립이 하나도 없습니다. 두들겨도 아무 모션이 안 나옵니다.", this);
+            }
+
+            if (mashStrikes != null)
+            {
+                for (int i = 0; i < mashStrikes.Count; i++)
+                {
+                    var strike = mashStrikes[i];
+                    if (strike == null) continue;
+
+                    strike.PlayerClip?.ValidateImpactTime(this, $"MashStrike[{i}].PlayerClip");
+                    strike.EnemyReaction?.ValidateImpactTime(this, $"MashStrike[{i}].EnemyReaction");
+
+                    // 순환은 빈 원소를 건너뛰지 않는다 — 그 타격은 통째로 무연출이 된다.
+                    if (!strike.IsUsable)
+                    {
+                        Debug.LogWarning(
+                            $"[Pattern] 연타 '{name}'의 타격 [{i}]에 플레이어 클립이 없습니다. " +
+                            $"{mashStrikes.Count}타마다 한 번씩 아무 모션도 안 나옵니다 — 채우거나 원소를 지우세요.", this);
+                    }
+                }
+            }
+
+            // 연타 큐는 시각이 아니라 사건에 붙으므로 성패를 알 수 없다 — 결과 조건은 영영 안 뜬다.
+            if (effectCues != null)
+            {
+                for (int i = 0; i < effectCues.Count; i++)
+                {
+                    var cue = effectCues[i];
+                    if (cue == null || !cue.IsUsable) continue;
+                    if (cue.Timing != EffectTiming.MashHit || !cue.NeedsOutcome) continue;
+
+                    Debug.LogWarning(
+                        $"[Pattern] '{name}'의 이펙트 큐 {i}('{cue.Label}')는 타이밍이 MashHit인데 조건이 {cue.Condition}입니다. " +
+                        "타격 순간에는 성패가 아직 안 정해져 재생되지 않습니다 — 조건을 Always로 두세요.", this);
+                }
+            }
+        }
+
         /// <summary>
         /// 이 패턴의 역할에서 <b>절대 재생되지 않을 슬롯</b>에 클립이 배선돼 있으면 경고한다.
         /// 인스펙터가 그 슬롯을 숨기므로, 이관 후 남은 찌꺼기를 찾을 유일한 장치다.
@@ -338,6 +563,9 @@ namespace PatternSpace
                         $"[Pattern] '{name}'의 이펙트 큐 {i}('{cue.Label}') 노드 인덱스가 {cue.NodeIndex}인데 " +
                         $"이 패턴의 노드는 {nodeCount}개입니다. 마지막 노드로 클램프됩니다.", this);
                 }
+
+                // 사건에 붙는 큐는 시각이 없다 — ResolveTime을 부르면 뜻 없는 숫자가 나온다(ValidateMash가 따로 본다).
+                if (cue.IsEventDriven) continue;
 
                 // 절대 시각이 아니라 기준점들의 '순서'만 보면 되므로 간격을 벌린 가짜 시각으로 판단한다.
                 // (start 0 < first 1 < last 2 < impact 2.5) — 실제 채보에서도 이 순서는 불변이다.

@@ -52,6 +52,24 @@ public class FocusRingView : MonoBehaviour, IPoolable
         pendingDuration = duration;
     }
 
+    /// <summary>
+    /// 링 가운데 글자. <b>연타 게이지 전용</b>이다 — 남은 타수를 쓴다.
+    ///
+    /// <para>⚠ 일반 패턴에서는 이 라벨을 쓰지 않는다. 같은 Point에 링이 둘 겹칠 수 있어
+    /// (이전 패턴의 마지막 노드 = 다음 패턴의 첫 노드) 숫자가 완전히 포개져 두꺼워 보이기 때문이다.
+    /// <b>연타는 링이 하나뿐이라 그 근거가 성립하지 않는다.</b></para>
+    ///
+    /// <para><c>null</c>을 주면 다시 감춘다 — 풀에서 재사용되므로 반납 시 반드시 꺼야 한다.</para>
+    /// </summary>
+    public void SetLabel(string text)
+    {
+        if (indexLabel == null) return;
+
+        bool show = !string.IsNullOrEmpty(text);
+        indexLabel.gameObject.SetActive(show);
+        if (show) indexLabel.text = text;
+    }
+
     public void OnSpawn()
     {
         gameObject.SetActive(true);
@@ -65,6 +83,7 @@ public class FocusRingView : MonoBehaviour, IPoolable
     {
         StopShrinking();
         OnArrived = null;
+        SetLabel(null);   // ⚠ 안 끄면 다음 대여가 남의 타수를 달고 나온다(일반 패턴에서 숫자가 보인다).
         gameObject.SetActive(false);
     }
 

@@ -62,6 +62,25 @@ public class HitStopDirector : MonoBehaviour
              "한 번 길게 멈춘 것이 되어 다중 히트스톱의 목적과 정반대가 된다.")]
     [SerializeField] private float minHitStopGap = 0f;
 
+    [Tooltip("연타 타격 하나가 멈추는 시간(초). 0이면 연타에 정지를 안 건다.\n" +
+             "⚠ 위 hitStopDuration(0.1초)을 그대로 쓰면 안 된다 — 연타 간격이 0.16초 수준이라\n" +
+             "시간의 60% 이상을 얼어 있게 되고, 타격감이 아니라 '멈춘 캐릭터'가 된다.\n" +
+             "실제 타격 간격의 30%를 넘지 않도록 런타임이 한 번 더 잘라 준다.")]
+    [Min(0f)]
+    [SerializeField] private float mashHitStopDuration = 0.03f;
+
+    /// <summary>
+    /// 연타 정지가 <b>실제 타격 간격에서 차지해도 되는 최대 비율</b>. 인스펙터에 안 여는 이유는
+    /// 튜닝값이 아니라 규칙이기 때문이다 — "간격의 일부만 멈춘다"가 깨지는 순간 연타는 정지 그림이 된다.
+    ///
+    /// <para>플레이어가 얼마나 빨리 두들길지는 알 수 없으므로 <see cref="mashHitStopDuration"/>만으로는
+    /// 부족하다. 빠르게 칠수록 정지가 저절로 짧아져야 비율이 유지된다.</para>
+    /// </summary>
+    private const float MashFreezeMaxRatio = 0.3f;
+
+    /// <summary>직전 연타 타격 시각. 위 비율을 계산할 실제 간격을 여기서 얻는다.</summary>
+    private float lastMashHitTime = float.NegativeInfinity;
+
     /// <summary>
     /// 예약 큐. <b>예전에는 최대 하나였다</b> — 패턴 완료가 순차적이고 A의 임팩트보다 B의 완료가
     /// 최소 0.4초 뒤라는 근거였다. 그 근거는 <b>지금도 참이지만 전제가 바뀌었다</b>:
@@ -99,6 +118,7 @@ public class HitStopDirector : MonoBehaviour
 
         handler.OnPatternComplete += HandlePatternComplete;
         handler.OnAllPatternsCleared += HandleAllCleared;
+        handler.OnMashHit += HandleMashHit;
 
         // 마지막 베기 '이전'의 칼질은 판정에서 파생되지 않는다 — 그 시각을 아는 것은
         // 자기 배속과 시작 시각을 든 배우뿐이다(§6). 여기서는 받아서 예약만 한다.
@@ -111,6 +131,7 @@ public class HitStopDirector : MonoBehaviour
 
         handler.OnPatternComplete -= HandlePatternComplete;
         handler.OnAllPatternsCleared -= HandleAllCleared;
+        handler.OnMashHit -= HandleMashHit;
         if (actionPlayer != null) actionPlayer.OnExtraImpact -= HandleExtraImpact;
         pending.Clear();
     }
@@ -153,6 +174,42 @@ public class HitStopDirector : MonoBehaviour
     /// </summary>
     private void HandleExtraImpact(float fireTime) => Schedule(fireTime, isMainImpact: false);
 
+    /// <summary>
+    /// 연타 타격 하나를 <b>즉시</b> 멈춘다(맞는 순간이 곧 지금이라 예약할 것이 없다).
+    ///
+    /// <para><b>⚠ <see cref="Fire"/>와 모양이 다르다 — 배우만 멈추고 카메라·파티클은 안 건드린다.</b>
+    /// 그쪽은 임팩트 한 번을 위한 것이라 넷을 다 얼려도 되지만, 연타는 초당 6타 이상이다.
+    /// <c>HoldForHitStop</c>은 <c>CinemachineBrain</c>을 통째로 껐다 켜므로 초당 6번 토글하면
+    /// 타격감이 아니라 <b>카메라 판정</b>이 되고, 파티클도 튀는 도중 반복해서 얼면 어색하다.
+    /// <b>멈춰야 하는 것은 보고 있는 대상, 즉 배우뿐이다.</b></para>
+    ///
+    /// <para><b>⚠ 길이를 실제 간격에서 다시 자른다.</b> 인스펙터 값만 믿으면 플레이어가 빨리 칠수록
+    /// 정지가 시간을 잡아먹는다 — 간격 0.16초에 0.10초를 멈추면 60% 이상 얼어 있게 되고,
+    /// 그게 이 기능을 한 번 걷어냈던 이유다(<see cref="MashFreezeMaxRatio"/>).</para>
+    ///
+    /// <para><b>⚠ 적도 함께 멈춘다.</b> §7-3-1은 추가 스톱에서 적을 얼리지 않는데, 그 근거는
+    /// 적 클립이 <c>impactAlignTime</c>에 정렬돼 있어 함께 얼리면 정렬만 밀린다는 것이었다.
+    /// <b>연타의 적 리액션은 정렬을 들고 있지 않다</b>(맞는 순간에 즉시 재생될 뿐이라 밀릴 것이 없다) —
+    /// 그래서 여기서는 얼려도 안전하고, 젖혀지는 순간이 같이 멈춰야 타격감이 산다.</para>
+    /// </summary>
+    private void HandleMashHit(MashHitInfo info)
+    {
+        if (!hitStopEnabled || mashHitStopDuration <= 0f) return;
+
+        float gap = Time.time - lastMashHitTime;
+        lastMashHitTime = Time.time;
+
+        // 첫 타는 비교할 간격이 없다 — 저작값을 그대로 쓴다.
+        float duration = float.IsInfinity(gap)
+            ? mashHitStopDuration
+            : Mathf.Min(mashHitStopDuration, gap * MashFreezeMaxRatio);
+
+        if (duration <= 0.001f) return;   // 너무 촘촘하면 아예 안 멈춘다(연장하지 않는다)
+
+        if (actionPlayer != null) actionPlayer.ApplyHitStop(duration);
+        if (enemyDirector != null) enemyDirector.ApplyHitStop(duration, pushBurst: false);
+    }
+
     private void Schedule(float fireTime, bool isMainImpact)
     {
         if (!hitStopEnabled) return;
@@ -170,6 +227,7 @@ public class HitStopDirector : MonoBehaviour
     {
         pending.Clear();
         suppressNextMain = false;   // 억제는 '다음 하나'뿐이다 — 곡이 끊기면 소진되지 않은 채 남는다
+        lastMashHitTime = float.NegativeInfinity;   // 다음 연타의 첫 타가 저작값을 온전히 쓰도록
     }
 
     void Update()

@@ -78,14 +78,14 @@ impactSpan      = clamp(animationImpactTime - startOffset, ε, dur) // 클립 �
   - **구현 메모**: 상태 박스가 3분기로 늘어 `DrawStatusBox(duration)`으로 분리했다. 마크가 전부 0인 초기 상태에서 프레임 0을 IMPACT로 오인하지 않도록, `atImpact`는 `inSwing`일 때만 판단한다.
 
 - [x] **Step 5 — 문서 갱신**
-  - `CLAUDE.md` §6 (캐릭터 액션): 정렬 기준이 "마지막 노드 판정 시각에 끝나도록"에서 "임팩트 프레임을 표적 절단 시각에 맞추도록"으로 바뀐 점 반영. ✅
-  - `CLAUDE.md` §11 (베이는 표적): 임팩트 시각이 `Deadline`이라는 서술은 유지하고, **캐릭터 애니메이션이 이 시각에 임팩트 프레임을 맞춘다**는 한 줄 추가. ✅
-  - 가이드: `docs/!Guides/Guide_CharacterActionTrim.md`가 트림 오서링 가이드였으므로(별도 `Guide_ClipTrimTool.md`는 없음) 여기에 **임팩트 프레임 절과 Clip Trimmer 사용 절차**를 추가했다. ✅
-  - 본 Plan의 각 Step 체크박스 갱신. ✅
+  - `CLAUDE.md` §6 (캐릭터 액션): 정렬 기준이 "마지막 노드 판정 시각에 끝나도록"에서 "임팩트 프레임을 표적 절단 시각에 맞추도록"으로 바뀐 점 반영. (완료)
+  - `CLAUDE.md` §11 (베이는 표적): 임팩트 시각이 `Deadline`이라는 서술은 유지하고, **캐릭터 애니메이션이 이 시각에 임팩트 프레임을 맞춘다**는 한 줄 추가. (완료)
+  - 가이드: `docs/!Guides/Guide_CharacterActionTrim.md`가 트림 오서링 가이드였으므로(별도 `Guide_ClipTrimTool.md`는 없음) 여기에 **임팩트 프레임 절과 Clip Trimmer 사용 절차**를 추가했다. (완료)
+  - 본 Plan의 각 Step 체크박스 갱신. (완료)
 
 - [x] **Step 6 — 검증**
-  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**, `editor/state`의 `compilation.is_compiling = false`로 컴파일 완료 확인. ✅
-  - 기존 패턴 에셋(임팩트 미지정)에 대해 `manage_scriptable_object(dry_run)`으로 `animationImpactTime` 프로퍼티 인식 확인 — `propertyType: Float`, 로드 경고 없음. ✅
+  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**, `editor/state`의 `compilation.is_compiling = false`로 컴파일 완료 확인. (완료)
+  - 기존 패턴 에셋(임팩트 미지정)에 대해 `manage_scriptable_object(dry_run)`으로 `animationImpactTime` 프로퍼티 인식 확인 — `propertyType: Float`, 로드 경고 없음. (완료)
   - **미검증(플레이 모드 육안 확인 필요 — 사람이 해야 함)**:
     - Clip Trimmer로 패턴에 임팩트 프레임을 찍고 저장 → 인스펙터 반영 확인.
     - 플레이 모드에서 `SliceTargetDirector.drawGizmos`로 표적 도착 시점과 칼 궤적이 겹치는지 확인.

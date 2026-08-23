@@ -17,7 +17,7 @@
 ### 사전 — 패키지
 - [x] **Step 0: UIParticle 패키지 설치**
   - `Packages/manifest.json`에 `com.coffee.ui-particle` (UPM Git URL `https://github.com/mob-sakai/ParticleEffectForUGUI.git`) 추가 완료.
-  - ⏳ Unity가 에디터 포커스 시 자동 리졸브 → `UIParticle` 컴포넌트 사용 가능 여부는 에디터에서 확인 필요.
+  - (대기) Unity가 에디터 포커스 시 자동 리졸브 → `UIParticle` 컴포넌트 사용 가능 여부는 에디터에서 확인 필요.
 
 ### 데이터/뷰 계층
 - [x] **Step 1: 트리거 enum + 카탈로그 엔트리 정의**

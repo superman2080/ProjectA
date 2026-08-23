@@ -4,15 +4,15 @@
 
 ## 구현 현황 (2026-07-18)
 
-- ✅ **코드 전부 완료** — Step 1(Pattern), Step 2(PatternCompletionInfo/ActivePattern/PatternHandler/EffectManager), Step 4(CharacterActionPlayer). 컴파일 클린.
-- ✅ **에디터 작업 완료(Unity MCP)** — Step 3(컨트롤러), Step 5(씬 배선), Step 6(Pattern 에셋). 아래 반영됨.
+- (완료) **코드 전부 완료** — Step 1(Pattern), Step 2(PatternCompletionInfo/ActivePattern/PatternHandler/EffectManager), Step 4(CharacterActionPlayer). 컴파일 클린.
+- (완료) **에디터 작업 완료(Unity MCP)** — Step 3(컨트롤러), Step 5(씬 배선), Step 6(Pattern 에셋). 아래 반영됨.
   - Step 3: `AttackSpeed` float 파라미터 추가, `Hit` 트리거 제거, AnyState 전이 전부 제거, `Hit1`/`Hit2` 스테이트 제거, `Attack` 스테이트에 `AttackSlot_Placeholder.anim` 주입 + Speed Multiplier=`AttackSpeed`, 레이어 웨이트 0 유지, `Attack→Sprint_Forward` 복귀 전이 유지.
   - Step 5: `School_Katana_FullBody-Magica cloth2`에 `CharacterActionPlayer` 부착, handler=`PointBackground`, animator=캐릭터, placeholder/hitClips(Hit1,Hit2) 배선, 씬 저장.
   - Step 6: 패턴 5개에 SuccessAnimationClip 배선됨(예: `Pattern(0,4,8)`→`Swipe_1To9`).
   - (참고: 사용자가 먼저 만들어 둔 Hit1/Hit2 스테이트+Hit 트리거는 '주입 방식' 채택에 따라 제거함.)
-- ✅ **타이밍 재설계(2026-07-18)** — contact 정렬/`successImpactNormalizedTime` 제거, **창에 맞춘 배속 재생**으로 전환(클립 앞부분을 자르지 않음).
-- ✅ **무기 본 베이크** — 커스텀 Humanoid 스윙 클립들이 무기 본(`add_weapon_r`)을 안 움직여 칼이 손에서 떨어지던 문제를, 손 그립을 따라가는 커브를 클립에 구워 해결(`docs/CharacterAction` 별도 기록 없이 클립 자산에 반영).
-- ⏳ **Step 7 검증** — Play 모드에서 수행 필요(아래 체크리스트).
+- (완료) **타이밍 재설계(2026-07-18)** — contact 정렬/`successImpactNormalizedTime` 제거, **창에 맞춘 배속 재생**으로 전환(클립 앞부분을 자르지 않음).
+- (완료) **무기 본 베이크** — 커스텀 Humanoid 스윙 클립들이 무기 본(`add_weapon_r`)을 안 움직여 칼이 손에서 떨어지던 문제를, 손 그립을 따라가는 커브를 클립에 구워 해결(`docs/CharacterAction` 별도 기록 없이 클립 자산에 반영).
+- (대기) **Step 7 검증** — Play 모드에서 수행 필요(아래 체크리스트).
 
 ## 설계 요약
 
@@ -62,7 +62,7 @@ Hit 클립은 **패턴별이 아니라 캐릭터 공용 리액션**이므로 `Pa
 
 ---
 
-## Step 1: `Pattern`에 애니메이션 클립 참조 추가 ✅
+## Step 1: `Pattern`에 애니메이션 클립 참조 추가 (완료)
 
 - [x] `Assets/02. Scripts/Pattern/Pattern.cs`
   - `[SerializeField] private AnimationClip successAnimationClip;` + `public AnimationClip SuccessAnimationClip => successAnimationClip;`
@@ -70,7 +70,7 @@ Hit 클립은 **패턴별이 아니라 캐릭터 공용 리액션**이므로 `Pa
   - Pattern은 여전히 '모양 원본'이다 — 이 필드는 **정적 데이터**이지 진행 상태가 아니므로 기존 원칙과 충돌하지 않는다.
   - (재설계로 `successImpactNormalizedTime`은 **제거**됨 — contact 정렬을 쓰지 않고 창에 맞춘 배속만 쓴다.)
 
-## Step 2: 완료 이벤트를 `PatternCompletionInfo` 페이로드로 리팩터링 (확장성) ✅
+## Step 2: 완료 이벤트를 `PatternCompletionInfo` 페이로드로 리팩터링 (확장성) (완료)
 
 - [x] `Assets/02. Scripts/Pattern/PatternCompletionInfo.cs` (신규) — 네임스페이스 `PatternSpace`
   - 완료 순간에 대한 **불변 페이로드**. 향후 소비자(카메라 등)가 필드를 추가해도 기존 구독자가 깨지지 않도록 하는 컨테이너.
@@ -107,7 +107,7 @@ Hit 클립은 **패턴별이 아니라 캐릭터 공용 리액션**이므로 `Pa
   - `HandlePatternComplete(bool allCorrect)` → `HandlePatternComplete(PatternCompletionInfo info)`.
   - 본문은 `info.AllCorrect`를 쓰도록만 바꾸고 동작은 **그대로**다 (`allCorrect ? PatternCompleteFull : PatternComplete`). EffectManager의 동작은 **변하지 않는다**.
 
-## Step 3: `PlayerAnimator.controller` 정리 (단일 Attack 스테이트 + 더미 키 클립) ✅
+## Step 3: `PlayerAnimator.controller` 정리 (단일 Attack 스테이트 + 더미 키 클립) (완료)
 
 Research에서 발견한 결함을 고치고, 클립을 주입받을 **단일 Attack 스테이트**를 더미 키 클립으로 구성한다.
 현재 상태: Attack Layer에 `Attack` 스테이트(예전 `Swipe_1To9`를 이름만 바꾼 것)가 있고 아직 `Swipe_1To9.anim`이 물려 있다.
@@ -135,7 +135,7 @@ Research에서 발견한 결함을 고치고, 클립을 주입받을 **단일 At
 > `AttackSpeed`는 겹침 방지를 위해 추가하는 **유일한 파라미터**다. 모션을 늘려도 이 파라미터는 그대로 재사용되며 추가 파라미터/전이는 필요 없다.
 > **이 `Attack` 스테이트는 베기·피격(Hit) 공용 슬롯**이다. 성공이면 베기 클립, 실패면 Hit 클립이 같은 슬롯에 주입된다 → Hit용 스테이트를 따로 만들지 않는다.
 
-## Step 4: `CharacterActionPlayer` 신규 작성 ✅
+## Step 4: `CharacterActionPlayer` 신규 작성 (완료)
 
 - [x] `Assets/02. Scripts/Character/CharacterActionPlayer.cs` (신규) — 아래 설계대로 구현 완료
 
@@ -231,7 +231,7 @@ public class CharacterActionPlayer : MonoBehaviour
   - `Attack → Sprint_Forward` 복귀 전이는 그대로 유지한다(웨이트가 0으로 내려가는 동안 레이어 내부가 기본 상태로 정리되어 다음 액션의 CrossFade 시작점이 깔끔해진다).
 - [ ] **불필요한 재설정 회피(선택)**: 마지막으로 주입한 클립을 캐싱해, 같은 클립이 연속되면 오버라이드 대입을 건너뛴다. (비용이 작아 필수는 아님.)
 
-## Step 5: 씬 배선 ✅
+## Step 5: 씬 배선 (완료)
 
 - [ ] `Assets/01. Scenes/DefaultScene.unity`
   - 씬의 `School_Katana_FullBody-Magica cloth2` 인스턴스에 `CharacterActionPlayer` 컴포넌트 부착.
@@ -241,7 +241,7 @@ public class CharacterActionPlayer : MonoBehaviour
   - `hitClips` ← `Hit1` / `Hit2` (`Assets/99. External Assets/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Hit1.fbx`, `Hit2.fbx`의 임베디드 AnimationClip 서브에셋 2개).
   - `attackStateName`(`Attack`) / `attackLayerName`(`Attack Layer`) / `attackSpeedParam`(`AttackSpeed`)은 기본값 그대로. `maxAttackSpeed`는 기본 2.5(필요 시 조정).
 
-## Step 6: Pattern 에셋에 클립 참조 + contact 시각 기입 ✅
+## Step 6: Pattern 에셋에 클립 참조 + contact 시각 기입 (완료)
 
 - [ ] `Assets/04. Datas/Patterns/Templates/Pattern_3Node_(0, 4, 8).asset`
   - `successAnimationClip` ← `Swipe_1To9.anim` (Point 1→5→9, 기존 클립 중 **유일하게 대응되는 패턴**).

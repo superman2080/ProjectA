@@ -199,6 +199,15 @@ public class PatternHandler : MonoBehaviour
     /// <summary>판정 대상의 AllCorrect가 처음 깨지는 순간(오답/타이밍Miss 공통, 패턴당 1회). 힛 애니 재생·성공 애니 취소에 쓴다.</summary>
     public event Action OnJudgeTargetFirstMiss;
     /// <summary>확장 포인트: 새 노드가 라인에 연결될 때마다 (index, 월드 좌표) 전달.</summary>
+    /// <summary>
+    /// 확장 포인트: <b>연타 타격 하나</b>. 목표 타수를 넘긴 초과 타격에서도 발행된다
+    /// (그때는 <c>Scored</c>가 false — 점수만 안 오르고 연출은 전부 나온다).
+    ///
+    /// <para>구독자 다섯: 타격 모션(<c>CharacterActionPlayer</c>) · 히트스톱 · 게이지 라벨 ·
+    /// 적 리액션(<c>EnemyDirector</c>) · 월드 이펙트(<c>PatternEffectDirector</c>).</para>
+    /// </summary>
+    public event Action<MashHitInfo> OnMashHit;
+
     public event Action<int, Vector3> OnNodeConnected;
 
     /// <summary>확장 포인트(캐릭터 액션): 포커스 링이 스폰될 때 (Point 인덱스, 노드 타입, 월드 좌표) 전달.</summary>
@@ -306,9 +315,13 @@ public class PatternHandler : MonoBehaviour
     /// </summary>
     public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null)
     {
-        if (inputTimes == null || inputTimes.Count != pattern.AllData.Count)
+        // 연타는 노드의 나열이 아니라 '창'이다 — 시각이 시작·끝 둘뿐이고 목표 타수는 패턴이 든다.
+        int expectedTimes = pattern.IsMash ? 2 : pattern.AllData.Count;
+
+        if (inputTimes == null || inputTimes.Count != expectedTimes)
         {
-            Debug.LogError($"[PatternHandler] '{pattern.name}' 입력 시각 개수({inputTimes?.Count ?? 0})가 노드 개수({pattern.AllData.Count})와 다릅니다. 패턴을 설정하지 않습니다.", this);
+            string what = pattern.IsMash ? "연타 창(시작·끝) 2개" : $"노드 개수({pattern.AllData.Count})";
+            Debug.LogError($"[PatternHandler] '{pattern.name}' 입력 시각 개수({inputTimes?.Count ?? 0})가 {what}와 다릅니다. 패턴을 설정하지 않습니다.", this);
             return;
         }
 
@@ -316,6 +329,48 @@ public class PatternHandler : MonoBehaviour
         // 나중에 판정 대상으로 승계될 때 다시 잡으면 판정 시각이 통째로 밀린다.
         var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow);
 
+        if (pattern.IsMash) ScheduleMashRing(active);
+        else ScheduleNodeRings(active, spawnTimes, exposureDurations);
+
+        bool becomesJudgeTarget = activePatterns.Count == 0;
+        activePatterns.Add(active);
+
+        // 판정 대상이 되는지와 무관하게 호출한다 — 큐에 얹히기만 한 패턴도 링은 지금부터 스폰되므로,
+        // 그 링이 앉을 노브가 같은 시각에 떠 있어야 한다(감춰진 노브 위에서 링이 줄어들면 타이밍 단서가 깨진다).
+        ApplyKnobVisibility(knobFadeDuration);
+
+        // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
+        OnPatternQueued?.Invoke(new PatternQueuedInfo(
+            active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline,
+            active.BuildNodeTimes()));
+
+        if (becomesJudgeTarget)
+        {
+            RefreshJudgeTargetVisuals();
+            RaiseJudgeTargetBegan();
+        }
+    }
+
+    /// <summary>
+    /// 연타의 링은 <b>하나</b>다. 자리는 유일한 노드(게이지 자리)이고 수축 시간은
+    /// <b>창 전체가 아니라 입력 마감까지</b>다 — 마무리 일격이 시작되면 입력이 닫히므로,
+    /// 창 전체로 그리면 <b>아직 줄고 있는데 입력이 안 먹는</b> 거짓말이 된다.
+    /// </summary>
+    private void ScheduleMashRing(ActivePattern active)
+    {
+        float shrinkDuration = Mathf.Max(active.MashInputDeadline - active.FirstNodeTime, 0.01f);
+
+        scheduledSpawns.Add(new ScheduledSpawn
+        {
+            owner = active,
+            position = 0,
+            spawnTime = active.FirstNodeTime,
+            shrinkDuration = shrinkDuration
+        });
+    }
+
+    private void ScheduleNodeRings(ActivePattern active, IReadOnlyList<float> spawnTimes, IReadOnlyList<float> exposureDurations)
+    {
         for (int i = 0; i < active.NodeCount; i++)
         {
             int pointIndex = active.GetPointIndex(i);
@@ -342,24 +397,6 @@ public class PatternHandler : MonoBehaviour
                 spawnTime = active.StartTime + spawnOffset,
                 shrinkDuration = shrinkDuration
             });
-        }
-
-        bool becomesJudgeTarget = activePatterns.Count == 0;
-        activePatterns.Add(active);
-
-        // 판정 대상이 되는지와 무관하게 호출한다 — 큐에 얹히기만 한 패턴도 링은 지금부터 스폰되므로,
-        // 그 링이 앉을 노브가 같은 시각에 떠 있어야 한다(감춰진 노브 위에서 링이 줄어들면 타이밍 단서가 깨진다).
-        ApplyKnobVisibility(knobFadeDuration);
-
-        // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
-        OnPatternQueued?.Invoke(new PatternQueuedInfo(
-            active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline,
-            active.BuildNodeTimes()));
-
-        if (becomesJudgeTarget)
-        {
-            RefreshJudgeTargetVisuals();
-            RaiseJudgeTargetBegan();
         }
     }
 
@@ -400,6 +437,15 @@ public class PatternHandler : MonoBehaviour
     {
         if (!IsDragging)
             BeginStroke();
+
+        // ⚠ 연타는 정의상 같은 Point를 계속 누른다 — 아래 두 가드가 그대로 걸리면
+        // 2타부터 전부 삼켜지고(중복 가드), 대각선 입력 하나가 두 타로 세어진다(통과 노드).
+        // 획도 그리지 않는다(연타는 잇는 것이 아니다).
+        if (JudgeTarget != null && JudgeTarget.IsMash)
+        {
+            AddPattern(index);
+            return;
+        }
 
         // 이번 패턴에서 이미 입력된 Point는 무시한다 (드래그 재진입 / 통과 노드 중복 방지).
         // connectedIndices는 패턴이 끝날 때마다 클리어되므로, 다음 패턴에서 같은 Point를 다시 쓸 수 있다.
@@ -479,6 +525,13 @@ public class PatternHandler : MonoBehaviour
     {
         if (guideLineRenderer == null) return;
 
+        // 연타에는 이을 순서가 없다 — 노드가 하나뿐이고 그것도 게이지 자리일 뿐이다.
+        if (pattern.IsMash)
+        {
+            HideGuideLine();
+            return;
+        }
+
         var localPoints = new List<Vector2>(pattern.AllData.Count);
         foreach (var data in pattern.AllData)
             localPoints.Add(WorldToLocal(guideLineRenderer.rectTransform, patternPoints[data.index].transform.position));
@@ -500,6 +553,14 @@ public class PatternHandler : MonoBehaviour
     private void ApplyHitAreas(Pattern pattern)
     {
         if (pattern == null)
+        {
+            foreach (var p in patternPoints)
+                p.ResetHitArea();
+            return;
+        }
+
+        // 연타는 "아무 데나 눌러라"다 — 9개 전부 온전한 판정 영역이어야 한다.
+        if (pattern.IsMash)
         {
             foreach (var p in patternPoints)
                 p.ResetHitArea();
@@ -534,6 +595,13 @@ public class PatternHandler : MonoBehaviour
 
         foreach (var active in activePatterns)
         {
+            // 연타는 어느 노브를 눌러도 되므로 9개를 통째로 합집합에 넣는다.
+            if (active.Template.IsMash)
+            {
+                for (int i = 0; i < knobUsage.Length; i++) knobUsage[i] = true;
+                continue;
+            }
+
             foreach (var data in active.Template.AllData)
                 knobUsage[data.index] = true;
         }
@@ -586,6 +654,12 @@ public class PatternHandler : MonoBehaviour
         var target = JudgeTarget;
         if (target == null) return;
 
+        if (target.IsMash)
+        {
+            HandleMashHit(index, target);
+            return;
+        }
+
         // 틀린 인덱스는 보너스만 취소하고 계속 진행
         if (index != target.ExpectedPointIndex)
         {
@@ -626,8 +700,54 @@ public class PatternHandler : MonoBehaviour
         target.Advance();
 
         // 마지막 노드가 판정된 그 자리에서 완료 처리 → 다음 패턴을 같은 프레임에 즉시 승계한다.
+        // ⚠ 연타는 여기 오지 않는다(위에서 갈렸다). 타수를 채워도 완료하면 안 되기 때문이다 —
+        // 그러면 다음 패턴이 즉시 승계돼 초과 타격이 그 패턴의 입력으로 흘러 들어간다.
         if (target.IsComplete)
             CompletePattern(target);
+    }
+
+    /// <summary>
+    /// 연타 타격 하나. <b>어느 인덱스든 유효타이고 타이밍을 보지 않는다</b> — 연타는 "언제"가 아니라
+    /// "몇 번"을 묻기 때문이다(창 안의 모든 타격이 Perfect).
+    ///
+    /// <para><b>⚠ 완료 처리를 하지 않는다.</b> 목표 타수를 채워도 창 끝까지 판정 대상으로 남는다 —
+    /// 완료는 <see cref="ExpireOverduePatterns"/>가 <c>Deadline</c>에 한 번만 한다.
+    /// 여기서 완료하면 다음 패턴이 같은 프레임에 승계돼 <b>초과 타격이 그 패턴을 오염시킨다</b>.</para>
+    ///
+    /// <para><b>⚠ 링도 회수하지 않는다.</b> 링은 남은 시간을 말하는 게이지라 타격마다 사라지면 안 된다.</para>
+    /// </summary>
+    private void HandleMashHit(int index, ActivePattern target)
+    {
+        // ⚠ 마무리 일격(playerAttack)이 시작된 뒤의 입력은 조용히 버린다. 안 그러면 타격 하나하나가
+        // 그 클립을 처음부터 끊어, 와인드업이 완주하지 못한 채 임팩트가 도착한다
+        // — 화면에서는 '칼이 안 지나갔는데 몸이 갈라지는' 그림이 된다.
+        if (Time.time >= target.MashInputDeadline) return;
+
+        bool scored = target.ConsumeMashHit();
+
+        patternPoints[index].SetJudgementColor(JudgementResult.Perfect);
+
+        // 점수·콤보는 이 한 줄로 자동으로 오른다. 초과 타격에서 안 쏘는 것이 곧
+        // "그 이상은 애니메이션만 나오고 점수는 안 오른다"의 구현 전부다.
+        if (scored) OnJudged?.Invoke(JudgementResult.Perfect, index);
+
+        UpdateMashRingLabel(target);
+
+        OnMashHit?.Invoke(new MashHitInfo(
+            target.Template, index, scored, target.MashHits, target.Template.MashTargetHits));
+    }
+
+    /// <summary>게이지 링에 남은 타수를 쓴다. 링 수축이 남은 시간을, 라벨이 남은 타수를 말한다.</summary>
+    private void UpdateMashRingLabel(ActivePattern target)
+    {
+        int remaining = Mathf.Max(target.Template.MashTargetHits - target.MashHits, 0);
+
+        for (int i = 0; i < activeFocusRings.Count; i++)
+        {
+            if (activeFocusRings[i].owner != target) continue;
+            activeFocusRings[i].view.SetLabel(remaining.ToString());
+            return;
+        }
     }
 
     private JudgementResult Judge(float delta)
@@ -696,6 +816,9 @@ public class PatternHandler : MonoBehaviour
             r.Initialize(pointIndex + 1, color, nodeType, targetLocalPos, focusRingStartScale, duration);
         });
         ring.OnArrived += HandleFocusRingArrived;
+
+        // 연타 게이지는 남은 타수를 단다. 스폰 시점에는 아직 한 대도 안 쳤으므로 목표 그대로다.
+        if (owner.IsMash) ring.SetLabel(owner.Template.MashTargetHits.ToString());
 
         activeFocusRings.Add(new ActiveNode { owner = owner, position = position, view = ring });
 

@@ -349,6 +349,24 @@ namespace ChartGen
             chainStarts.Clear();
         }
 
+        /// <summary>
+        /// 이 템플릿이 <b>엔트리에서 요구하는 온셋 개수</b>.
+        ///
+        /// <para><b>⚠ 연타는 노드 수가 아니다.</b> 연타의 <c>patternDatas</c>는 게이지가 앉을 자리 1칸뿐이고,
+        /// 엔트리가 들어야 하는 것은 <b>창의 시작·끝 두 값</b>이다(목표 타수는 패턴이 따로 든다).</para>
+        ///
+        /// <para><b>이 함수가 하나여야 하는 이유</b>: 배정(<see cref="ManualAssign"/>)·스폰 시각 계산
+        /// (<see cref="RecomputeSpawnTimes"/>)·행 경고(<see cref="DrawEntryRow"/>)가 각자 세면 언젠가 갈라진다 —
+        /// 실제로 갈라져서 <b>"템플릿 노드 수(1)가 이 그룹(1)과 다릅니다"</b>라는 앞뒤가 안 맞는 경고가 나왔다.</para>
+        /// </summary>
+        private static int RequiredOnsets(Pattern template)
+        {
+            if (template == null) return 0;
+            if (template.IsMash) return 2;
+
+            return template.AllData == null ? 0 : template.AllData.Count;
+        }
+
         private void RecomputeSpawnTimes(ChartEntryDraft draft)
         {
             if (draft.template == null)
@@ -357,14 +375,17 @@ namespace ChartGen
                 return;
             }
 
-            // 템플릿의 노드 수와 이 그룹의 온셋 수가 어긋나면 계산 자체가 성립하지 않는다.
+            // 템플릿이 요구하는 온셋 수와 이 그룹의 온셋 수가 어긋나면 계산 자체가 성립하지 않는다.
             // 던지지 않고 spawnTimes를 비워 둔다 — 저장이 그 값을 보고 멈추므로(Save) 조용히 틀린 채보가 안 나온다.
-            int nodeCount = draft.template.AllData == null ? 0 : draft.template.AllData.Count;
+            int nodeCount = RequiredOnsets(draft.template);
+
             if (nodeCount != draft.onsetTimes.Length)
             {
                 Debug.LogWarning($"[PatternChartWindow] '{draft.template.name}'의 노드 수({nodeCount})가 " +
                                  $"이 그룹의 온셋 수({draft.onsetTimes.Length})와 다릅니다. 스폰 시각을 계산하지 않았습니다 — " +
-                                 "쪼개기/합치기로 크기를 맞추거나 다른 템플릿을 배정하세요.");
+                                 (draft.template.IsMash
+                                     ? "연타는 온셋이 정확히 2개(창 시작·끝)여야 합니다."
+                                     : "쪼개기/합치기로 크기를 맞추거나 다른 템플릿을 배정하세요."));
                 draft.spawnTimes = null;
                 return;
             }
@@ -678,6 +699,60 @@ namespace ChartGen
             Repaint();
         }
 
+        /// <summary>
+        /// 연타 엔트리가 <b>물리적으로 가능한가</b>를 숫자 하나로 보여 준다.
+        ///
+        /// <para><b>⚠ 기준이 창 전체가 아니라 '입력 마감'까지다.</b> 마무리 일격(<c>playerAttack</c>)이 시작되면
+        /// 입력이 닫히므로(그 클립이 매 타격에 끊기는 것을 막는다), 저작자가 창 길이로 계산하면
+        /// 실제보다 후하게 잡는다.</para>
+        ///
+        /// <para>경고가 아니라 <b>판단할 숫자</b>를 준다 — 몇 타/초가 적당한지는 곡과 난이도가 정한다.
+        /// 다만 사람이 낼 수 없는 값은 막는다.</para>
+        /// </summary>
+        private void DrawMashWarnings(ChartEntryDraft draft)
+        {
+            // ⚠ 온셋이 2개일 때만 창을 잴 수 있다. 이 가드가 없으면 onsetTimes[1]에서 터진다
+            //   (그리기 도중 예외라 인스펙터 레이아웃이 통째로 깨진다). 크기 문제는 위 Error가 이미 말했다.
+            if (draft.onsetTimes == null || draft.onsetTimes.Length != 2) return;
+
+            float window = draft.onsetTimes[1] - draft.onsetTimes[0];
+            float usable = window - draft.template.MashInputDeadlineLead;
+            int target = draft.template.MashTargetHits;
+
+            if (usable <= 0f)
+            {
+                EditorGUILayout.HelpBox(
+                    $"연타 창({window:0.00}s)이 마무리 일격의 와인드업({draft.template.MashInputDeadlineLead:0.00}s)보다 짧습니다 — " +
+                    "입력할 시간이 없습니다. 창을 늘리거나 playerAttack의 ImpactTime을 앞으로 당기세요.",
+                    MessageType.Error);
+                return;
+            }
+
+            float rate = target / usable;
+            EditorGUILayout.LabelField(
+                $"    {target}타 / {usable:0.00}s(마감까지, 창 {window:0.00}s) = {rate:0.0}타/초",
+                EditorStyles.miniLabel);
+
+            if (rate > MashMaxRate)
+            {
+                EditorGUILayout.HelpBox(
+                    $"{rate:0.0}타/초는 사람이 내기 어렵습니다(권장 상한 {MashMaxRate:0.0}). " +
+                    "타수를 줄이거나 창을 늘리세요.",
+                    MessageType.Warning);
+            }
+
+            if (!draft.enemyCue.killOnSuccess)
+            {
+                EditorGUILayout.HelpBox(
+                    "연타인데 killOnSuccess가 꺼져 있습니다. 사슬 안의 연타는 chainKillRatio 셈을 흔들고 " +
+                    "긴 창 뒤에 또 교전이 이어져 리듬이 무너집니다.",
+                    MessageType.Warning);
+            }
+        }
+
+        /// <summary>사람이 낼 수 있다고 보는 연타 속도 상한(타/초). 판단 보조일 뿐 저장을 막지 않는다.</summary>
+        private const float MashMaxRate = 10f;
+
         private void DrawEntryRow(int index, ChartEntryDraft draft)
         {
             bool unassigned = draft.template == null;
@@ -694,22 +769,31 @@ namespace ChartGen
                 ? $"[{index}] 템플릿 없음 ({nodeCount}개 노드)"
                 : $"[{index}] {draft.template.name} ({nodeCount}개 노드)";
 
+            // 연타 뱃지 — 판정 규칙이 통째로 다른데 인스펙터에서는 체크박스 하나 차이라 행에서 바로 보여야 한다.
+            if (!unassigned && draft.template.IsMash)
+                label += $"   연타 {draft.template.MashTargetHits}타";
+
             // 사슬 뱃지 — 엔트리가 수백 개라 토글 하나만 보고는 몇 번째 타인지 셀 수 없다.
             var chain = ChainInfoAt(index);
             if (chain.length > 1)
-                label += $"   ⛓ 사슬 {chain.position}/{chain.length} · {RequiredHits(chain.length)}타 이상 필요";
+                label += $"   사슬 {chain.position}/{chain.length} · {RequiredHits(chain.length)}타 이상 필요";
 
             EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
 
             // 배정은 됐는데 크기가 안 맞는 상태. 저장이 여기서 멈추므로 행에서 바로 보이게 한다.
             if (!unassigned && draft.spawnTimes == null)
             {
-                int templateNodes = draft.template.AllData == null ? 0 : draft.template.AllData.Count;
+                int want = RequiredOnsets(draft.template);
                 EditorGUILayout.HelpBox(
-                    $"템플릿 노드 수({templateNodes})가 이 그룹({nodeCount})과 다릅니다. 이대로는 저장되지 않습니다 — " +
-                    "쪼개기/합치기로 맞추거나 다른 템플릿을 배정하세요.",
+                    draft.template.IsMash
+                        ? $"연타는 온셋이 정확히 2개(창 시작·끝)여야 하는데 이 그룹은 {nodeCount}개입니다. 이대로는 저장되지 않습니다 — " +
+                          "'아래와 합치기'로 뒤 엔트리를 흡수해 2개로 맞추세요."
+                        : $"템플릿 노드 수({want})가 이 그룹({nodeCount})과 다릅니다. 이대로는 저장되지 않습니다 — " +
+                          "쪼개기/합치기로 맞추거나 다른 템플릿을 배정하세요.",
                     MessageType.Error);
             }
+
+            if (!unassigned && draft.template.IsMash) DrawMashWarnings(draft);
 
             if (chain.length > 1 && chain.position == 1)
             {
@@ -980,7 +1064,7 @@ namespace ChartGen
                 return;
             }
 
-            int want = candidate.AllData == null ? 0 : candidate.AllData.Count;
+            int want = RequiredOnsets(candidate);
             int have = draft.onsetTimes.Length;
 
             // 노드가 없는 패턴은 배정할 수 없다 — 갓 만든 빈 에셋이 이 경로로 들어온다.
@@ -994,9 +1078,22 @@ namespace ChartGen
 
             if (want > have)
             {
-                Debug.LogWarning($"[PatternChartWindow] '{candidate.name}'의 노드 개수({want})가 이 그룹({have})보다 많습니다. " +
+                string what = candidate.IsMash ? "연타가 요구하는 온셋(창 시작·끝) 2개" : $"노드 개수({want})";
+                Debug.LogWarning($"[PatternChartWindow] '{candidate.name}'의 {what}가 이 그룹({have})보다 많습니다. " +
                                  "'아래와 합치기'로 뒤 엔트리를 흡수해 크기를 맞춘 뒤 배정하세요 — " +
                                  "합치기는 온셋 그룹 경계를 넘을 수 있어 자동으로 하지 않습니다.");
+                return;
+            }
+
+            // ⚠ 연타는 쪼개지 않는다. 창은 '시작과 끝' 두 값이고 그 사이의 온셋은 판정에 안 쓰이므로,
+            //   그룹이 크면 남는 온셋을 뒤로 떼어낼 게 아니라 <b>양 끝만 남기고 안쪽을 버려야</b> 한다
+            //   — 쪼개면 버려질 온셋이 별도 엔트리로 살아나 채보에 빈 그룹이 생긴다.
+            if (candidate.IsMash)
+            {
+                if (want < have) CollapseToMashWindow(draft);
+
+                draft.template = candidate;
+                RecomputeSpawnTimes(draft);
                 return;
             }
 
@@ -1004,6 +1101,26 @@ namespace ChartGen
 
             draft.template = candidate;
             RecomputeSpawnTimes(draft);
+        }
+
+        /// <summary>
+        /// 이 엔트리를 <b>연타 창(첫 온셋 ~ 마지막 온셋)으로 접는다</b> — 양 끝만 남기고 안쪽 온셋을 버린다.
+        ///
+        /// <para><b>왜 쪼개지 않는가</b>: 연타는 창 안의 온셋을 판정에 쓰지 않는다(어느 시각이든 유효타다).
+        /// <see cref="SplitDraft"/>로 뒤를 떼어내면 그 온셋들이 <b>배정 안 된 빈 엔트리로 살아남아</b>
+        /// 채보에 구멍이 생긴다. 연타에서 남는 온셋은 옮길 것이 아니라 <b>흡수될 것</b>이다.</para>
+        ///
+        /// <para>그래서 원래 그룹이 길수록 연타 창도 길어진다 — 음악이 정한 구간을 그대로 쓴다는 뜻이라
+        /// 이 툴의 나머지 규율과 방향이 같다.</para>
+        /// </summary>
+        private static void CollapseToMashWindow(ChartEntryDraft draft)
+        {
+            int last = draft.onsetTimes.Length - 1;
+            if (last < 1) return;
+
+            draft.onsetTimes = new[] { draft.onsetTimes[0], draft.onsetTimes[last] };
+            draft.exposureDurations = new[] { draft.exposureDurations[0], draft.exposureDurations[last] };
+            draft.spawnTimes = null;   // 아래에서 다시 계산된다
         }
 
         /// <summary>

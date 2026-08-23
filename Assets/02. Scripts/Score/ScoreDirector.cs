@@ -149,7 +149,12 @@ public class ScoreDirector : MonoBehaviour
         foreach (var entry in chart.entries)
         {
             if (entry?.onsetTimes == null) continue;
-            totalNotes += entry.onsetTimes.Length;
+
+            // ⚠ 연타는 onsetTimes가 '창(시작·끝)' 둘뿐이고 노트 수는 목표 타수다.
+            // 아래 HandlePatternComplete의 뺄셈 좌변과 같은 값을 봐야 총량과 뺄셈이 안 어긋난다.
+            totalNotes += entry.template != null && entry.template.IsMash
+                ? entry.template.MashTargetHits
+                : entry.onsetTimes.Length;
         }
     }
 
@@ -269,9 +274,12 @@ public class ScoreDirector : MonoBehaviour
     {
         if (info.AllCorrect) successPatterns++;
 
-        int nodeCount = info.Template != null && info.Template.AllData != null
-            ? info.Template.AllData.Count
-            : judgedInPattern;   // 템플릿을 모르면 뺄 것이 없다(놓친 노트 0으로 본다)
+        // ⚠ 연타의 노트 수는 노드 수(= 게이지 자리 1칸)가 아니라 목표 타수다.
+        // CountChart의 총량 계산과 짝을 이룬다 — 하나만 고치면 달성도가 1을 못 넘거나 넘어 버린다.
+        int nodeCount;
+        if (info.Template == null) nodeCount = judgedInPattern;   // 템플릿을 모르면 뺄 것이 없다
+        else if (info.Template.IsMash) nodeCount = info.Template.MashTargetHits;
+        else nodeCount = info.Template.AllData != null ? info.Template.AllData.Count : judgedInPattern;
 
         int missed = ScoreMath.MissedNotes(nodeCount, judgedInPattern);
         for (int i = 0; i < missed; i++) ApplyNote(JudgementResult.Miss);

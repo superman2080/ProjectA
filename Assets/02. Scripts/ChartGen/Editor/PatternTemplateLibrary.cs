@@ -58,6 +58,12 @@ namespace ChartGen
         {
             if (pattern == null || pattern.AllData == null) return;
 
+            // ⚠ 연타는 자동 배정에서 뺀다. 음악의 온셋이 연타를 정하지 않으므로(어디에 둘지는 저작 판단이다)
+            // 손으로 꽂는 것이 맞고, 그냥 두면 더 나쁘다 — 연타의 patternDatas는 게이지 자리 1칸뿐이라
+            // 이 사전에서 '1노드 패턴'으로 분류돼 1온셋 그룹에 무작위로 꽂히는데,
+            // 정작 연타가 요구하는 온셋은 2개(창 시작·끝)라 배정하는 족족 저장이 막힌다.
+            if (pattern.IsMash) return;
+
             int count = pattern.AllData.Count;
             if (count <= 0) return;
 

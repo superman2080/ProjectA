@@ -93,7 +93,7 @@ pelvis⁻¹ · add_weapon_l          add_weapon_l = root⁻¹ · pelvis · 오�
 
 ## Step 1 실측 결과 (`AnimationMode` 샘플링, 30fps)
 
-### 칼 — `hand_r` 기준 그립은 강체다 ✅
+### 칼 — `hand_r` 기준 그립은 강체다 (완료)
 | 클립 | 회전 편차 max | 위치 편차 max | 평균 오프셋 |
 |---|---|---|---|
 | `Swipe_1To9` (69프레임) | **0.00도** | 0.0367m | (-0.0649, 0.0300, 0.0505) |
