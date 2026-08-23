@@ -113,6 +113,10 @@ namespace EnemySpace
         // 클립이 재생될 프레임이 존재하지 않는다(예전엔 CrossFade 직후 렌더러를 꺼서 죽은 배선이었다).
         [SerializeField] private float crossFadeDuration = 0.12f;
 
+        [Tooltip("연타 타격 리액션의 크로스페이드(초). 위 값보다 훨씬 짧아야 한다 — " +
+                 "연타 간격이 0.15초 수준이라 기본값을 쓰면 젖혀지는 포즈가 한 번도 도착하지 못한다.")]
+        [SerializeField] private float mashReactionCrossFade = 0.04f;
+
         [Header("Dissolve")]
         [Tooltip("소멸 셰이더의 노출 프로퍼티 이름. Assets/Shaders/Dissolve/Dissolve.shadergraph 기준.")]
         [SerializeField] private string dissolveProperty = "_Dissolve";
@@ -812,6 +816,32 @@ namespace EnemySpace
             Current = Phase.Recover;
         }
 
+        /// <summary>
+        /// 연타 타격 하나에 대한 <b>즉시</b> 반응. <see cref="Resolve"/>의 리액션과 달리 <b>예약하지 않는다</b> —
+        /// 그쪽은 확정(마지막 노드 입력)이 칼보다 <c>goodWindow</c>만큼 일러서 임팩트에 맞춰 미뤄야 하지만,
+        /// 연타는 <b>맞는 순간이 곧 지금</b>이라 정렬할 시각이 없다.
+        ///
+        /// <para><b>⚠ <see cref="Current"/>(Phase)를 건드리지 않는다.</b> <see cref="Resolve"/>는
+        /// <c>Phase.Recover</c>로 넘기지만 그건 교전이 끝났다는 뜻이다 — 연타는 아직 진행 중이라
+        /// 넘기면 견제(<c>EnemyFeint</c>)와 이동 상태가 끊긴다. <c>StopWander</c>도 같은 이유로 안 부른다
+        /// (현재 상대는 배회 중이 아니고, <see cref="reactionUntil"/>이 이미 로코모션·상체를 막는다).</para>
+        ///
+        /// <para><b>⚠ 클립은 재생을 끝내지 못한다.</b> 초당 8타면 간격이 0.125초라 보이는 것은 앞부분뿐이고
+        /// 계속 처음부터 다시 시작한다 — 그게 샌드백의 그림이지만, <b>젖혀지는 동작이 클립 맨 앞에 와야 한다</b>.</para>
+        /// </summary>
+        public void PlayMashReaction(ClipAlignment reaction)
+        {
+            if (Current == Phase.Dying) return;
+
+            // ⚠ 크로스페이드가 짧아야 젖혀지는 포즈가 실제로 '도착'한다. 기본값(0.12초)은 연타 간격과
+            //    같은 자릿수라 포즈가 도착하기 전에 다음 타격이 들어오고, 적이 영원히 전환 중으로 남아
+            //    맞는 것이 아니라 흐느적거리는 그림이 된다(플레이어 쪽과 같은 이유).
+            if (reaction != null && reaction.IsUsable) PlayAttack(reaction, reaction.Speed, mashReactionCrossFade);
+            else CrossFadeReaction(knockBackStateName);
+
+            reactionUntil = Time.time + Mathf.Max(reactionHoldDuration, 0f);
+        }
+
         public void Resolve(bool playerSucceeded, Attacker attacker, float retreatDistance, float retreatDuration,
                             Vector3 retreatTarget, ClipAlignment reaction = null, float impactTime = 0f)
         {
@@ -1197,7 +1227,7 @@ namespace EnemySpace
             animator.CrossFadeInFixedTime(deathStateHash, crossFadeDuration, 0, alignment.StartOffset / Mathf.Max(speed, 0.01f));
         }
 
-        private void PlayAttack(ClipAlignment alignment, float speed)
+        private void PlayAttack(ClipAlignment alignment, float speed, float crossFadeOverride = -1f)
         {
             if (animator == null || overrideController == null || attackPlaceholder == null) return;
 
@@ -1205,8 +1235,10 @@ namespace EnemySpace
             animator.SetFloat(attackSpeedHash, speed);
             lastAttackSpeed = speed; // 히트스톱 해제가 되돌릴 값
 
+            float fade = crossFadeOverride >= 0f ? crossFadeOverride : crossFadeDuration;
+
             // fixedTimeOffset은 '스테이트 재생 초'라 speed가 곱해진다 — 클립 초를 speed로 나눠 넘겨야 맞다.
-            animator.CrossFadeInFixedTime(attackStateHash, crossFadeDuration, 0, alignment.StartOffset / Mathf.Max(speed, 0.01f));
+            animator.CrossFadeInFixedTime(attackStateHash, fade, 0, alignment.StartOffset / Mathf.Max(speed, 0.01f));
         }
 
         /// <summary>

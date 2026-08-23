@@ -342,6 +342,12 @@ namespace EnemySpace
             // arriveTime은 여기 두지 않는다 — ResolveScheduleStart가 '지금'에 의존하므로 배정 시점에 계산해야 한다.
             public ClipAlignment attack;
             public float startTime;
+
+            /// <summary>
+            /// 첫 노드의 입력 예정 시각. <b>연타에서만 쓰인다</b> — 그때가 곧 창이 열리는 순간이고,
+            /// 플레이어는 <b>그 전에</b> 적 앞에 도착해 있어야 한다(§연타).
+            /// </summary>
+            public float firstNodeTime;
         }
 
         private sealed class Debris
@@ -665,6 +671,7 @@ namespace EnemySpace
             if (handler == null) return;
             handler.OnPatternQueued += HandlePatternQueued;
             handler.OnPatternComplete += HandlePatternComplete;
+            handler.OnMashHit += HandleMashHit;
             handler.OnJudgeTargetFirstMiss += HandleFirstMiss;
             handler.OnAllPatternsCleared += HandleAllCleared;
         }
@@ -674,6 +681,7 @@ namespace EnemySpace
             if (handler == null) return;
             handler.OnPatternQueued -= HandlePatternQueued;
             handler.OnPatternComplete -= HandlePatternComplete;
+            handler.OnMashHit -= HandleMashHit;
             handler.OnJudgeTargetFirstMiss -= HandleFirstMiss;
             handler.OnAllPatternsCleared -= HandleAllCleared;
         }
@@ -1360,6 +1368,7 @@ namespace EnemySpace
                 opponent = null,           // 배정은 BindReservation에서
                 impactTime = impactTime,
                 startTime = info.StartTime,
+                firstNodeTime = info.FirstNodeTime,
 
                 // 적이 공격자일 때만 적 클립을 재생한다. 플레이어가 공격자면 적은 무방비로 서 있는다.
                 attack = info.Template != null && info.Template.Attacker == Attacker.Enemy
@@ -1402,6 +1411,16 @@ namespace EnemySpace
             float arriveTime = r.attack != null && r.attack.IsUsable
                 ? r.attack.ResolveScheduleStart(r.impactTime, Time.time)
                 : r.impactTime;
+
+            // ⚠ 연타는 임팩트까지가 '여유'가 아니다 — 창 전체가 두들기는 시간이라 이동에 쓸 수 없다.
+            //
+            // §11-2의 속도감 규칙(목표거리 = cruiseSpeed × 창 / playerShare)은 <b>입력 간격이 곧 이동 시간</b>이라는
+            // 전제 위에 있고, 연타가 그 전제를 깬다. 그대로 두면 3초짜리 창이 12~16m 이동을 요구해
+            // 플레이어가 두들기는 내내 무대를 가로질러 달린다(= 적에게서 멀어진 채 연타가 시작된다).
+            //
+            // 연타의 진짜 마감은 <b>창이 열리는 순간</b>이다 — 첫 타를 칠 때 이미 적 앞에 서 있어야 한다.
+            if (r.template != null && r.template.IsMash)
+                arriveTime = Mathf.Min(arriveTime, r.firstNodeTime);
 
             // 표적 선택도 '도착 시각의 간격'을 쓴다 — 커브가 그 뒤 간격을 바꿔도
             // 어느 적을 고를지는 붙는 순간의 거리로 정해야 창과 속도감이 맞는다(§11-2).
@@ -1488,6 +1507,33 @@ namespace EnemySpace
             if (reservation == null) return;
 
             ResolveReservation(reservation, info.AllCorrect);
+        }
+
+        /// <summary>
+        /// 연타 타격 하나 — 현재 상대를 <b>즉시</b> 젖힌다.
+        ///
+        /// <para><b>클립은 <c>Pattern.EnemyHit</c>을 그대로 쓴다</b>(§11-5). 그 슬롯의 정의가 이미
+        /// "맞았는데 죽지 않은 적의 리액션"이라 연타 타격과 의미가 정확히 같다 — 새 슬롯을 만들면
+        /// 같은 뜻의 필드가 둘이 된다.</para>
+        ///
+        /// <para><b>⚠ <c>info.Scored</c>를 보지 않는다.</b> 목표 타수를 넘긴 초과 타격에서도 적은 젖혀져야
+        /// 한다 — "그 이상은 애니메이션만 나온다"의 적 쪽 절반이다.</para>
+        ///
+        /// <para>템플릿을 페이로드에서 받는 것이 핵심이다 — 여기서 <c>pendingTokens.Peek()</c>으로
+        /// "지금 판정 대상"을 다시 유도하면 판정 계층의 답과 어긋날 여지가 생긴다(§11-1의 부류).</para>
+        /// </summary>
+        private void HandleMashHit(MashHitInfo info)
+        {
+            if (currentOpponent == null || info.Template == null) return;
+
+            // 이 타격이 쓴 쌍의 리액션 — 플레이어 클립을 고른 것과 '같은 함수'가 정한다.
+            // 쌍에 리액션이 없으면 패턴 공용 EnemyHit으로, 그것도 없으면 뷰의 knockBack으로 폴백한다.
+            var strike = info.Template.MashStrikeFor(info.Hits);
+            var reaction = strike != null && strike.EnemyReaction != null && strike.EnemyReaction.IsUsable
+                ? strike.EnemyReaction
+                : info.Template.EnemyHit;
+
+            currentOpponent.PlayMashReaction(reaction);
         }
 
         /// <summary>첫 미스 순간 — 아직 확정되지 않은 가장 오래된 토큰이 곧 현재 판정 대상이다.</summary>
@@ -1585,6 +1631,18 @@ namespace EnemySpace
             // 그 재접근은 TakeTargetForWindow를 안 거쳐 거리가 창에 안 맞춰진다(docs/FailConverge/) —
             // 사슬은 그 구간을 매 타격 반복하게 된다. 제자리에 세우면 그 문제 자체가 없다.
             if (playerSucceeded) return 0f;
+
+            // 연타 실패는 물러나지 않는다 — 언제나 제자리 패링으로 받는다.
+            //
+            // 창을 보는 아래 판단을 건너뛰는 것이 이 줄의 전부다. 안 그러면 같은 사건이
+            // 다음 패턴의 간격에 따라 어떤 때는 후퇴, 어떤 때는 패링으로 보인다.
+            // 거리 0이 곧 패링이라는 규칙은 EnemyView.Resolve 안에 이미 있고(parried 식),
+            // reactionClip 선택식도 그 값을 보고 Pattern.EnemyParry를 고른다 — 그림에 새 코드가 0줄이다.
+            //
+            // 덤으로 docs/FailConverge의 함정을 피한다: 후퇴하면 재접근이 TakeTargetForWindow를
+            // 안 거쳐 거리가 창에 안 맞춰져 플레이어가 기어서 돌아간다. 제자리면 이동이
+            // convergeMinDistance 아래라 수렴 로코모션을 아예 안 건다.
+            if (r.template != null && r.template.IsMash) return 0f;
 
             // r은 위에서 이미 제거됐으므로 선두가 곧 다음 패턴이다(FIFO).
             if (reservations.Count == 0) return 0f;

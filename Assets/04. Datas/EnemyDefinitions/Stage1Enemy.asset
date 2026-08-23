@@ -27,10 +27,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a81df08edf399464792d0bb0edc57d21, type: 2}
   - {fileID: 11400000, guid: d9c149e84a94e8f44843018207a2f624, type: 2}
   - {fileID: 11400000, guid: 1b5cc3533db4c264092cc9a68b96e361, type: 2}
-  - {fileID: 11400000, guid: 9f82a9d15892de141b9e7560370d3242, type: 2}
   - {fileID: 11400000, guid: 2243332dcb528b748ba2bed09335048e, type: 2}
-  - {fileID: 11400000, guid: 839252913cc1f9c49b2c33e309e615ab, type: 2}
-  - {fileID: 11400000, guid: 88d5fb6e47a02df4da066b40b83a0731, type: 2}
   ambushAttacks:
   - clip: {fileID: 7400000, guid: f67de248f8947da40b042795e914709f, type: 2}
     startOffset: 0

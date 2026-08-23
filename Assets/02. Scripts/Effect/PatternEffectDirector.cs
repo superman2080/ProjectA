@@ -83,6 +83,10 @@ public class PatternEffectDirector : MonoBehaviour
     private CanvasEffectPool pool;
     private int nextToken;
 
+    // 연타 큐 순환. 매 타격 재할당을 피하려고 스크래치 리스트를 하나 든다.
+    // ⚠ 커서는 들지 않는다 — 순환 위치를 누적 타수에서 유도해야 클립·리액션과 같은 박자로 돈다.
+    private readonly List<PatternEffectCue> mashCueScratch = new List<PatternEffectCue>();
+
     // 히트스톱 창. 창 안에서 새로 뜨는 이펙트도 얼려야 그놈만 혼자 흐르지 않는다.
     private bool frozen;
     private float freezeUntil;
@@ -112,6 +116,7 @@ public class PatternEffectDirector : MonoBehaviour
             handler.OnPatternQueued += HandlePatternQueued;
             handler.OnPatternComplete += HandlePatternComplete;
             handler.OnAllPatternsCleared += HandleAllCleared;
+            handler.OnMashHit += HandleMashHit;
         }
         else
         {
@@ -128,6 +133,7 @@ public class PatternEffectDirector : MonoBehaviour
             handler.OnPatternQueued -= HandlePatternQueued;
             handler.OnPatternComplete -= HandlePatternComplete;
             handler.OnAllPatternsCleared -= HandleAllCleared;
+            handler.OnMashHit -= HandleMashHit;
         }
 
         if (enemyDirector != null) enemyDirector.OnEnemyReacted -= HandleEnemyReacted;
@@ -151,6 +157,10 @@ public class PatternEffectDirector : MonoBehaviour
         {
             var cue = cues[i];
             if (cue == null || !cue.IsUsable) continue;   // 비면 예약 자체를 안 만든다
+
+            // ⚠ 사건에 붙는 큐(연타 타격)는 예약하지 않는다 — 시각이 없으므로 ResolveTime이
+            // 뜻 없는 숫자를 돌려주고, 그대로 두면 타격과 무관한 때에 한 번 더 뜬다.
+            if (cue.IsEventDriven) continue;
 
             float fireTime = cue.ResolveTime(
                 info.StartTime, info.FirstNodeTime, info.LastNodeTime, info.Deadline,
@@ -200,6 +210,56 @@ public class PatternEffectDirector : MonoBehaviour
             run.reaction = reaction;
             return;
         }
+    }
+
+    /// <summary>
+    /// 연타 타격 하나 — <b>예약하지 않고 그 자리에서 발사한다</b>.
+    ///
+    /// <para><b>예약할 수 없는 것과 발사할 수 없는 것은 다르다.</b> <see cref="Fire"/>는 큐 하나만 있으면
+    /// 되는 독립 메서드다(앵커 조회·풀 대여·포즈·배속·소리·정지 동결이 전부 그 안에 있다) —
+    /// 시각이 없다는 것은 <c>ResolveTime</c>을 못 쓴다는 뜻일 뿐이다.</para>
+    ///
+    /// <para><b>공짜로 따라오는 것들</b>: <c>EffectAnchor.Opponent</c>가 원래 <b>발사 순간에</b> 조회되므로
+    /// 현재 상대에 정확히 붙고, <c>PlayerWeapon</c> + <c>bladeT</c>가 휘두르는 칼날을 따라가며,
+    /// <c>Sfx</c>가 실려 있으면 타격음도 같이 난다. <see cref="Prewarm"/>도 <c>Timing</c>을 안 보므로
+    /// 풀 예열이 이미 돼 있다.</para>
+    ///
+    /// <para><b>⚠ <c>info.Scored</c>를 보지 않는다</b> — 초과 타격에도 이펙트가 뜬다(적 반응과 같은 판단).
+    /// <b>⚠ 조건은 <c>Always</c>만 유효하다</b> — 타격 순간에는 성패가 아직 안 정해졌다.</para>
+    ///
+    /// <para><b>⚠ 풀 크기가 이 경로의 유일한 실무 함정이다.</b> 초당 8타 × 이펙트 수명이 동시 인스턴스 수라,
+    /// <c>poolSize</c>가 모자라면 곡 도중 <c>Instantiate</c>가 나고 그 히치가 그대로 판정 손실이다.</para>
+    /// </summary>
+    private void HandleMashHit(MashHitInfo info)
+    {
+        if (!effectsEnabled || info.Template == null) return;
+
+        var cues = info.Template.EffectCues;
+        if (cues == null) return;
+
+        // ⚠ 연타 큐는 '전부'가 아니라 '하나씩 번갈아' 돈다 — mashHitClips와 같은 규율이다.
+        //
+        // 전부 쏘면 같은 순간에 같은 소리가 겹쳐 한 덩어리로 들리고, "타격마다 다른 소리"를
+        // 데이터로 표현할 방법이 사라진다(큐 하나에 소리도 하나다). 번갈아 돌면 큐가 하나뿐일 때는
+        // 매 타격 그 하나가 나가므로 '전부 쏘기'와 결과가 같고, 둘 이상일 때만 갈린다.
+        //
+        // 같은 그림을 매 타격 보여 주고 소리만 바꾸고 싶다면 큐 둘에 같은 프리팹을 넣으면 된다.
+        mashCueScratch.Clear();
+        for (int i = 0; i < cues.Count; i++)
+        {
+            var cue = cues[i];
+            if (cue == null || !cue.IsUsable) continue;
+            if (!cue.IsEventDriven || cue.NeedsOutcome) continue;
+
+            mashCueScratch.Add(cue);
+        }
+
+        if (mashCueScratch.Count == 0) return;
+
+        // 순환 위치를 누적 타수에서 유도한다 — 커서를 따로 들면 클립·리액션과 박자가 어긋나
+        // "1타에 07 소리인데 모션은 3번" 같은 상태가 조용히 만들어진다(Pattern.MashStrikeFor와 같은 규율).
+        int index = (Mathf.Max(info.Hits, 1) - 1) % mashCueScratch.Count;
+        Fire(mashCueScratch[index]);
     }
 
     private void HandleAllCleared()

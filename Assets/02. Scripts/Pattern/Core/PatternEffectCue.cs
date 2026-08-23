@@ -36,7 +36,23 @@ namespace PatternSpace
         LastNode,
 
         /// <summary>칼이 닿는 순간(<c>Deadline + Pattern.ImpactOffset</c>). §6·§11과 같은 식.</summary>
-        Impact
+        Impact,
+
+        /// <summary>
+        /// 연타 타격이 들어온 <b>바로 그 순간</b>. 위 다섯과 성질이 다르다 —
+        /// 나머지는 <b>시각을 계산</b>하지만 이것은 <b>사건에 붙는다</b>.
+        ///
+        /// <para>그래서 <see cref="PatternEffectCue.ResolveTime"/>이 의미를 갖지 않고, 디렉터가
+        /// 예약을 만들지 않은 채 <c>OnMashHit</c>에서 곧바로 발사한다. 발사 자체는 원래
+        /// 큐 하나만 있으면 되는 일이라(앵커·풀·포즈·배속·소리가 전부 그 안에 있다) 새 재생 경로가 아니다.</para>
+        ///
+        /// <para><b>⚠ 조건은 <see cref="EffectCondition.Always"/>만 유효하다</b> — 타격 순간에는
+        /// 성패가 아직 안 정해졌다(연타는 창 끝에 끝난다).</para>
+        ///
+        /// <para><b>⚠ 이 값은 언제나 enum의 끝에 있어야 한다.</b> <see cref="EffectTiming"/>은 명시 정수가 없어
+        /// 서수가 곧 직렬화 키다 — 중간에 끼우면 기존 패턴의 <b>모든</b> 큐가 한 칸씩 밀린다.</para>
+        /// </summary>
+        MashHit
     }
 
     /// <summary>이펙트가 붙는 기준 Transform. 실제 배선은 <c>PatternEffectDirector</c>가 든다.</summary>
@@ -180,6 +196,12 @@ namespace PatternSpace
 
         /// <summary>성패가 정해져야만 뜰 수 있는 큐인가.</summary>
         public bool NeedsOutcome => condition != EffectCondition.Always;
+
+        /// <summary>
+        /// 이 큐가 <b>시각이 아니라 사건에 붙는가</b>. true면 <see cref="ResolveTime"/>이 의미를 갖지 않으므로
+        /// 예약을 만들면 안 된다 — 발사는 그 사건이 일어날 때 직접 한다.
+        /// </summary>
+        public bool IsEventDriven => timing == EffectTiming.MashHit;
 
         /// <summary><see cref="BladeT"/>가 의미를 갖는가. 다른 앵커에서는 인스펙터·툴이 이 값을 감춘다.</summary>
         public bool UsesBlade => anchor == EffectAnchor.PlayerWeapon;
