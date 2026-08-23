@@ -37,7 +37,7 @@ enemyTarget  = mid + dir * half
 - `duelDistance`는 기존 규약 그대로 **기준선 + `Pattern.DuelDistanceOffset`**
   (`DuetPreview` 결정 1-10). 모션 리치가 그대로 반영된다.
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ### 1-2. 도착 시각은 **클립 시작 전**(`pendingScheduleStart`)이다 — 기하 동결 규율 유지
 
@@ -48,7 +48,7 @@ enemyTarget  = mid + dir * half
 
 수렴도 같다. **클립이 시작되기 전에 둘 다 도착해 있어야 한다.**
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ### 1-3. 계산 주체는 `EnemyDirector`, 플레이어는 **이벤트로 받는다**
 
@@ -67,7 +67,7 @@ public event Action<DuelPlan> OnDuelScheduled;
 
 `PlayerCombatMover`가 구독해 자기 몫만 움직인다. **디렉터는 플레이어를 모른다.**
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ### 1-4. 시간이 모자라면 **수렴을 생략하고 적만 붙인다**
 
@@ -80,7 +80,7 @@ public event Action<DuelPlan> OnDuelScheduled;
 > 순간이동처럼 보이는 것보다 "플레이어가 못 움직인 채 적이 달려든다"가 낫다.
 > 어느 쪽이든 **거리는 항상 `duelDistance`로 맞춘다** — 그게 깨지면 칼이 빗나간다.
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ### 1-5. 리시(중앙 이탈)는 **수렴 지점에 클램프**로 건다
 
@@ -107,7 +107,7 @@ playerTarget = center + clamp(playerTarget − center, maxOffset)
 위 클램프가 고정 원점 기준으로 제대로 동작하므로 **복귀 없이도 표류가 묶인다.**
 `PlayerCombatMover`는 이제 상대가 바뀔 때 **선 자리에서 방향만 돌린다.**
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ### 1-6. `duelAnchor`는 **기준 거리의 출처**로만 남는다
 
@@ -124,7 +124,7 @@ playerTarget = center + clamp(playerTarget − center, maxOffset)
 `ScheduleMove`가 거리를 보고 Run/Idle을 고르므로(이번 세션 작업) 추가 작업이 없다.
 **플레이어는 base 레이어가 이미 Sprint 경로를 갖고 있다** — 수렴 구간이 그 노출 창과 겹치는지만 확인한다.
 
->>> ✅ 확정 (2026-08-01)
+>>> (완료) 확정 (2026-08-01)
 
 ---
 

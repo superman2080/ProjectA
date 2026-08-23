@@ -83,9 +83,9 @@ PlaySlot(성공 클립)          actionEndTime               recoveryEndTime
   - `Tiny.Trail`은 `material`을 `MeshRenderer.material`에 넣으므로 이미 인스턴스가 만들어진다 — 원본 에셋(`TrailStick.mat`)을 건드리지 않도록 반드시 인스턴스를 잡을 것.
 
 - [x] **Step 6 — 검증** *(정적 검증만 완료 — 플레이 확인은 사람이 해야 함)*
-  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**. ✅
+  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**. (완료)
   - 씬 배선 확인: `WeaponTrailController.actionPlayer` → 캐릭터의 `CharacterActionPlayer`,
-    `bladeTrails[0]` → `Weapon_Katana_01_Blade`(안쪽 메쉬 노드)의 `Tiny.Trail`. 컴포넌트 리소스로 재조회해 확인. ✅
+    `bladeTrails[0]` → `Weapon_Katana_01_Blade`(안쪽 메쉬 노드)의 `Tiny.Trail`. 컴포넌트 리소스로 재조회해 확인. (완료)
   - **미검증(플레이 모드 육안 확인 필요)**:
     - 베기 중에만 트레일이 보이는가, 트림 끝에 사라지는가.
     - **연계 구간**: 다음 스윙이 이전 스윙을 끊을 때 트레일이 새로 시작되는가(잔상이 이어붙지 않는가).

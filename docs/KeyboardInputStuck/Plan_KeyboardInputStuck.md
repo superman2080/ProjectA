@@ -111,12 +111,12 @@ public void OnPointerEnter(PointerEventData eventData)
 ### 검증·문서
 
 - [x] **Step 8 — 검증** (Play 모드 실측)
-  - **버그 재현 시나리오**(Research 1절): A(0,3,6)를 키보드로 완주 → B(0,4,8) 승계 → B의 첫 노드(Point_1, A에서도 쓴 Point) 입력 → **위치 0 → 1로 진행** ✅ (수정 전에는 0에서 멈춤)
-  - **마우스 경로**(추가 발견 1): 드래그를 놓지 않고 A 완주 → B 승계 → 같은 Point_1 재진입 → **위치 0 → 1로 진행**, `IsMouseDragging`은 True로 유지되어 이어 긋기가 끊기지 않음 ✅
-  - **키보드 중 마우스 호버**(추가 발견 2): 키보드 스트로크 중 `IsDragging=True` / `IsMouseDragging=False`. Point_5에 `OnPointerEnter`를 발생시켜도 **입력되지 않음** ✅
-  - **중복 방지 보존**: 같은 패턴에서 Point_1을 두 번 입력 → 두 번째는 무시(위치 그대로) ✅
-  - **통과 노드 자동 인식**: Point_1 → Point_7 입력 시 사이의 Point_4가 자동 인식되어 3노드 패턴이 완주됨 ✅
-  - **실제 채보 오토플레이**(`Dreamer_Lv10`, 1500프레임): **입력 시도 33회 / 정상 진행 33회 / 삼켜진 입력 0회 / 완료된 패턴 13개** ✅
+  - **버그 재현 시나리오**(Research 1절): A(0,3,6)를 키보드로 완주 → B(0,4,8) 승계 → B의 첫 노드(Point_1, A에서도 쓴 Point) 입력 → **위치 0 → 1로 진행** (완료) (수정 전에는 0에서 멈춤)
+  - **마우스 경로**(추가 발견 1): 드래그를 놓지 않고 A 완주 → B 승계 → 같은 Point_1 재진입 → **위치 0 → 1로 진행**, `IsMouseDragging`은 True로 유지되어 이어 긋기가 끊기지 않음 (완료)
+  - **키보드 중 마우스 호버**(추가 발견 2): 키보드 스트로크 중 `IsDragging=True` / `IsMouseDragging=False`. Point_5에 `OnPointerEnter`를 발생시켜도 **입력되지 않음** (완료)
+  - **중복 방지 보존**: 같은 패턴에서 Point_1을 두 번 입력 → 두 번째는 무시(위치 그대로) (완료)
+  - **통과 노드 자동 인식**: Point_1 → Point_7 입력 시 사이의 Point_4가 자동 인식되어 3노드 패턴이 완주됨 (완료)
+  - **실제 채보 오토플레이**(`Dreamer_Lv10`, 1500프레임): **입력 시도 33회 / 정상 진행 33회 / 삼켜진 입력 0회 / 완료된 패턴 13개** (완료)
 
 - [x] **Step 9 — 문서 갱신**
   - `CLAUDE.md`: 입력 계층 규칙 추가 — "중복 입력 방지의 진실의 원천은 `PatternHandler.connectedIndices`(패턴 단위로 리셋)", "`IsMouseDragging`과 `IsDragging`의 구분", "Point 인덱스는 `patternPoints` 배열 순서로 주입".

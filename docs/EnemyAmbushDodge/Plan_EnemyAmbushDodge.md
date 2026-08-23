@@ -389,9 +389,9 @@ Step 5 흐름 6은 *"성패와 무관하게 적은 찌르고 물러난다"*로 �
 ### - [~] Step 0 — 사전 실측 (2·3 완료 / 1은 플레이 필요)
 
 **결과**
-- ✅ **2. Apply Root Motion = 꺼짐**(`Char_School_Katana_FullBody-Magica cloth2.prefab: m_ApplyRootMotion: 0`) — 구르기가 이중으로 안 간다.
-- ✅ **3. Attack Layer 아바타 마스크 없음**(`PlayerAnimator.controller`의 Attack Layer `m_Mask: {fileID: 0}`) — 전신이라 구르기가 다리까지 걸린다.
-- ⏳ **1. 공백 길이 분포** — 런타임 값이라 정적 계산 불가. `DodgeDirector.logWindows`(기본 켜짐)가
+- (완료) **2. Apply Root Motion = 꺼짐**(`Char_School_Katana_FullBody-Magica cloth2.prefab: m_ApplyRootMotion: 0`) — 구르기가 이중으로 안 간다.
+- (완료) **3. Attack Layer 아바타 마스크 없음**(`PlayerAnimator.controller`의 Attack Layer `m_Mask: {fileID: 0}`) — 전신이라 구르기가 다리까지 걸린다.
+- (대기) **1. 공백 길이 분포** — 런타임 값이라 정적 계산 불가. `DodgeDirector.logWindows`(기본 켜짐)가
   공백마다 `[DodgeDirector] 공백 1.34s → 발동/무시(사유)`를 한 줄씩 찍는다. **한 곡 돌려 그 로그로 `minIdleWindow`를 확정할 것.**
   현재 기본값 **1.2초**는 예산(와인드업 0.5 + 판정 0.15 + 구르기 0.5 + margin 0.2 ≈ 1.35초)에서 역산한 잠정값이다.
 

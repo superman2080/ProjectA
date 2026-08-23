@@ -35,11 +35,11 @@
 
 | 큐가 이미 가진 것 | 소리에 그대로 쓰이는가 |
 |---|---|
-| `EffectTiming` (PatternStart/FirstNode/Node[i]/LastNode/Impact) + `timeOffset` | ✅ 임팩트뿐 아니라 칼 뽑는 소리·타격 중간음 |
-| `EffectCondition` (Always/Success/Parry/Evade) | ✅ **여기가 핵심** — 아래 3절 |
-| 리스트 = 개수 자유 | ✅ 한 패턴에 여러 소리 |
-| `ResolveTime` 단일 소유 + 툴 타임라인 프리뷰 | ✅ 저작 화면과 게임이 같은 함수를 본다 |
-| `anchor`/`follow`/`bladeT`/`scale`/`speed`/`poolSize` | ❌ 소리에 무의미 (2D · 풀 불필요) |
+| `EffectTiming` (PatternStart/FirstNode/Node[i]/LastNode/Impact) + `timeOffset` | O 임팩트뿐 아니라 칼 뽑는 소리·타격 중간음 |
+| `EffectCondition` (Always/Success/Parry/Evade) | O **여기가 핵심** — 아래 3절 |
+| 리스트 = 개수 자유 | O 한 패턴에 여러 소리 |
+| `ResolveTime` 단일 소유 + 툴 타임라인 프리뷰 | O 저작 화면과 게임이 같은 함수를 본다 |
+| `anchor`/`follow`/`bladeT`/`scale`/`speed`/`poolSize` | X 소리에 무의미 (2D · 풀 불필요) |
 
 **시각 계산·조건 판정·저작 도구가 전부 이미 있고, 소리가 안 쓰는 필드는 그냥 안 쓰면 된다.**
 

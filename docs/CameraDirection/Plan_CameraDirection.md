@@ -143,9 +143,9 @@ startTime = now
   - 본 Plan의 체크박스 갱신.
 
 - [x] **Step 6 — 검증** *(정적 검증만 완료 — 플레이 확인은 사람이 해야 함)*
-  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**, `compilation.is_compiling = false`. ✅
-  - 씬 배선 재조회 — `handler`→`PointBackground`, `perlin`→`CinemachineCamera`, 카탈로그 3행, `shakeFrequency` 1.6. ✅
-  - `PatternHandler.GoodWindow`가 인스펙터 리소스에 `0.1`로 노출되는 것 확인(getter 동작). ✅
+  - `refresh_unity(force, compile)` 후 `read_console` — **에러/경고 0건**, `compilation.is_compiling = false`. (완료)
+  - 씬 배선 재조회 — `handler`→`PointBackground`, `perlin`→`CinemachineCamera`, 카탈로그 3행, `shakeFrequency` 1.6. (완료)
+  - `PatternHandler.GoodWindow`가 인스펙터 리소스에 `0.1`로 노출되는 것 확인(getter 동작). (완료)
   - **실측**: 씬 Perlin의 `AmplitudeGain`이 **0.1**이었다(0 아님) — 휴지값 캐시가 실제로 필요했다(Research 제약 2 실증).
   - **미검증(플레이 모드 육안 확인 필요)**:
     - **성공**: 표적이 갈라지는 **바로 그 순간** 흔들리는가(칼날·절단·쉐이크가 한 순간에 모이는가).
