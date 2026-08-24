@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using EnemySpace;
 using PatternSpace;
 using UnityEditor;
@@ -179,8 +179,30 @@ public class PatternEffectWindow : EditorWindow
         {
             drawHeaderCallback = rect => EditorGUI.LabelField(rect, "이펙트 큐 (위에서 아래 순서는 의미 없음 — 시각은 각 큐가 든다)"),
             elementHeight = EditorGUIUtility.singleLineHeight + 4f,
-            drawElementCallback = DrawCueRow
+            drawElementCallback = DrawCueRow,
+            onAddCallback = AddCue
         };
+    }
+
+    /// <summary>
+    /// 큐를 하나 추가한다. <b>배속·크기를 1로 다시 써 주는 것이 이 콜백의 존재 이유다.</b>
+    ///
+    /// <para><c>ReorderableList</c>의 기본 추가는 <c>InsertArrayElementAtIndex</c>라
+    /// <b>필드 이니셜라이저가 돌지 않는다</b> — <c>PatternEffectCue</c>가 <c>scale = 1f</c>,
+    /// <c>speed = 1f</c>로 선언돼 있어도 목록의 첫 큐는 0으로 나온다. 그 값은
+    /// <c>Mathf.Max(_, 0.01f)</c>에 걸려 <b>1% 크기로 1% 배속</b>이 되므로,
+    /// 화면에서는 "이펙트가 아예 안 나온다"로 보이고 원인을 짚을 단서가 없다.</para>
+    /// </summary>
+    private void AddCue(ReorderableList list)
+    {
+        int index = cuesProperty.arraySize;
+        cuesProperty.InsertArrayElementAtIndex(index);
+
+        var element = cuesProperty.GetArrayElementAtIndex(index);
+        element.FindPropertyRelative("scale").floatValue = 1f;
+        element.FindPropertyRelative("speed").floatValue = 1f;
+
+        list.index = index;
     }
 
     private void DrawCueRow(Rect rect, int index, bool active, bool focused)

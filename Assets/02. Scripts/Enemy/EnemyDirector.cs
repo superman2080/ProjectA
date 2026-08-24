@@ -1473,6 +1473,18 @@ namespace EnemySpace
         /// </summary>
         private void AssignEngageClip(EnemyView opponent, Reservation r, DuelPlan plan)
         {
+            // 상호 공격 — 적이 견제 대신 진짜 공격을 같이 휘두른다(Pattern.CountersOnFail).
+            //
+            // ⚠ 아래 견제의 minFeintWindow 가드를 물려받지 않는다. 견제는 창이 짧으면 깜빡임으로만 보여
+            //   안 거는 편이 나았지만, 상호 공격은 안 걸면 실패해도 플레이어가 안 맞는다 — 즉 규칙이 사라진다.
+            //   창이 짧으면 AssignAttack이 시작 시점에 남은 시간으로 배속을 재계산해 스스로 벌충한다.
+            if (r.template != null && r.template.CountersOnFail)
+            {
+                opponent.AssignAttack(r.template.EnemyAttack, r.impactTime,
+                                      plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+                return;
+            }
+
             var feint = AttackerOf(r.template) == Attacker.Player ? r.template?.EnemyFeint : null;
 
             // 창이 너무 짧으면 아예 걸지 않는다 — 깜빡임으로만 보이는 재생은 없느니만 못하다.
@@ -1576,18 +1588,24 @@ namespace EnemySpace
 
                     // 리액션 클립은 패턴이 소유한다. 회피(물러남)만 뷰의 고정 스테이트로 남는다 —
                     // 클립·후퇴 이동·무대 경계 클램프가 한 덩어리라 ClipAlignment 하나로 안 끝난다.
+                    // 상호 공격의 실패 — 적은 아무 반응도 하지 않는다. 자기 칼이 끝까지 나가는 것이
+                    // 곧 플레이어가 맞는 그림이고, 어떤 리액션도 그 임팩트를 지운다.
+                    bool counterLanding = !playerSucceeded && r.template != null && r.template.CountersOnFail;
+
                     ClipAlignment reactionClip = playerSucceeded
                         ? r.template?.EnemyHit
-                        : (retreat <= 0f ? r.template?.EnemyParry : null);
+                        : (retreat <= 0f && !counterLanding ? r.template?.EnemyParry : null);
 
                     opponent.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, retreatTarget,
-                                     reactionClip, r.impactTime);
+                                     reactionClip, r.impactTime, counterLanding);
 
                     // 반응 통지 — 판정은 EnemyView.Resolve의 parried 식과 '같은 retreat 값'을 본다.
                     // 다른 값으로 다시 계산하면 애니메이션과 이펙트가 언젠가 어긋난다.
                     if (!playerSucceeded)
                     {
-                        bool parried = AttackerOf(r.template) != Attacker.Enemy && retreat <= 0f;
+                        // ⚠ 상호 공격은 넉백이 0이라 그냥 두면 Parry로 읽히는데, 적은 막은 게 아니라 벴다.
+                        //    Attacker.Player에서 Evade의 뜻이 이미 "플레이어가 맞았다"라 저작 규칙이 안 늘어난다(§7-4).
+                        bool parried = !counterLanding && AttackerOf(r.template) != Attacker.Enemy && retreat <= 0f;
                         OnEnemyReacted?.Invoke(r.template, parried ? EnemyReaction.Parry : EnemyReaction.Evade, r.impactTime);
                     }
                 }
@@ -1626,6 +1644,10 @@ namespace EnemySpace
             // 적이 공격자인 패턴의 결말은 어느 쪽이든 물러난다 — 성공은 패링당해 밀려나는 것이고,
             // 실패는 벤 뒤의 여파다. 둘 다 회피가 아니므로 창을 보지 않는다.
             if (AttackerOf(r.template) == Attacker.Enemy) return failRetreatDistance;
+
+            // 상호 공격의 실패는 적이 이기는 결말이다 — 물러나면 자기 칼이 안 닿는다.
+            // 성공(넉백 0)과 같은 값이지만 근거가 반대라 분기를 따로 둔다.
+            if (!playerSucceeded && r.template != null && r.template.CountersOnFail) return 0f;
 
             // 사슬 중간 타격에는 넉백이 없다. 물러나면 플레이어가 매 타격마다 다시 붙어야 하는데,
             // 그 재접근은 TakeTargetForWindow를 안 거쳐 거리가 창에 안 맞춰진다(docs/FailConverge/) —

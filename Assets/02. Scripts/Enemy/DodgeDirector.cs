@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PatternSpace;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -654,7 +654,10 @@ namespace EnemySpace
         {
             // 강조는 여기서 끈다 — 기습이 끝난 적은 더 이상 특별하지 않다.
             // 카메라와 달리 구르기를 기다리지 않는다: 아웃라인은 "지금 온다"의 표시라 사건이 끝나면 즉시 거짓이 된다.
-            ambusher?.SetHighlight(false);
+            //
+            // ⚠ '?.'가 아니라 '!= null'이다 — 널 조건 연산자는 진짜 C# null만 보므로
+            //    파괴된 UnityEngine.Object를 통과시킨다(Abort의 같은 줄이 그래서 터졌다).
+            if (ambusher != null) ambusher.SetHighlight(false);
 
             enemyDirector.ReleaseAmbusher(ambusher);
 
@@ -677,11 +680,15 @@ namespace EnemySpace
         private void Abort()
         {
             if (dodgePoint != null) dodgePoint.Hide();
-            cameraDirector?.SetAmbusher(null);
+            if (cameraDirector != null) cameraDirector.SetAmbusher(null);
 
             // ⚠ 강조는 Finish와 Abort <b>양쪽</b>에서 끈다(ReleaseAmbusher가 두 곳에 있는 것과 같은 이유).
             // 곡 정리·비활성으로 여기 들어오면 켜진 채로 남고, 그 적이 풀에 반납되면 다음 대여가 빛난다.
-            ambusher?.SetHighlight(false);
+            //
+            // ⚠ 여기는 OnDisable에서도 불린다 — 플레이 종료 시 파괴 순서가 정해져 있지 않아
+            //    적이 먼저 파괴돼 있을 수 있다. '?.'는 파괴된 UnityEngine.Object를 통과시켜
+            //    MissingReferenceException이 났다. Unity의 '=='만이 파괴를 null로 본다.
+            if (ambusher != null) ambusher.SetHighlight(false);
 
             // 클립을 이미 건 적은 예약을 들고 있다 — 놓아주지 않으면 그 자리에 굳는다.
             if (fired && ambusher != null && enemyDirector != null) enemyDirector.ReleaseAmbusher(ambusher);

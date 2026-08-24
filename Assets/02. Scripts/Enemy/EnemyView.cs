@@ -842,11 +842,29 @@ namespace EnemySpace
             reactionUntil = Time.time + Mathf.Max(reactionHoldDuration, 0f);
         }
 
+        /// <param name="keepAttackClip">
+        /// <b>진행 중인 자기 공격 클립을 끊지 말 것</b>(상호 공격 패턴의 실패 —
+        /// <see cref="PatternSpace.Pattern.CountersOnFail"/>). 그 경우 적은 아무 반응도 하지 않아야 한다:
+        /// 칼이 끝까지 나가는 것이 곧 플레이어가 맞는 그림이다.
+        ///
+        /// <para><b>⚠ 그래도 이 메서드를 불러야 한다.</b> <see cref="ApplyLocomotion"/>이
+        /// <c>Phase.Windup</c>에서 스스로 물러나므로, 건너뛰면 <c>Windup</c>을 빠져나오는 경로가
+        /// (여기와 <see cref="MarkDying"/>뿐이라) 사라져 <b>적이 영구히 갇힌다</b>.
+        /// 대신 <see cref="reactionUntil"/>을 걸어 그 사이 로코모션·상체 마스크가 따라베기 잔여를
+        /// 덮지 못하게 한다 — 기존 노브라 <b>새 상태 필드가 0개다</b>.</para>
+        /// </param>
         public void Resolve(bool playerSucceeded, Attacker attacker, float retreatDistance, float retreatDuration,
-                            Vector3 retreatTarget, ClipAlignment reaction = null, float impactTime = 0f)
+                            Vector3 retreatTarget, ClipAlignment reaction = null, float impactTime = 0f,
+                            bool keepAttackClip = false)
         {
             StopWander();
-            hasPendingAttack = false;
+
+            // 아직 시작조차 안 한 공격 예약. 상호 공격에서 ImpactOffset이 와인드업보다 크면
+            // Deadline 시점에 클립이 아직 대기 중일 수 있고, 그때 예약을 지우면 적이 안 휘두른 채
+            // 플레이어만 맞는다 — keepAttackClip이면 예약을 그대로 살려 둔다.
+            bool attackStillPending = hasPendingAttack && !attackStarted;
+
+            hasPendingAttack = keepAttackClip && attackStillPending;
             hasPendingReaction = false;
 
             if (Current == Phase.Dying) return;
@@ -859,7 +877,13 @@ namespace EnemySpace
             // 패턴이 리액션 클립을 들고 있으면 그것을 임팩트에 정렬해 예약한다 — 확정(마지막 노드 입력)은
             // 칼이 닿기 goodWindow만큼 전이라, 즉시 재생하면 리액션이 칼보다 먼저 나온다.
             // 슬롯이 비면 아래 고정 스테이트로 떨어진다(기존 동작).
-            if (reaction != null && reaction.IsUsable)
+            if (keepAttackClip)
+            {
+                // 상호 공격 실패 — 적은 지금 자기 칼을 내밀고 있다. 어떤 크로스페이드도 그 임팩트를 지운다
+                // (Deadline과 임팩트는 ImpactOffset밖에 안 떨어져 있어 '닿기 직전 프레임'에 튄다).
+                reactionUntil = Time.time + Mathf.Max(reactionHoldDuration, 0f);
+            }
+            else if (reaction != null && reaction.IsUsable)
             {
                 pendingReaction = reaction;
                 pendingReactionStart = Mathf.Max(impactTime - ReactionLead(reaction), Time.time);

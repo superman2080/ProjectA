@@ -482,6 +482,21 @@ Assets/
 - **⚠ `Attacker.Enemy`에서는 저작자 책임이다** — 적 칼은 예약 시점의 자리를 겨냥하므로 임팩트 시점 간격이 저작값과 다르면 빗나간다. 막지 않는 이유는 툴 프리뷰가 그 어긋남을 그대로 보여 주기 때문.
 - 저작: `Tools/Animation Clip Trimmer`(타임라인 `t`와 같은 축) — 기준 거리는 씬 `EnemyDirector.DuelBaseDistance()`에서 자동으로 읽고, **프리뷰는 런타임과 같이 플레이어를 움직인다**(적은 임팩트 자리 고정). 가이드: `docs/!Guides/Guide_CharacterActionTrim.md` / 상세: `docs/DuelDistanceCurve/`
 
+### 11-10. 상호 공격 — 실패하면 플레이어가 맞는 `Attacker.Player` 패턴 (PatternCounter)
+- **`Attacker.Player` 패턴에 `enemyAttack` 클립이 배선돼 있으면 적이 견제 대신 진짜 공격을 같이 휘두른다.** 두 칼이 같은 시각(`Deadline + ImpactOffset`)을 겨누고, **실패하면 적의 칼이 닿아 `OnPlayerHit`이 난다** — 즉 §6의 "`Attacker.Player`면 피격 자체가 없다"의 **유일한 예외**다.
+- **저작 필드가 0개다**(`Pattern.CountersOnFail`은 게터). `Attacker.Player` + `enemyAttack`은 원래 `WarnUnusedSlots`가 "재생되지 않는 슬롯"으로 경고만 하던 **무의미한 조합**이라, 거기에 의미를 준다. bool을 따로 두면 "켰는데 클립이 없다"/"클립은 있는데 껐다"가 새로 생기지만 **클립 유무가 곧 의도면 그 부류가 원천 소멸한다**(§2-1의 "분기가 아니라 데이터로 갈린다"와 같은 관용구).
+- **⚠ 반격(실패를 보고 그때 휘두르기)이 아니라 상호 공격이다.** 첫 미스에 배정하면 임팩트까지 남는 실시간이 `goodWindow`(0.1초)뿐이라 사망 클립과 같은 함정에 빠진다(§11-3). **견제와 같은 구간**(`BindReservation` ~ 임팩트)에 놓으면 창이 `Attacker.Enemy` 패턴과 완전히 같아져 그 문제가 통째로 사라진다.
+- **성공 경로에 새 코드가 0줄이다** — `ResolveReservation`이 이미 성공+`Attacker.Player`에 `Pattern.EnemyHit`을 `impactTime − ReactionLead`에 예약하고, 그것이 적의 공격 클립을 **자기 임팩트 직전에 끊는다**(= "플레이어가 더 빨랐다"). `killOnSuccess`면 `EnemyDeath`가 끊는다.
+- **⚠ 손댈 곳은 실패 경로 하나다 — 적은 아무 반응도 하면 안 된다.** `EnemyView.Resolve`는 실패에서 **반드시** parry/evade로 크로스페이드하는데, `Deadline`과 임팩트가 `ImpactOffset`밖에 안 떨어져 있어 **적 칼이 닿기 직전 프레임에 회피 모션으로 튄다.** `keepAttackClip`이 그 크로스페이드만 건너뛴다.
+  - **⚠ 그래도 `Resolve`를 불러야 한다.** `ApplyLocomotion`이 `Phase.Windup`에서 스스로 물러나므로, 건너뛰면 `Windup`을 빠져나오는 경로가 (`Resolve`·`MarkDying`뿐이라) 사라져 **적이 영구히 갇힌다**. 대신 `reactionUntil`을 걸어 그 사이 로코모션·상체 마스크가 따라베기 잔여를 못 덮게 한다 — 기존 노브라 **새 상태 필드가 0개다**.
+  - **⚠ 아직 시작 안 한 공격 예약은 살려 둔다**(`attackStillPending`). `ImpactOffset`이 와인드업보다 크면 Deadline 시점에 클립이 대기 중일 수 있고, 그때 `hasPendingAttack`을 지우면 **적이 안 휘두른 채 플레이어만 맞는다**.
+  - **⚠ 넉백은 0이다** — 물러나면 자기 칼이 안 닿는다. 성공(사슬 중간)과 값은 같지만 근거가 반대라 분기를 따로 둔다.
+  - **⚠ `OnEnemyReacted`는 `Evade`로 보낸다.** 넉백 0이라 그냥 두면 `Parry`로 읽히는데 적은 막은 게 아니라 **벴다**. `Attacker.Player`에서 `Evade`의 뜻이 이미 "플레이어가 맞았다"라 저작 규칙이 안 늘어난다(§7-4).
+- **⚠ 견제의 `minFeintWindow` 가드를 물려받지 않는다.** 견제는 창이 짧으면 깜빡임이라 안 거는 편이 나았지만, 상호 공격은 **안 걸면 실패해도 안 맞는다**(규칙 자체가 사라진다). 창이 짧으면 `AssignAttack`이 시작 시점에 남은 시간으로 배속을 재계산해 스스로 벌충한다.
+- **`PlayerHealth`·`CameraDirector`·`PatternHandler`는 한 줄도 안 고쳤다** — `OnPlayerHit` 하나에 체력 감소와 `PatternMiss` 카메라 큐가 이미 매달려 있다(§7-6).
+- 저작: `Tools/Animation Clip Trimmer`의 **적 보조 슬롯 → `Attack`**(ImpactTime을 플레이어와 같은 `t = 0`에 찍는다) · `Tools/Pattern Chart Tool`의 **`상호 공격 · 실패 시 피격`** 배지.
+- 상세: `docs/PatternCounter/`
+
 ### 11-4. 견제 — 표적이 된 순간부터 임팩트까지 (EnemyFeint)
 - **`Attacker.Player` 패턴에서 적은 휘두르지 않는다** → 그 구간에 클립이 없어 **표적이 된 순간부터 베이는 순간까지 가만히 서 있었다.** `Pattern.EnemyFeint`(`ClipAlignment` 슬롯)가 그 구간을 채운다.
 - **임팩트가 없는 슬롯이다.** 닿지 않는 동작이라 `ImpactTime`을 찍지 않고, 그러면 `ClipAlignment`가 트림 끝을 임팩트로 폴백해 **클립 끝이 임팩트 시각에 붙는다**(§6과 같은 정렬 규칙, 새 수학 없음).

@@ -773,6 +773,10 @@ namespace ChartGen
             if (!unassigned && draft.template.IsMash)
                 label += $"   연타 {draft.template.MashTargetHits}타";
 
+            // 상호 공격 뱃지 — 실패하면 체력이 깎이는 엔트리라, 저작자가 그 밀도를 행에서 바로 봐야 한다.
+            if (!unassigned && draft.template.CountersOnFail)
+                label += "   상호 공격 · 실패 시 피격";
+
             // 사슬 뱃지 — 엔트리가 수백 개라 토글 하나만 보고는 몇 번째 타인지 셀 수 없다.
             var chain = ChainInfoAt(index);
             if (chain.length > 1)
@@ -979,6 +983,19 @@ namespace ChartGen
             var template = draft.template;
             if (template == null) return;
             if (template.Attacker == EnemySpace.Attacker.Enemy) return; // 그 구간은 EnemyAttack이 채운다
+
+            if (template.CountersOnFail)
+            {
+                var counter = template.EnemyAttack;
+                float counterTrim = counter.ResolvedDuration / counter.Speed;
+                float counterWindow = ResolveFeintWindow(index, template);
+
+                EditorGUILayout.LabelField("상호 공격",
+                    $"{counter.Clip.name} · 트림 {counterTrim:0.00}s / 창 {counterWindow:0.00}s");
+                EditorGUILayout.LabelField(" ", "실패하면 이 칼이 닿아 플레이어가 대미지를 입는다", EditorStyles.miniLabel);
+                DrawOpenActionEditorButton(template);
+                return;
+            }
 
             var feint = template.EnemyFeint;
 

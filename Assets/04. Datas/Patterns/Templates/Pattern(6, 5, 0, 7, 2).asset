@@ -43,6 +43,7 @@ MonoBehaviour:
     - 0.123646736
     - 0.5024378
     - 0.72814226
+  playerLeadInClips: []
   enemyFeint:
     clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
     startOffset: 0
@@ -79,6 +80,9 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  isMash: 0
+  mashTargetHits: 10
+  mashStrikes: []
   bladePlane:
     normal: {x: -0.3472799, y: -0.93457264, z: -0.07726978}
     distance: 0.89925754
@@ -96,10 +100,10 @@ MonoBehaviour:
     alignToBlade: 0
     positionOffset: {x: 0, y: 1.16, z: -0.83}
     rotationOffset: {x: 0, y: 0, z: -180}
-    scale: 0
+    scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 0}
+    sfx: {fileID: 8300000, guid: 3df9bbbc130ccb344af5f3fc793a630f, type: 3}
     sfxVolume: 0.3
     sfxPitch: 2
   - label: Slash Fire VFX
@@ -114,12 +118,12 @@ MonoBehaviour:
     alignToBlade: 0
     positionOffset: {x: 0, y: 1.16, z: -0.83}
     rotationOffset: {x: 0, y: 0, z: 9.8}
-    scale: 0
+    scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 0}
-    sfxVolume: 1
-    sfxPitch: 1
+    sfx: {fileID: 8300000, guid: 7cbd6cd765888ff418d01d98bd1ce9c2, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
   - label: Slash Fire VFX
     prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
     condition: 0
@@ -132,12 +136,12 @@ MonoBehaviour:
     alignToBlade: 0
     positionOffset: {x: 0, y: 1.16, z: -0.83}
     rotationOffset: {x: 0, y: 0, z: -180}
-    scale: 0
+    scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 0}
-    sfxVolume: 1
-    sfxPitch: 1
+    sfx: {fileID: 8300000, guid: 3df9bbbc130ccb344af5f3fc793a630f, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
   - label: Slash Fire VFX
     prefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
     condition: 0
@@ -150,12 +154,12 @@ MonoBehaviour:
     alignToBlade: 0
     positionOffset: {x: 0, y: 1.16, z: -0.83}
     rotationOffset: {x: 0, y: 0, z: 9.8}
-    scale: 0
+    scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 0}
-    sfxVolume: 1
-    sfxPitch: 1
+    sfx: {fileID: 8300000, guid: 7cbd6cd765888ff418d01d98bd1ce9c2, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
   - label: 
     prefab: {fileID: 0}
     condition: 1

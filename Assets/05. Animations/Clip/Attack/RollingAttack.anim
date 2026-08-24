@@ -134738,7 +134738,7 @@ AnimationClip:
     floatParameter: 0
     intParameter: 0
     messageOptions: 0
-  - time: 1.8540156
+  - time: 1.8
     functionName: StopSwordTrail
     data: 
     objectReferenceParameter: {fileID: 0}

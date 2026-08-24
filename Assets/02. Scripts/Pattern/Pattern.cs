@@ -33,7 +33,10 @@ namespace PatternSpace
                  "양쪽이 필요하면 패턴 에셋을 복제하라.")]
         [SerializeField] private EnemySpace.Attacker attacker = EnemySpace.Attacker.Player;
 
-        [Tooltip("적이 이 패턴으로 휘두르는 공격. Attacker.Enemy(패링)일 때만 재생된다. 비우면 무연출.")]
+        [Tooltip("적이 이 패턴으로 휘두르는 공격.\n" +
+                 "Attacker.Enemy: 플레이어가 패링해야 하는 적의 공격.\n" +
+                 "Attacker.Player: 상호 공격 — 적이 견제 대신 같이 휘두른다. 실패하면 이 칼이 닿아 플레이어가 대미지를 입는다.\n" +
+                 "비우면 무연출(Attacker.Player면 EnemyFeint 견제 경로로 돌아간다).")]
         [SerializeField] private ClipAlignment enemyAttack = new ClipAlignment();
 
         [Tooltip("적 공격을 받아치는 플레이어 패링. Attacker.Enemy일 때 재생된다. 비우면 무연출.")]
@@ -120,8 +123,24 @@ namespace PatternSpace
         /// </summary>
         public EnemySpace.Attacker Attacker => attacker;
 
-        /// <summary>적이 이 패턴으로 휘두르는 공격(<c>Attacker.Enemy</c>일 때만).</summary>
+        /// <summary>적이 이 패턴으로 휘두르는 공격. <c>Attacker.Player</c>면 상호 공격이다(<see cref="CountersOnFail"/>).</summary>
         public ClipAlignment EnemyAttack => enemyAttack;
+
+        /// <summary>
+        /// <b>상호 공격 패턴인가</b> — 적이 견제(<see cref="EnemyFeint"/>) 대신 <b>진짜 공격을 같이 휘두르고</b>,
+        /// 플레이어가 실패하면 그 칼이 닿아 대미지를 입는다.
+        ///
+        /// <para><b>새 필드가 없다.</b> <c>Attacker.Player</c> + <see cref="EnemyAttack"/> 배선은 원래
+        /// <c>WarnUnusedSlots</c>가 "재생되지 않는 슬롯"으로 경고만 하던 <b>무의미한 조합</b>이었다 —
+        /// 거기에 의미를 준다. bool을 따로 두면 "켰는데 클립이 없다"/"클립은 있는데 껐다"라는
+        /// 어긋난 조합이 새로 생기지만, 클립 유무가 곧 의도면 그 부류가 원천 소멸한다.</para>
+        ///
+        /// <para><b>성공 경로에는 새 코드가 없다</b> — <c>EnemyDirector.ResolveReservation</c>이 이미
+        /// 성공한 <c>Attacker.Player</c> 패턴에 <see cref="EnemyHit"/>을 임팩트에 정렬해 예약하고,
+        /// 그것이 적의 공격 클립을 자기 임팩트 직전에 끊는다(<c>killOnSuccess</c>면 <see cref="EnemyDeath"/>가 끊는다).</para>
+        /// </summary>
+        public bool CountersOnFail =>
+            attacker == EnemySpace.Attacker.Player && enemyAttack != null && enemyAttack.IsUsable;
 
         /// <summary>적 공격을 받아치는 플레이어 패링(<c>Attacker.Enemy</c>).</summary>
         public ClipAlignment PlayerParry => playerParry;
@@ -510,11 +529,21 @@ namespace PatternSpace
         {
             bool enemyIsAttacker = attacker == EnemySpace.Attacker.Enemy;
 
-            Warn(enemyIsAttacker ? playerAttack : enemyAttack, enemyIsAttacker ? "PlayerAttack" : "EnemyAttack");
+            // ⚠ EnemyAttack은 Attacker.Player에서도 재생된다 — 상호 공격이다(CountersOnFail).
+            //    그래서 여기서 경고하는 것은 적이 공격자일 때 죽은 슬롯인 PlayerAttack 하나뿐이다.
+            if (enemyIsAttacker) Warn(playerAttack, "PlayerAttack");
             Warn(enemyIsAttacker ? enemyDeath : playerParry, enemyIsAttacker ? "EnemyDeath" : "PlayerParry");
 
             // 견제는 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 EnemyAttack이 이미 채운다.
             if (enemyIsAttacker) Warn(enemyFeint, "EnemyFeint");
+
+            // 상호 공격이 그 구간을 통째로 가져가므로 견제는 죽은 데이터다(둘 다 같은 구간을 노린다).
+            if (CountersOnFail && enemyFeint?.Clip != null)
+            {
+                Debug.LogWarning(
+                    $"[Pattern] 상호 공격 '{name}'에 EnemyFeint 클립 '{enemyFeint.Clip.name}'이 함께 배선돼 있습니다. " +
+                    "EnemyAttack이 같은 구간을 차지하므로 견제는 재생되지 않습니다 — 비우세요.", this);
+            }
 
             // 피격 리액션도 Attacker.Player 전용이다 — 적이 공격자인 패턴의 실패는 §11-2대로 언제나 물러나고,
             // 성공은 패링이라 밀려나는 쪽(knockBack)이 이미 자리를 잡고 있다.

@@ -10,45 +10,47 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: PatternBlock(4)
+  m_Name: Pattern(1, 4, 7)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
+  - index: 1
   - index: 4
-  attacker: 0
+  - index: 7
+  attacker: 1
   enemyAttack:
-    clip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
-    startOffset: 0
-    duration: 0.980969
-    impactTime: 0.3011524
-    speed: 1.5
-    extraImpactTimes: []
-  playerParry:
-    clip: {fileID: 7400000, guid: 620f78649addacc41a9e3434cf5a4daf, type: 2}
-    startOffset: 0
-    duration: 0.980969
-    impactTime: 0.34665996
-    speed: 1.5
-    extraImpactTimes: []
-  playerAttack:
     clip: {fileID: 0}
     startOffset: 0
-    duration: 0.98096895
-    impactTime: 0.3455531
-    speed: 1.5
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  playerParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  playerAttack:
+    clip: {fileID: 7400000, guid: a55642d3e1786884c99c3d1c2954c024, type: 2}
+    startOffset: 0
+    duration: 1
+    impactTime: 0.45984456
+    speed: 1
     extraImpactTimes: []
   playerLeadInClips: []
   enemyFeint:
-    clip: {fileID: 0}
-    startOffset: 0
-    duration: 1
-    impactTime: 0.2636906
+    clip: {fileID: 7400000, guid: 0e2fcbecedc05a742bfb97b18957bb73, type: 2}
+    startOffset: 0.04126788
+    duration: 0.9587321
+    impactTime: 0.44
     speed: 1
     extraImpactTimes: []
   enemyDeath:
-    clip: {fileID: 0}
+    clip: {fileID: 7400000, guid: 86a1273ae19324e489d4a4007fdae235, type: 2}
     startOffset: 0
-    duration: 1
-    impactTime: 0.09800859
+    duration: 0.54763633
+    impactTime: 0.20011918
     speed: 1
     extraImpactTimes: []
   enemyHit:
@@ -69,7 +71,25 @@ MonoBehaviour:
   duelDistanceOffset: 0
   duelDistanceCurve:
     serializedVersion: 2
-    m_Curve: []
+    m_Curve:
+    - serializedVersion: 3
+      time: -0.45984456
+      value: 1.75
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0
+      value: 0.8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
@@ -77,9 +97,9 @@ MonoBehaviour:
   mashTargetHits: 10
   mashStrikes: []
   bladePlane:
-    normal: {x: 0, y: 0, z: 0}
-    distance: 0
-  hasBladePlane: 0
+    normal: {x: 0.9450436, y: 0.30188748, z: -0.12552494}
+    distance: -0.32630435
+  hasBladePlane: 1
   effectCues:
   - label: 
     prefab: {fileID: 0}
@@ -96,9 +116,9 @@ MonoBehaviour:
     scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 8300000, guid: e5ecc98ff40556543b77c8c2aa090822, type: 3}
-    sfxVolume: 1
-    sfxPitch: 1
+    sfx: {fileID: 8300000, guid: 7cbd6cd765888ff418d01d98bd1ce9c2, type: 3}
+    sfxVolume: 0.3
+    sfxPitch: 2
   - label: BloodSplash
     prefab: {fileID: 2547653176252853621, guid: 7ba73965ea003004da2c2a2c32b306f3, type: 3}
     condition: 1
@@ -107,7 +127,7 @@ MonoBehaviour:
     timeOffset: 0
     anchor: 0
     follow: 0
-    bladeT: 1
+    bladeT: 0
     alignToBlade: 0
     positionOffset: {x: 0, y: 1.15, z: 0}
     rotationOffset: {x: 0, y: 0, z: 0}
@@ -115,5 +135,5 @@ MonoBehaviour:
     speed: 1
     poolSize: 4
     sfx: {fileID: 0}
-    sfxVolume: 1
-    sfxPitch: 1
+    sfxVolume: 0
+    sfxPitch: 0

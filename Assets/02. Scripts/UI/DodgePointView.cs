@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PatternSpace;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -124,7 +124,7 @@ public class DodgePointView : MonoBehaviour, IPointerDownHandler
     {
         if (ring == null) return;
 
-        Pool.Instance.Return(PoolKey.FocusRing, ring);
+        Pool.Release(PoolKey.FocusRing, ring);
         ring = null;
     }
 
