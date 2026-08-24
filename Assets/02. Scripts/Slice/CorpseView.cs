@@ -182,11 +182,14 @@ namespace SliceSpace
         /// 절단면마다 출혈 이펙트를 하나씩 붙인다. <b><see cref="Burst"/> 뒤에 부른다</b> —
         /// 흩어진 조각에만 붙이므로 <c>launched</c>가 채워져 있어야 한다.
         ///
-        /// <para>자리는 <b>조각 중심을 절단 평면에 내린 점</b>이고 뿜는 방향은 그 조각이 있는 쪽의 법선이다.
-        /// 평면이 없으면(구 세트) 조각 중심에서 바깥으로 뿜는다 — 배선이 비면 조용히 폴백한다.</para>
+        /// <para><b>발생원은 점이 아니라 절단면 자체다.</b> 캡(잘린 면)은 굽기가 <b>마지막 서브메쉬 하나</b>로
+        /// 병합해 두므로(§11 머티리얼 슬롯 M+1 규칙), 파티클 shape을 그 서브메쉬로 주면
+        /// 면 전체에서 고르게 솟는다. 방향은 캡의 면 법선이 그대로 준다 —
+        /// <b>절단 평면도, 좌표계 변환도, 저작값도 필요 없다.</b></para>
+        ///
+        /// <para>서브메쉬가 하나뿐인 조각은 <b>잘린 면이 없다</b>는 뜻이라 그냥 건너뛴다.</para>
         /// </summary>
-        /// <param name="plane">절단 평면. <b>적 루트 로컬</b>(= 시체 루트 로컬)이어야 한다 — 메쉬 로컬을 넣으면 헛것을 겨눈다.</param>
-        public void Bleed(GameObject prefab, PrefabPool pool, int maxPoolSize, SlicePlane plane, bool hasPlane)
+        public void Bleed(GameObject prefab, PrefabPool pool, int maxPoolSize)
         {
             if (prefab == null || pool == null) return;
 
@@ -196,28 +199,32 @@ namespace SliceSpace
             {
                 if (piece == null) continue;
 
-                var renderer = (Renderer)piece.GetComponent<MeshRenderer>() ?? piece.GetComponentInChildren<Renderer>();
-                if (renderer == null) continue;
+                var renderer = piece.GetComponent<MeshRenderer>();
+                var filter = piece.GetComponent<MeshFilter>();
+                if (renderer == null || filter == null || filter.sharedMesh == null) continue;
 
-                Vector3 local = transform.InverseTransformPoint(renderer.bounds.center);
-                Vector3 outward = local;
-
-                if (hasPlane)
-                {
-                    float side = plane.SignedDistance(local);
-                    local -= plane.normal * side;
-                    outward = side >= 0f ? plane.normal : -plane.normal;
-                }
-
-                if (outward.sqrMagnitude < 1e-6f) outward = Vector3.up;
+                int cap = filter.sharedMesh.subMeshCount - 1; // 캡은 언제나 마지막 슬롯이다
+                if (cap <= 0) continue;
 
                 var go = pool.Rent(prefab, maxPoolSize);
                 if (go == null) continue;
 
+                // 부모가 조각이라 조각이 구르면 발생면도 같이 돈다.
+                // ⚠ 로컬 포즈는 항등이어야 한다 — MeshRenderer shape은 그 렌더러의 트랜스폼으로 샘플링하므로
+                // 이펙트를 따로 옮기면 발생면과 그림이 어긋난다.
                 go.transform.SetParent(piece.transform, false);
-                go.transform.SetPositionAndRotation(
-                    transform.TransformPoint(local),
-                    Quaternion.LookRotation(transform.TransformDirection(outward.normalized)));
+                go.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+                foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+                {
+                    var shape = ps.shape;
+                    shape.enabled = true;
+                    shape.shapeType = ParticleSystemShapeType.MeshRenderer;
+                    shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+                    shape.meshRenderer = renderer;
+                    shape.useMeshMaterialIndex = true;
+                    shape.meshMaterialIndex = cap;
+                }
 
                 bleeders.Add(go);
             }

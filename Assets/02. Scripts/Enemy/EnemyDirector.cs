@@ -1892,9 +1892,8 @@ namespace EnemySpace
             corpse.AdoptPose(opponent.transform, source != null ? source.bones : null);
             corpse.Burst(scatterSpeed, scatterSpin, pieceLayer, frozenMeshPool, keepRootSkinnedForRagdoll);
 
-            // 절단면 출혈. 평면은 <b>적 루트 로컬</b>(canonical)이라 시체 루트 로컬과 같은 좌표계다 —
-            // set.BakedPlanes(메쉬 로컬)를 넣으면 조용히 헛것을 겨눈다.
-            corpse.Bleed(bleedPrefab, pool, bleedPoolSize, set.BakedBladePlane, set.HasBakedBladePlane);
+            // 절단면 출혈. 발생면은 조각 메쉬의 캡 서브메쉬가 그대로 준다 — 평면도 좌표계도 안 본다.
+            corpse.Bleed(bleedPrefab, pool, bleedPoolSize);
 
             corpses.Add(new Corpse { view = corpse, prefab = set.CorpsePrefab, time = Time.time });
 
