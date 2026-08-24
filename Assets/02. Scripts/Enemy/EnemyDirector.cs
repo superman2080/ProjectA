@@ -2043,6 +2043,28 @@ namespace EnemySpace
         public void ClearSpot(Vector3 spot) => PushOut(spot, spot);
 
         /// <summary>
+        /// 이 자리가 <b>플레이어–현재 상대 통로</b> 안이면 밖으로 밀어낸 자리를 돌려준다.
+        /// 적을 미는 것이 아니라 <b>자리를 고른다</b>는 점만 <see cref="PushOut"/>과 다르고,
+        /// 통로의 정의와 밀어내는 식은 그대로 공유한다(<see cref="EnemyRing.SeparationPush"/>).
+        ///
+        /// <para><b>왜 필요한가</b>: 매 프레임 이격은 <c>IsIdle</c>인 적만 민다 —
+        /// 클립을 예약한 적(기습자)은 <b>설계상 면제</b>다(찌르러 온 적을 밀어내면 칼이 빗나간다).
+        /// 그래서 그런 적은 <b>서기 전에</b> 통로를 피해야 하고, 그 유일한 지점이 자리를 정하는 순간이다.</para>
+        ///
+        /// <para>상대가 없으면 두 끝점이 같아져 <b>플레이어 원</b>으로 무너진다 — 분기를 두지 않는다.</para>
+        /// </summary>
+        public Vector3 KeepOutOfDuelLane(Vector3 spot)
+        {
+            if (separationRadius <= 0f) return spot;
+
+            Vector3 player = PlayerPosition;
+            Vector3 opponent = currentOpponent != null ? currentOpponent.transform.position : player;
+
+            Vector3 push = EnemyRing.SeparationPush(spot, player, opponent, separationRadius);
+            return push == Vector3.zero ? spot : ClampToStage(spot + push);
+        }
+
+        /// <summary>
         /// 선분 <paramref name="a"/>–<paramref name="b"/>의 캡슐에서 자유로운 적을 밀어낸다.
         /// <b>이 루프가 이격의 유일한 구현이다</b> — 매 프레임 통로(<see cref="TickSeparation"/>)와
         /// 일회성 자리 비우기(<see cref="ClearSpot"/>)가 같은 몸통을 쓴다.

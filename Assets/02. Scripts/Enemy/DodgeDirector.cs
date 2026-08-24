@@ -480,7 +480,13 @@ namespace EnemySpace
             // 아직 출발도 안 한 자리를 찌른다 — 정정 2 B와 같은 실수다.
             Vector3 player = hasStagedPlayerSpot ? stagedPlayerSpot
                            : mover != null ? mover.transform.position : transform.position;
-            Vector3 lungeSpot = PlaceAround(player, ambusher.transform.position, lungeDistance);
+            // ⚠ 통로(플레이어–현재 상대)를 비켜 선다. PlaceAround는 플레이어와 기습자 자신의 방위만 보는데,
+            // 후보는 <b>현재 상대와 같은 무리</b>에서 고르므로(§11-6) 그 방위가 곧 상대 방향인 경우가 흔하다 —
+            // 그대로 두면 둘 사이에 낀 채로 선다. 그리고 기습자는 hasPendingAttack이라
+            // 매 프레임 이격이 건너뛰므로(설계상 면제) <b>여기서 피하지 않으면 아무도 못 치운다</b>.
+            // ⚠ 연타처럼 임팩트가 먼 패턴에서는 그 자세가 수 초간 굳는다.
+            Vector3 lungeSpot = enemyDirector.KeepOutOfDuelLane(
+                PlaceAround(player, ambusher.transform.position, lungeDistance));
 
             ambusher.AssignAttack(ambushClip, impactTime, lungeSpot, player, enemyDirector.MaxAttackSpeed);
 
