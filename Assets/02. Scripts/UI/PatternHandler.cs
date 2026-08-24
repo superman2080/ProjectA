@@ -834,7 +834,7 @@ public class PatternHandler : MonoBehaviour
         Vector3 worldPosition = patternPoints[ring.PointIndex].transform.position;
         OnFocusRingMissedArrival?.Invoke(ring.PointIndex, ring.Type, worldPosition);
 
-        Pool.Instance.Return(PoolKey.FocusRing, ring);
+        Pool.Release(PoolKey.FocusRing, ring);
     }
 
     private void RemoveRingEntry(FocusRingView ring)
@@ -883,6 +883,6 @@ public class PatternHandler : MonoBehaviour
     private void ReleaseFocusRing(FocusRingView ring)
     {
         ring.OnArrived -= HandleFocusRingArrived;
-        Pool.Instance.Return(PoolKey.FocusRing, ring);
+        Pool.Release(PoolKey.FocusRing, ring);
     }
 }

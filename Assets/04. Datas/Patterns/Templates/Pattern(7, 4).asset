@@ -37,6 +37,7 @@ MonoBehaviour:
     impactTime: 0.43049547
     speed: 1
     extraImpactTimes: []
+  playerLeadInClips: []
   enemyFeint:
     clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
     startOffset: 0
@@ -91,6 +92,9 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  isMash: 0
+  mashTargetHits: 10
+  mashStrikes: []
   bladePlane:
     normal: {x: -0.75010127, y: 0.05609886, z: -0.6589393}
     distance: 0.72559947

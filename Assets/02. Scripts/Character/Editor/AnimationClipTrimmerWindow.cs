@@ -112,6 +112,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
     private enum EnemyAuxSlot
     {
         Feint,   // 표적이 된 순간 ~ 임팩트 (Attacker.Player 전용)
+        Attack,  // 표적이 된 순간 ~ 임팩트 — 상호 공격(Attacker.Player에서 견제를 대체한다)
         Hit,     // 임팩트 — 맞았는데 안 죽었다(사슬 중간 타격)
         Parry    // 임팩트 — 막아냈다
     }
@@ -159,6 +160,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
     private static string AuxSlotPath(EnemyAuxSlot slot) => slot switch
     {
+        EnemyAuxSlot.Attack => "enemyAttack",
         EnemyAuxSlot.Hit => "enemyHit",
         EnemyAuxSlot.Parry => "enemyParry",
         _ => "enemyFeint"
@@ -166,6 +168,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
     private static string AuxSlotLabel(EnemyAuxSlot slot) => slot switch
     {
+        EnemyAuxSlot.Attack => "적 — enemyAttack (상호 공격)",
         EnemyAuxSlot.Hit => "적 — enemyHit (피격)",
         EnemyAuxSlot.Parry => "적 — enemyParry (패링)",
         _ => "적 — enemyFeint (견제)"
@@ -494,15 +497,26 @@ public class AnimationClipTrimmerWindow : EditorWindow
         EditorGUI.BeginChangeCheck();
         enemyAuxSlot = (EnemyAuxSlot)EditorGUILayout.EnumPopup(
             new GUIContent("적 보조 슬롯", "적 한 명의 다른 시각 구간이라 배우를 늘리지 않고 슬롯만 바꾼다.\n" +
-                                      "Feint = 표적이 된 순간~임팩트 / Hit = 맞았는데 안 죽음(사슬 중간) / Parry = 막아냄."),
+                                      "Feint = 표적이 된 순간~임팩트 / Attack = 상호 공격(같은 구간, 닿는다) / " +
+                                      "Hit = 맞았는데 안 죽음(사슬 중간) / Parry = 막아냄."),
             enemyAuxSlot);
         if (EditorGUI.EndChangeCheck()) LoadFromPattern();
 
-        if (enemyAuxSlot != EnemyAuxSlot.Feint)
+        if (enemyAuxSlot == EnemyAuxSlot.Hit || enemyAuxSlot == EnemyAuxSlot.Parry)
         {
             EditorGUILayout.HelpBox(
                 "피격·패링은 임팩트에 시작합니다 — ImpactTime을 찍지 않으면 t = 0이 클립 시작입니다.\n" +
                 "⚠ 트림 0.5초 이하 권장: 길면 다음 패턴의 견제 클립이 끊습니다.",
+                MessageType.Info);
+        }
+
+        if (!enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Attack)
+        {
+            EditorGUILayout.HelpBox(
+                "상호 공격 — 적이 견제 대신 진짜 공격을 같이 휘두릅니다. 클립을 배선하면 이 패턴은 " +
+                "실패 시 플레이어가 대미지를 입습니다(비우면 견제 경로로 돌아갑니다).\n" +
+                "ImpactTime은 플레이어 공격과 같은 t = 0에 찍습니다 — 두 칼이 같은 시각을 겨눕니다.\n" +
+                "성공하면 enemyHit(또는 enemyDeath)이 이 클립을 임팩트 직전에 끊습니다.",
                 MessageType.Info);
         }
 
@@ -715,7 +729,10 @@ public class AnimationClipTrimmerWindow : EditorWindow
         {
             // 견제는 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 enemyAttack이 채운다.
             // 피격·패링은 역할과 무관하게 열어 둔다(적이 공격자여도 막힐 수는 있다).
-            feint.slotPath = enemyIsAttacker && enemyAuxSlot == EnemyAuxSlot.Feint ? null : AuxSlotPath(enemyAuxSlot);
+            // 견제·상호 공격은 Attacker.Player 전용이다 — 적이 공격자면 그 구간을 위의 enemy 배우가
+            // 이미 enemyAttack으로 열고 있어, 여기서 또 열면 같은 슬롯이 화면에 둘 뜬다.
+            bool auxIsEngage = enemyAuxSlot == EnemyAuxSlot.Feint || enemyAuxSlot == EnemyAuxSlot.Attack;
+            feint.slotPath = enemyIsAttacker && auxIsEngage ? null : AuxSlotPath(enemyAuxSlot);
             feint.label = AuxSlotLabel(enemyAuxSlot);
         }
 

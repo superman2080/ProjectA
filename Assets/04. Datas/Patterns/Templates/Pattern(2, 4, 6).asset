@@ -38,6 +38,7 @@ MonoBehaviour:
     impactTime: 0.2581653
     speed: 1
     extraImpactTimes: []
+  playerLeadInClips: []
   enemyFeint:
     clip: {fileID: 7400000, guid: acfaa3806b1b1d9499e1c233ced07a1f, type: 2}
     startOffset: 0
@@ -74,6 +75,9 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  isMash: 0
+  mashTargetHits: 10
+  mashStrikes: []
   bladePlane:
     normal: {x: 0.63870245, y: -0.7523784, z: -0.16120167}
     distance: 0.8274228
@@ -94,7 +98,7 @@ MonoBehaviour:
     scale: 1
     speed: 1
     poolSize: 0
-    sfx: {fileID: 8300000, guid: 3df9bbbc130ccb344af5f3fc793a630f, type: 3}
+    sfx: {fileID: 8300000, guid: 05d0536a3eefc80438f95f9662331f52, type: 3}
     sfxVolume: 0.3
     sfxPitch: 2
   - label: 

@@ -368,6 +368,10 @@ public class CharacterActionPlayer : MonoBehaviour
     // 이번 판정 대상에서 누가 휘두르는가. 클립 선택과 "맞는지 여부"를 동시에 가른다.
     private EnemySpace.Attacker currentAttacker = EnemySpace.Attacker.Player;
 
+    // 이번 판정 대상이 상호 공격인가(Attacker.Player인데 적도 같이 휘두른다 — Pattern.CountersOnFail).
+    // 역할과 수명이 같아야 어긋나지 않으므로 같은 자리에서 캐시한다.
+    private bool currentCountersOnFail;
+
     // 피격 예약 — 적 칼이 도착하는 시각(impactTime)에 재생한다.
     private bool hasPendingHit;
     private float pendingHitTime;
@@ -832,10 +836,12 @@ public class CharacterActionPlayer : MonoBehaviour
         missedThisTarget = false;
         hasPending = false;
         hasPendingHit = false;
+        currentCountersOnFail = false;
 
         if (info.Template == null) return;
 
         currentAttacker = enemyDirector != null ? enemyDirector.CurrentAttacker : EnemySpace.Attacker.Player;
+        currentCountersOnFail = info.Template.CountersOnFail;
 
         // 칼이 닿는 시각 — 적 공격·표적 절단과 반드시 같은 식이어야 한다.
         float impactAlignTime = info.ImpactTime();
@@ -1179,6 +1185,10 @@ public class CharacterActionPlayer : MonoBehaviour
     ///
     /// <para>플레이어가 공격자였다면(<c>Attacker.Player</c>) <b>피격 자체가 없다</b> — 적은 애초에 휘두르지 않았고
     /// 뒤로 물러나 회피할 뿐이다. 헛스윙으로 끝난다.</para>
+    ///
+    /// <para><b>예외는 상호 공격뿐이다</b>(<see cref="PatternSpace.Pattern.CountersOnFail"/>) — 그 패턴에서는
+    /// 적이 견제 대신 진짜 공격을 같이 휘두르고 있으므로, 실패하면 그 칼이 <c>impactTime</c>에 닿는다.
+    /// 예약 경로는 <c>Attacker.Enemy</c>와 완전히 같다.</para>
     /// </summary>
     private void HandleJudgeTargetFirstMiss()
     {
@@ -1196,7 +1206,9 @@ public class CharacterActionPlayer : MonoBehaviour
             recoveryEndTime = actionEndTime + recoveryHoldDuration;
         }
 
-        if (currentAttacker != EnemySpace.Attacker.Enemy)
+        // 맞는 경우가 둘이다 — 적이 공격자였거나(패링 실패), 상호 공격이었거나(적도 같이 휘둘렀다).
+        // 어느 쪽이든 적의 칼이 이미 오고 있으므로 도착 시각(impactTime)에 피격을 예약한다.
+        if (currentAttacker != EnemySpace.Attacker.Enemy && !currentCountersOnFail)
         {
             RaiseSwingEnded(); // 적 무방비 — 맞지 않는다. 진행 중이던 스윙만 끊는다.
             return;
