@@ -1733,6 +1733,7 @@ MonoBehaviour:
   hitStopEnabled: 1
   hitStopDuration: 0.1
   minHitStopGap: 0
+  mashHitStopDuration: 0.03
 --- !u!114 &330585551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11230,6 +11231,8 @@ MonoBehaviour:
   maxActivePieces: 96
   maxActiveCorpses: 6
   keepRootSkinnedForRagdoll: 0
+  bleedPrefab: {fileID: 2201506753129102851, guid: ed886fdfaf9511747a7999678e322ae7, type: 3}
+  bleedPoolSize: 24
   dissolveDuration: 1.2
   dissolveMaterial: {fileID: 2100000, guid: 0c8aa34338f4b1847b6e64f285ea6951, type: 2}
   debugCue:

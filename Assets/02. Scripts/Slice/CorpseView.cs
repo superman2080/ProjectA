@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace SliceSpace
@@ -68,6 +68,11 @@ namespace SliceSpace
                     foreach (var r in cachedRenderers) dissolveRenderers.Add(r);
                 }
             }
+
+            // 출혈 파티클은 소멸 대상이 아니다 — 머티리얼을 갈아끼우면 피가 통째로 사라진다.
+            dissolveRenderers.RemoveAll(r => r is ParticleSystemRenderer);
+
+            StopBleeding();
 
             dissolveSwap.Begin(dissolveRenderers, dissolveMaterial, propertyBlock);
             SetDissolveAmount(0f);
@@ -168,6 +173,71 @@ namespace SliceSpace
             }
         }
 
+        // ── 절단면 출혈 (CLAUDE.md §11-3) ───────────────────────────────────────
+        // 조각마다 루프 파티클을 <b>자식으로</b> 하나 붙인다 — 조각이 구르면 피도 같이 돈다(추종 코드 0줄).
+        private readonly List<GameObject> bleeders = new List<GameObject>();
+        private PrefabPool bleedPool;
+
+        /// <summary>
+        /// 절단면마다 출혈 이펙트를 하나씩 붙인다. <b><see cref="Burst"/> 뒤에 부른다</b> —
+        /// 흩어진 조각에만 붙이므로 <c>launched</c>가 채워져 있어야 한다.
+        ///
+        /// <para>자리는 <b>조각 중심을 절단 평면에 내린 점</b>이고 뿜는 방향은 그 조각이 있는 쪽의 법선이다.
+        /// 평면이 없으면(구 세트) 조각 중심에서 바깥으로 뿜는다 — 배선이 비면 조용히 폴백한다.</para>
+        /// </summary>
+        /// <param name="plane">절단 평면. <b>적 루트 로컬</b>(= 시체 루트 로컬)이어야 한다 — 메쉬 로컬을 넣으면 헛것을 겨눈다.</param>
+        public void Bleed(GameObject prefab, PrefabPool pool, int maxPoolSize, SlicePlane plane, bool hasPlane)
+        {
+            if (prefab == null || pool == null) return;
+
+            bleedPool = pool;
+
+            foreach (var piece in launched)
+            {
+                if (piece == null) continue;
+
+                var renderer = (Renderer)piece.GetComponent<MeshRenderer>() ?? piece.GetComponentInChildren<Renderer>();
+                if (renderer == null) continue;
+
+                Vector3 local = transform.InverseTransformPoint(renderer.bounds.center);
+                Vector3 outward = local;
+
+                if (hasPlane)
+                {
+                    float side = plane.SignedDistance(local);
+                    local -= plane.normal * side;
+                    outward = side >= 0f ? plane.normal : -plane.normal;
+                }
+
+                if (outward.sqrMagnitude < 1e-6f) outward = Vector3.up;
+
+                var go = pool.Rent(prefab, maxPoolSize);
+                if (go == null) continue;
+
+                go.transform.SetParent(piece.transform, false);
+                go.transform.SetPositionAndRotation(
+                    transform.TransformPoint(local),
+                    Quaternion.LookRotation(transform.TransformDirection(outward.normalized)));
+
+                bleeders.Add(go);
+            }
+        }
+
+        /// <summary>
+        /// 방출만 멈춘다 — 이미 떠 있는 입자는 제 수명대로 사라진다.
+        /// <b>즉시 파기하면 소멸 시작 프레임에 피가 뚝 끊겨</b> "탄다"가 아니라 "사라졌다"로 읽힌다.
+        /// </summary>
+        private void StopBleeding()
+        {
+            foreach (var go in bleeders)
+            {
+                if (go == null) continue;
+
+                foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+                    ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
+        }
+
         /// <summary>날아간 조각이 전부 잠들었는지. 디렉터가 이른 회수 판단에 쓴다.</summary>
         public bool AllPiecesSettled
         {
@@ -193,6 +263,11 @@ namespace SliceSpace
             dissolveSwap.Restore();
             dissolveRenderers.Clear();
             dissolving = false;
+
+            // ⚠ 조각을 제자리로 되돌리기 <b>전에</b> 떼어낸다 — 안 떼면 출혈 이펙트가 시체와 함께 반납돼
+            // 다음 대여가 피를 흘리며 나온다.
+            foreach (var go in bleeders) bleedPool?.Release(go);
+            bleeders.Clear();
 
             if (pieces == null) return;
 

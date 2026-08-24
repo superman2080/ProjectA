@@ -184,6 +184,12 @@ namespace EnemySpace
                  "물리가 없으면 그 조각만 공중에 매달린 채 남는다(docs/EnemyRagdoll/ 후속 플랜).")]
         [SerializeField] private bool keepRootSkinnedForRagdoll;
 
+        [Header("Corpse Bleed")]
+        [Tooltip("절단면마다 조각에 붙는 루프 출혈 이펙트. 비면 출혈이 없다(예전 동작).")]
+        [SerializeField] private GameObject bleedPrefab;
+        [Tooltip("출혈 이펙트 풀 크기. 시체 하나가 조각 수만큼 쓰므로 (동시 시체 수 x 조각 수)가 실질 하한이다.")]
+        [SerializeField] private int bleedPoolSize = 24;
+
         [Header("Dissolve")]
         [Tooltip("적·시체가 사라지는 시간(초).")]
         [SerializeField] private float dissolveDuration = 1.2f;
@@ -750,6 +756,8 @@ namespace EnemySpace
             if (rosterPool == null) return;
 
             var seen = new HashSet<SliceSet>();
+
+            pool.Prewarm(bleedPrefab, bleedPoolSize, bleedPoolSize);
 
             foreach (var definition in rosterPool)
             {
@@ -1883,6 +1891,10 @@ namespace EnemySpace
             var source = opponent.SourceSkinned;
             corpse.AdoptPose(opponent.transform, source != null ? source.bones : null);
             corpse.Burst(scatterSpeed, scatterSpin, pieceLayer, frozenMeshPool, keepRootSkinnedForRagdoll);
+
+            // 절단면 출혈. 평면은 <b>적 루트 로컬</b>(canonical)이라 시체 루트 로컬과 같은 좌표계다 —
+            // set.BakedPlanes(메쉬 로컬)를 넣으면 조용히 헛것을 겨눈다.
+            corpse.Bleed(bleedPrefab, pool, bleedPoolSize, set.BakedBladePlane, set.HasBakedBladePlane);
 
             corpses.Add(new Corpse { view = corpse, prefab = set.CorpsePrefab, time = Time.time });
 
