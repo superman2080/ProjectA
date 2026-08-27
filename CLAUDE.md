@@ -379,6 +379,13 @@ Assets/
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
 - **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
+- **`Managers` 프리팹**(`03. Prefabs/Managers.prefab`): **씬을 넘어 살아남아야 하는** 매니저만 한 덩어리로 든다 — `GameSession` · `SoundManager` · `SfxManager`. 씬마다 이 프리팹 인스턴스를 하나 놓는다.
+  - 자식들이 전부 `Singleton<T>`(`DontDestroy => true`)이고 `Singleton.Awake`가 **`transform.root`**에 `DontDestroyOnLoad`를 건다 → **루트째 씬을 넘어간다.**
+  - **⚠ 그래서 루트에도 `ManagerRoot`(= `Singleton<ManagerRoot>`)가 붙는다.** 없으면 다음 씬의 인스턴스는 자식들만 각자 파괴되고 **빈 `Managers` 껍데기가 남아** 하이어라키에 같은 이름이 둘 보인다(디버깅할 때 엉뚱한 쪽을 연다). 새 로직은 0줄이다.
+  - **⚠ 이 프리팹이 없는 씬은 조용히 무음이다** — `SoundManager.Instance` 게터가 카탈로그가 빈 인스턴스를 런타임에 만들어 낸다(에러가 안 난다).
+  - **⚠ `Pool`과 `EventSystem`은 여기 들어가지 않는다 — 둘 다 씬에 묶여 있다.**
+    - `Pool`은 `DontDestroy`가 **false**다. 대여한 `FocusRingView`를 `PatternHandler`가 씬 Canvas(`focusRingParent`) 밑으로 옮기고 `Return`은 **부모를 되돌리지 않으므로**, 풀이 씬을 넘어가면 큐에 **파괴된 오브젝트**가 남아 다음 대여가 터진다.
+    - `EventSystem`은 입력 모듈이 씬마다 다르다(`BattleScene` = `InputSystemUIInputModule`, `SongSelectScene` = `StandaloneInputModule`). 공유하면 한쪽이 잘못된 모듈로 돈다.
 - **`PrefabPool`**(`Util/`, 순수 C#): 프리팹별 인스턴스 풀. `EnemyDirector`·`SliceTargetDirector`가 필드로 하나씩 든다. 반납 시 원본을 되짚는 표식은 런타임에 붙는 `PooledInstance`다. **`Pool`(PoolKey)과 역할이 다르다** — 저쪽은 키가 고정된 소수의 `IPoolable`, 이쪽은 에셋이 데이터로 지정하는 임의 개수의 프리팹.
 - **`CanvasEffectPool`**(`Effect/`, 순수 C#): `CanvasEffectView` 전용 풀. `EffectManager`(Canvas)와 `PatternEffectDirector`(월드)가 공유한다. 반납 훅(`OnDespawn`)과 `SourcePrefab` 규약 때문에 `PrefabPool`과 나뉜다.
 

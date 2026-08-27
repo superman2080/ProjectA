@@ -641,6 +641,45 @@ public class CharacterActionPlayer : MonoBehaviour
         LogConverge($"{(backward ? "Quickshift(뒤)" : "Quickshift")} x{speed:0.00}", distance, window);
     }
 
+    // ── 탐색 로코모션 ────────────────────────────────────────────────────────
+    [Header("Explore Locomotion")]
+    [Tooltip("이 속도 이상이면 Sprint, 미만이면 Idle. 걷기 클립이 없어 지금은 두 갈래뿐이다.")]
+    [SerializeField] private float exploreMoveThreshold = 0.1f;
+
+    [Tooltip("탐색이 base 레이어를 쥐고 있는 시간(초). 매 프레임 갱신되므로 짧아도 된다 — 탐색이 멈추면 저절로 풀린다.")]
+    [SerializeField] private float exploreLocomotionLatch = 0.1f;
+
+    /// <summary>
+    /// 탐색 이동의 로코모션을 건다. <b>base 레이어의 주인을 <see cref="convergeUntil"/> 래치로 넘겨받는다</b> —
+    /// 그 필드의 의미가 이미 "지금 base는 내 것이 아니다"이고 탐색이 요구하는 의미와 같아서,
+    /// 새 상태 필드도 새 스테이트도 만들지 않는다.
+    ///
+    /// <para>래치를 안 걸면 <see cref="Update"/>의 복귀 로직이 <b>다음 프레임에 즉시 Idle로 덮는다</b>
+    /// (수렴 로코모션이 같은 이유로 <c>convergeUntil</c>을 쓴다).</para>
+    ///
+    /// <para><b>⚠ 걷기 클립이 없다</b> — <c>PlayerAnimator</c>의 base 레이어는 Idle/Sprint/Quickshift 셋뿐이라
+    /// 지금은 Sprint의 배속으로만 표현된다. 걷기 블렌드 트리는 별건이다.</para>
+    /// </summary>
+    public void SetExploreLocomotion(float travelSpeed)
+    {
+        if (animator == null || runningLayerIndex < 0) return;
+
+        // 탐색이 base를 쥔다. 매 프레임 갱신되므로 호출이 멎으면 복귀 로직이 저절로 되찾아간다.
+        convergeUntil = Time.time + Mathf.Max(exploreLocomotionLatch, 0.01f);
+
+        if (travelSpeed < exploreMoveThreshold)
+        {
+            SwitchBaseState(idleStateHash);
+            return;
+        }
+
+        // 발이 지면을 긁지 않도록 실제 이동 속도에 배속을 맞춘다(수렴 경로와 같은 식).
+        float runSpeed = Mathf.Clamp(travelSpeed / Mathf.Max(sprintReferenceSpeed, 0.01f),
+                                     sprintSpeedRange.x, sprintSpeedRange.y);
+        animator.SetFloat(sprintSpeedHash, runSpeed);
+        SwitchBaseState(sprintStateHash);
+    }
+
     /// <summary>
     /// Quickshift 스테이트가 재생할 클립을 갈아 끼운다(전진 ↔ 백스텝).
     /// <b>키는 언제나 원본 <see cref="quickshiftClip"/></b>이다 — 오버라이드는 원본 클립을 키로 잡으므로
