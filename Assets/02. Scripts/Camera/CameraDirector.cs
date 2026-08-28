@@ -1073,11 +1073,26 @@ public class CameraDirector : MonoBehaviour
     ///
     /// <para>블렌드 시간은 <see cref="CinemachineBrain.DefaultBlend"/>에서 <b>읽는다</b>. 인스펙터에 같은 값을 두 번 적으면
     /// 언젠가 한쪽만 고쳐져 "곡은 시작됐는데 카메라가 아직 움직이는" 상태가 된다. 진실의 원천은 Brain 하나다.</para>
+    ///
+    /// <para><b>⚠ 그 값이 세는 것은 ②뿐이다.</b> 우선순위를 올리면 Brain이 ①로 <b>들어오는</b> 블렌드도 만드는데,
+    /// 그동안 화면 구도는 아직 게임플레이 카메라의 것이라 <b>스플라인은 달리는데 정면을 보고 있는</b> 그림이 된다.
+    /// 그래서 인트로에는 <b>컷으로 들어간다</b>. 안 그러면 블렌드가 길어질수록(<c>angleBlendDuration</c>)
+    /// 인트로가 창의 양쪽에서 깎여, 2초면 3초 카운트다운에서 인트로 구도를 한 프레임도 못 본다.</para>
     /// </summary>
     private IEnumerator IntroRoutine(float duration)
     {
         introCamera.Priority = new PrioritySettings { Enabled = true, Value = introPriority };
         introDolly.CameraPosition = 0f;
+
+        // ⚠ 인트로에는 컷으로 들어간다. 우선순위가 올라가면 Brain은 게임플레이 vcam에서 이쪽으로 블렌드하는데,
+        // 그 블렌드가 도는 동안 화면의 구도는 여전히 게임플레이 카메라의 것이다 — 스플라인은 달리는데
+        // "정면을 보고 있다"로 읽히고, 블렌드가 카운트다운보다 길면 인트로 구도를 한 프레임도 못 본다.
+        // 아래 blendTime은 마무리 블렌드(②) 몫으로만 쓰는데, 시작 블렌드(①)까지 같은 값을 먹으면
+        // 창이 두 번 깎이는 것도 같은 이유로 잘못이다.
+        // ⚠ 한 프레임 기다린 뒤에 끊는다 — 블렌드는 Brain의 다음 갱신에서 만들어지므로 지금은 아직 없다.
+        // 곡 시작 연출은 어차피 검은 화면에서 열리므로(BattleSceneBootstrap의 페이드) 컷이 보이지도 않는다.
+        yield return null;
+        brain.ActiveBlend = null;
 
         // 곡 시작을 늦출 수는 없으므로, 블렌드가 창을 다 먹으면 인트로가 잘리는 쪽을 택한다.
         float travel = duration - brain.DefaultBlend.BlendTime;

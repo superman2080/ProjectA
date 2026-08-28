@@ -6,11 +6,14 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/01. Scenes/SongSelectScene.unity
-    guid: f647644e1ec65214687e240606e42ef1
+    path: Assets/01. Scenes/Explore_Stage1.unity
+    guid: f51d2f3785b31404289b2fc1f13dc31b
   - enabled: 1
     path: Assets/01. Scenes/BattleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/01. Scenes/SongSelectScene.unity
+    guid: f647644e1ec65214687e240606e42ef1
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: c2afccfebf2d61f4784dc75965ccb5d5, type: 3}

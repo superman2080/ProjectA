@@ -137,12 +137,54 @@ public class DialogUI : MonoBehaviour
     private void Close()
     {
         currentData = null;
-        dialog.SetActive(false);
+
+        // ⚠ 대사가 끝났다고 창을 무조건 내리면, 그 아래 깔려 있던 프롬프트가 같이 사라진다.
+        if (promptText == null) dialog.SetActive(false);
+        else ShowPromptNow();
 
         // 콜백이 또 대사를 띄울 수 있으므로 먼저 비우고 부른다.
         Action callback = onFinished;
         onFinished = null;
         callback?.Invoke();
+    }
+
+    // ─── 프롬프트 ───
+    //
+    // 대사와 같은 창을 쓰지만 성질이 다르다: 큐도 타이핑도 완료 콜백도 없고, 내려 달라고 할 때까지 떠 있다.
+    // ⚠ 창의 주인이 둘이 되는 문제를 여기서 끝낸다 - 대사가 언제나 이기고, 대사가 끝나면 프롬프트가 돌아온다.
+    // 그래서 프롬프트를 띄우는 쪽(Encounter)은 시퀀스가 도는지 알 필요가 없다.
+
+    private string promptText;
+
+    /// <summary>내려 달라고 할 때까지 떠 있는 한 줄. 대사가 들어오면 잠시 가려졌다가 되돌아온다.</summary>
+    public void ShowPrompt(string text)
+    {
+        if (dialog == null) return;
+
+        promptText = text;
+        if (currentData != null) return; // 대사가 우선. 그 대사가 끝나면 Close가 되살린다.
+
+        ShowPromptNow();
+    }
+
+    /// <summary>프롬프트를 내린다. 대사가 떠 있으면 그 대사는 건드리지 않는다.</summary>
+    public void HidePrompt()
+    {
+        if (dialog == null) return;
+
+        promptText = null;
+        if (currentData != null) return;
+
+        dialog.SetActive(false);
+    }
+
+    private void ShowPromptNow()
+    {
+        StopPrinting();
+
+        dialogName.text = string.Empty;
+        dialogScript.text = promptText;
+        dialog.SetActive(true);
     }
 
     private void StopPrinting()

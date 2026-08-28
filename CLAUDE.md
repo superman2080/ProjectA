@@ -41,8 +41,18 @@ Assets/
 │   │   ├── DodgePointView.cs        # 기습 회피 입력 지점 — 화면 우하단 고정(§11-8)
 │   │   ├── ScoreHudView.cs          # 점수·콤보 HUD(순수 표시, §12)
 │   │   ├── ComboPostFxView.cs       # 콤보 단계 포스트FX 볼륨 웨이트(§12)
+│   │   ├── DialogUI.cs              # 대사 창 + DialogData(정적 Instance, §15)
 │   │   └── Editor/
 │   │       └── PatternHandlerEditor.cs # 디버그 입력 커스텀 인스펙터(에디터 전용)
+│   ├── SequenceSystem/              # 대사·브리핑·컷신을 에셋으로 저작·재생(§15)
+│   │   ├── SequenceAsset.cs         # ScriptableObject - 시퀀스 정의(씬 참조 0개)
+│   │   ├── SequenceRunner.cs        # 씬에서 실행 + 씬 오브젝트 배선
+│   │   ├── SequenceStep.cs          # 스텝 추상 베이스([SerializeReference])
+│   │   ├── SequenceBindings.cs      # 슬롯 이름 → 씬 오브젝트
+│   │   ├── SequenceContext.cs       # 스텝이 씬 세계에 닿는 유일한 통로
+│   │   ├── Steps/                   # Wait · MoveTo · Dialog · WaitFlag · Timeline
+│   │   └── Editor/                  # 씬 뷰 핸들 저작 + 슬롯 드롭다운
+│   ├── StateMachine/                # 평평한 FSM(IState·StateBase·StateMachine) — ⚠ 현재 사용처 0
 │   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
 │   │   ├── SongChart.cs             # ScriptableObject - 곡+채보 데이터
 │   │   ├── ChartPlayer.cs           # 오디오 시각에 맞춰 SetPattern 흘려보내는 재생 글루
@@ -52,6 +62,8 @@ Assets/
 │   ├── Character/
 │   │   ├── CharacterActionPlayer.cs # 베기/피격 애니메이션 + 수렴 로코모션
 │   │   ├── PlayerCombatMover.cs     # 결투 이동·회전(OnDuelScheduled 구독)
+│   │   ├── PlayerExploreMover.cs    # 무대 밖 3인칭 이동(§11-2 · §15)
+│   │   ├── PlayerModeDirector.cs    # 플레이어 모드 유일 관리 지점 — 위치의 주인이 하나임을 보장
 │   │   └── Editor/                  # AnimationClipTrimmerWindow(짝 저작 툴)
 │   ├── Slice/                       # 베이는 표적(연출 전용)
 │   │   ├── SliceSet.cs              # ScriptableObject - 굽기 산출물(원본+조각 프리팹 N개+절단 평면)
@@ -97,7 +109,8 @@ Assets/
 ├── 03. Prefabs/StoryProps/          # 배경 프롭 낱개 프리팹(툴 산출물, §13)
 ├── 04. Datas/
 │   ├── Patterns/Templates/          # Pattern 에셋(모양 원본)
-│   └── Song/                        # SongChart 에셋
+│   ├── Song/                        # SongChart 에셋
+│   └── Sequences/{Stage}/           # SequenceAsset 에셋(§15)
 ├── 06. Models/Props/                # 배경 프롭 FBX(Blender 산출물, §13)
 └── docs/                            # Research/Plan 설계 문서(주제별) + !Guides(사용 가이드) + Story(서사 설계)
 ```
@@ -271,7 +284,8 @@ Assets/
 **인트로** — 곡 시작 전 로우앵글부터 훑고 올라가 게임플레이 구도로 고정.
 - **두 도막**: ① `CinemachineSplineDolly` 주행(씬의 `IntroSpline`) ② `CinemachineBrain` 블렌드. 시각은 `ChartPlayer.OnCountdownStarted`에서 온다.
 - **경로는 코드가 모른다.** 좌표·높이·곡률 전부 씬의 `SplineContainer`에 있고 코드는 `CameraPosition` 0→1만 민다. **`PositionUnits = Normalized`가 그 전제**라 어긋나면 경고를 찍는다(경로가 조용히 일부만 재생됨). 코드가 주는 건 속도 배분(`introEase`)뿐.
-- **블렌드 시간은 `Brain.DefaultBlend.BlendTime`에서 읽는다**(`Time`이 아니라 — `Cut`이면 0을 돌려주는 실효값). 인스펙터에 두 번 적으면 *곡은 시작됐는데 카메라가 아직 움직이는* 상태가 된다.
+- **블렌드 시간은 `Brain.DefaultBlend.BlendTime`에서 읽는다**(`Time`이 아니라 — `Cut`이면 0을 돌려주는 실효값). 인스펙터에 두 번 적으면 *곡은 시작됐는데 카메라가 아직 움직이는* 상태가 된다. ⚠ 씬의 Brain 값이 런타임 값이 아니다 — `CameraDirector.angleBlendDuration`이 `Awake`에서 그것을 **덮어쓴다**(진실의 원천을 Brain 하나로 모으는 설계).
+- **⚠ 인트로에는 컷으로 들어간다**(`brain.ActiveBlend = null`, 우선순위를 올린 **다음 프레임에**). 안 그러면 Brain이 게임플레이 vcam에서 인트로로 **들어오는** 블렌드도 만드는데, 그동안 화면 구도는 아직 게임플레이 카메라의 것이라 **스플라인은 달리는데 어깨너머로 정면을 보고 있는** 그림이 된다. `travel` 식은 마무리 블렌드만 창에서 빼므로 들어오는 블렌드까지 같은 값을 먹으면 창이 두 번 깎인다 — 블렌드 2초 · 카운트다운 3초면 **인트로 구도를 한 프레임도 못 본다**. 블렌드가 0.4초일 때는 눈에 안 띄어 오래 숨어 있던 결함이다. 컷이 안 보이는 이유는 곡 시작이 어차피 검은 화면에서 열리기 때문(§9 `ScreenFader`). 상세: `docs/CameraFraming/Research_CameraIntroBlend.md`
 - **끝점을 게임플레이 구도에 정확히 맞출 의무가 없다** — 차이는 블렌드가 흡수한다.
 - 인트로 vcam은 TargetGroup을 안 쓰고(그래서 등 뒤 추적과도 무관하다) 플레이어를 `LookAt`으로 직접 본다(주인공이 플레이어고, 그룹을 공유하면 두 기능이 한 값으로 얽힌다). 노이즈도 안 붙인다. **휴지 우선순위는 −10** — 0이면 게임플레이 vcam과 동점이라 끝난 뒤 승자가 활성화 순서에 달린다.
 - 상세: `docs/CameraFraming/` · 등 뒤 추적: `docs/CameraOverShoulder/`
@@ -354,7 +368,7 @@ Assets/
 
 ### 7-6. 목숨 (PlayerHealth)
 - **`PlayerHealth`**(플레이어 프리팹): `CharacterActionPlayer.OnPlayerHit`만 구독한다. 그 이벤트가 **적 칼이 실제로 닿는 시각**에만, 그것도 `Attacker.Enemy` 패턴에서만 나오므로 "적 공격을 못 막았을 때만 깎인다"는 규칙이 이벤트 하나로 이미 표현돼 있다(§6).
-- **⚠ `OnDepleted`는 아직 구독자가 없다** — 목숨이 0이 돼도 화면에서 아무 일도 일어나지 않는다. 버그가 아니라 **사망 연출이 미구현**인 것이며, 그 연출이 붙을 진입점이 이 이벤트다. `OnDamaged`(남은 수치)도 UI가 붙기 전까지 같은 상태다. (점수·콤보 쪽 HUD는 `ScoreHudView`로 이미 붙어 있다 — §12.)
+- **`OnDepleted`는 `BattleSceneBootstrap`이 구독한다**(§9) — 곡을 끊고 **아무것도 기록하지 않은 채** 탐색 씬으로 되돌린다. **패배 화면이 없다**: 그 무대는 `Fresh` 그대로라 다시 들어서면 곧바로 시작된다. 사망 연출을 넣고 싶으면 여기가 그 자리다. `OnDamaged`(남은 수치)도 UI가 붙기 전까지 같은 상태다. (점수·콤보 쪽 HUD는 `ScoreHudView`로 이미 붙어 있다 — §12.)
 
 ### 8. 디버그 입력 (에디터 전용)
 - `PatternHandler`의 `#if UNITY_EDITOR` 블록 + `PatternHandlerEditor` 커스텀 인스펙터. **빌드에는 포함되지 않는다.**
@@ -366,20 +380,56 @@ Assets/
 - **`SongSelectManager`**: 곡 선택 씬에서 버튼으로 `SelectChart(chart)` → `GameSession.SelectedChart`에 등록 후 `BattleScene` 로드. 씬 이름은 `gameplaySceneName` 인스펙터 값이 진실의 원천이다(코드 기본값은 새 인스턴스용 폴백).
 - **`GameSession`**(Singleton, DontDestroyOnLoad): 씬을 넘어 `SelectedChart`를 전달. `ChartPlayer`가 읽어 사용.
 
-#### ⚠ 이 구조는 스토리 모드에서 폐기된다 (설계 확정 · 코드 미구현)
+#### ⚠ 이 구조는 스토리 모드에서 폐기된다 (씬 배선만 미구현 — 코드는 있다)
 
-**`곡 선택 씬 → 전투 씬 → 종료 → 다시 곡 선택 씬`은 스토리 모드에 존재하지 않는다.** 플레이어는 **심상세계를 3인칭으로 직접 걸어 다니고**, 괴물이 고여 있는 무대에 들어서면 **그 자리에서** 곡이 시작되며, 끝나면 그 자리에 선 채 세계가 이어진다. 근거와 서사 규율은 `docs/Story/Story_Overview.md` §1-1·§2-4에 있다.
+**`곡 선택 씬 → 전투 씬 → 종료 → 다시 곡 선택 씬`은 스토리 모드에 존재하지 않는다.** 플레이어는 **심상세계를 3인칭으로 직접 걸어 다니고**, 괴물이 고여 있는 무대에 들어서면 곡이 시작되며, 끝나면 **떠난 그 자리에 선 채** 세계가 이어진다. 근거와 서사 규율은 `docs/Story/Story_Overview.md` §1-1·§2-4에 있다.
 
-- **모드가 둘로 갈린다**(`GameMode`) — **Story**(심상세계, 곡 선택 없음) / **FreePlay**(해금된 곡만 다시 치기). **`SongSelectScene`·`SongSelectManager`는 삭제하지 않는다** — FreePlay 전용으로 소속만 바뀐다. ⚠ **FreePlay 결과는 파편·등급 기록·엔딩 판정 어디에도 쌓이지 않는다**(쌓이면 서사가 성적표의 부산물이 된다).
-- **곡은 고르는 것이 아니라 자리에 딸린다** — 무대 하나가 `Encounter` 컴포넌트로 자기 `SongChart`를 들고, `EncounterDirector`가 진입 감지 → 곡 시작 → 종료 후 탐색 복귀를 맡는다. **`ChartPlayer`·`PatternHandler`·`EnemyDirector`는 한 줄도 안 고친다** — `GameSession.SelectedChart` 경로가 그대로 살아 있고 FreePlay가 계속 쓴다.
-- **⚠ 재도전은 UI가 아니라 장소다.** 그 곡을 `SSS`로 못 낸 자리는 **아직 얕게 일렁이고**, 다시 들어서면 같은 곡이 다시 시작된다. 재도전 메뉴·확인 창이 없다 — "들어서면 시작된다"는 규칙이 처음과 재도전에서 똑같이 작동할 뿐이라 **새로 배울 규칙이 0이다**. 등급은 **최고 기록으로만 갱신**되고, 트루 엔딩(전 곡 `SSS`)으로 가는 세계는 **일렁임이 하나도 없는 세계**라 진행도 UI가 필요 없다.
-- **무대 하나 = 씬 하나 = 곡 하나**이며, 씬 안에 전투 원(`stageRadius` 8m)과 그 주위 탐색 영역이 함께 있다. **무대 중심은 여전히 월드 원점**이라 §11-2의 배치·이격·프레이밍, §13의 배치표 좌표, 라이트맵이 전부 그대로다 — **이 개편은 무대 안을 건드리지 않는다.** 씬 경계는 골목·계단참 같은 **좁고 시야가 막힌 통로**에만 둔다.
-- **⚠ 이 개편의 유일한 위험 지점은 플레이어 위치의 소유권이다** — §11-2 참조.
+- **씬은 셋으로 나뉜다** — `Explore_Stage{N}`(탐색 + 그 무대의 복제 구조) / `BattleScene`(전투 오브젝트 일습 한 벌) / `StageBackground_Stage{N}`(프롭·라이트만, 전투 씬에 **가산 로드**).
+  - **⚠ 나눈 이유는 하나뿐이다** — 전투 오브젝트 일습(Canvas·`PatternHandler`·`EnemyDirector`·`CameraDirector`·vcam들·`Pool`)을 **한 벌만 유지**하는 것. 탐색 씬마다 복제하면 노브 하나가 여섯 씬 수정이 된다. **그 이득이 사라지는 변경(탐색 씬에 전투를 심는 것)은 하지 않는다.**
+  - **⚠ 배경이 프리팹이 아니라 씬인 이유**: 베이크 라이트맵은 씬에 딸린다. 실시간 전환은 불가하다 — `BattleScene`의 라이트가 **Point 12 + Directional 1**인데 URP `PC_RPAsset`의 `AdditionalLightsPerObjectLimit`이 **4**라, 오브젝트당 4개만 골라 쓰고 나머지를 버려 **바닥과 벽이 다른 라이트로 켜진다**.
+  - **⚠ 성립 조건은 "이음매가 안 보인다" 하나다.** 경계에 로딩 화면·진행바·확인 창·스테이지 이름을 두지 않는다(`ScreenFader`의 검은 페이드뿐). 하나라도 띄우면 세계가 자기가 스테이지들의 묶음이라고 자백한 셈이 되어 `Story_Overview.md` §0이 깨진다.
+  - **⚠ 탐색 씬에도 그 무대를 같은 배치표로 세우고 중심을 월드 원점에 맞춘다**(§13 `Build Stage Layout`을 그 씬에서 한 번 더 돌린다). 전환 전후로 플레이어가 같은 자리에 서게 하는 것이 페이드의 일을 절반으로 줄인다.
+  - **⚠ 4스테이지는 탐색 씬이 둘이다**(`Explore_Stage4a`/`4b` — 「면을 쓴 자」의 4-b가 같은 실내의 안쪽 방이다). 원점에 놓을 수 있는 무대가 하나뿐이라서다. 그래서 **스테이지 수와 탐색 씬 수가 다르고**, 씬 이름을 `stageIndex`에서 파생시키면 안 된다.
+- **모드가 둘로 갈린다**(`GameMode`) — **Story**(심상세계, 곡 선택 없음) / **FreePlay**(해금된 곡만 다시 치기). **`SongSelectScene`·`SongSelectManager`는 삭제하지 않는다** — FreePlay 전용으로 소속만 바뀐다. **`GameSession.ReturnScene`이 비어 있는 것이 곧 FreePlay**이고, 그러면 `BattleSceneBootstrap`이 곡 선택 씬으로 돌아가며 **`GameProgress`에 아무것도 남기지 않는다**(쌓이면 서사가 성적표의 부산물이 된다).
+- **곡은 고르는 것이 아니라 자리에 딸린다** — `Encounter`가 자기 `SongChart`를 들고, `EncounterDirector`가 진입 감지 → 복귀 정보 기입 → 전투 씬 로드를 맡는다. **`ChartPlayer`·`PatternHandler`는 한 줄도 안 고쳤다** — `GameSession.SelectedChart` 경로가 그대로 살아 있다(`SongSelectManager`가 이미 하던 일이라 **새 파이프라인이 아니라 그 경로의 재사용**이다).
+- **무대의 상태는 넷이고 전부 `GameProgress`에서 파생된다**(`Encounter.State`는 게터다 — 저장하면 등급과 어긋난 상태가 표현 가능해진다):
+
+| 상태 | 조건 | 일렁임 | 들어서면 |
+|---|---|---|---|
+| `Locked` | `unlockFlag`가 안 섰다 | 없음 | 아무 일도 안 일어난다 |
+| `Fresh` | 해금됐고 **완곡한 적이 없다** | 있음 | **곧바로 시작된다** |
+| `Retry` | 완곡했지만 `SSS`가 아니다 | 있음 | 프롬프트 → `Interact` → 재도전 |
+| `Done` | `SSS` | 없음 | 아무 일도 안 일어난다 |
+
+- **⚠ `Locked`과 `Done`은 화면에서 똑같이 조용하다.** 일렁임의 뜻이 "지금 여기 볼일이 있다"로 통일되기 때문이고, 그래서 자물쇠 아이콘·"아직 갈 수 없습니다" 문구가 하나도 필요 없다.
+- **⚠ 재도전 프롬프트는 기능 안내가 아니라 대사다**(`Encounter.retryText`, 예: *"아직 전부 처리하지 않았어"*). `"E — 다시 도전"`을 띄우지 않는다 — 게임이 자기 구조를 설명하는 것이라 §0이 막는 부류다. **찜찜함이 곧 유도**다.
+  - **⚠ 이것이 §13 프롬프트 금지의 유일한 예외다** — 배경 도상과 「닫힌 문」에는 여전히 아무것도 안 붙는다. 도상 쪽에 프롬프트가 하나라도 생기면 예외가 규칙을 잠식한 것이다.
+  - **⚠ 멈춰 세우지 않는다.** 모드는 `Explore` 그대로이고 창을 띄워 확인받는 구조가 아니다 — 걸어 다니는 채로 한 줄이 떠 있고 키 하나가 살아 있는 것뿐이라 복구 경로가 필요 없다.
+  - **⚠ 대사 창의 주인이 둘이 되는 문제는 `DialogUI`가 끝낸다** — `SetDialog`(브리핑)가 언제나 이기고, 그 대사가 끝나면 프롬프트가 되돌아온다(`ShowPrompt`/`HidePrompt`). 그래서 `Encounter`는 시퀀스가 도는지 알 필요가 없다.
+  - **⚠ `Fresh`에는 프롬프트가 없다.** 처음에도 확인을 요구하면 그 확인 창이 곧 "스테이지 선언"이다. **새로 배우는 규칙은 "끝낸 자리는 말을 걸어야 다시 열린다" 하나뿐**이다.
+- **진행의 조건은 완곡이지 성적이 아니다.** 등급이 `D`여도 다음으로 간다 — **⚠ 이것은 엔딩이 갈리기 위한 필수 조건이다**: 성적으로 잠그면 못 깬 플레이어가 끝에 도달할 수 없어 **배드 엔딩이 표현 불가능**해진다(`Story_Overview.md` §6).
+  - **완곡은 플래그 하나를 세운다**(`Encounter.completeFlag`). **해금 플래그와 같은 이름 공간**이라 시퀀스의 `WaitFlagStep`도 다음 무대의 `unlockFlag`도 그대로 읽는다 — 세우는 주체만 다르다(`UnlockStep` vs `BattleSceneBootstrap`).
+  - **⚠ 도중에 끊기면 아무것도 기록하지 않는다.** 목숨이 0이면(§7-6) 곡을 끊고 되돌아가며 등급도 완곡 플래그도 안 남는다. **패배 화면이 없다** — 그 무대는 `Fresh` 그대로라 다시 들어서면 곧바로 시작된다. ⚠ 여기서 `ReportGrade`가 새어 나가면 죽은 곡의 낮은 등급이 박혀 **`Fresh`가 `Retry`로 바뀐다**.
+- **해금은 시퀀스가 하나씩 연다**(§15). 스토리 씬의 특정 지점을 지나면 `SequenceZoneTrigger`가 시퀀스를 재생하고, 그 시퀀스의 `UnlockStep`이 플래그를 세운다. **해금 순서표·의존 그래프를 만들지 않는다** — "하나씩"은 시퀀스가 재생되는 순서가 이미 표현하고 있고, 순서를 두 곳에 적으면 어긋난 조합이 조용히 만들어진다.
+  - **⚠ 브리핑이 "그 장소를 처음 열 때만" 재생되는 것도 같은 플래그가 한다**(`SequenceZoneTrigger.onceFlag`). "들었다"를 기록하는 상태를 새로 만들지 않는다.
+  - **⚠ `SequenceRunner.SetFlag`와 `GameProgress.SetFlag`는 다른 물건이다.** 러너 쪽은 **씬 한정 런타임 조건**이라 전투 씬을 다녀오면 사라지고, `GameProgress` 쪽은 영구 진행도다. 합치지 않는다.
+- **잡몹·튜토리얼 전투도 `Encounter`다** — 적 1~2마리(`Encounter.clusterSizeOverride` → `EnemyDirector.SetClusterSize`), 패턴 2~3개, 10초 안팎의 짧은 `SongChart`. **탐색 씬에 전투를 심지 않는다**: 이 게임에서 벤다는 것은 `PatternHandler` 입력 → 판정 → `CharacterActionPlayer` 재생이라 연습용 적 한 마리도 전투 오브젝트 일습을 통째로 요구한다.
+  - **연습 모드를 따로 만들지 않는다** — `Retry` 상태가 이미 반복 진입이라 튜토리얼 자리가 그대로 연습장이다.
+  - **⚠ 짧은 곡일수록 전환 비용이 도드라진다.** 잡몹은 길목마다 뿌리지 말고 몇 군데에만 둔다. 그것이 실제로 리듬을 끊으면 그때 여는 문은 **전투 일습을 `CombatRig.unity`로 추출해 Additive로 올리는 것**이다(그러면 전환이 통째로 사라진다).
+- **진행도 저장은 `GameProgress` 하나가 든다**(자리별 최고 등급 + 플래그). **⚠ `PlayerPrefs`는 임시 백엔드**이고, 저장 시스템이 생길 때까지 **다른 클래스가 `PlayerPrefs`를 직접 부르지 않는다** — 창구가 하나라 교체가 그 파일 안에서 끝난다.
+- **`ScreenFader`는 `Managers` 안에 산다**(§10). 씬이 언로드되는 동안에도 화면을 덮고 있어야 하므로 씬에 두면 자기가 먼저 사라진다.
+- **⚠ 복귀 좌표는 트리거가 아니라 플레이어의 그 순간 위치다.** 트리거 위치를 쓰면 매번 같은 자리에서 되살아나 "그 자리에 선 채 이어진다"가 깨진다.
+- **⚠ 복귀하면 플레이어는 대개 그 무대의 트리거 안에 서 있다.** 그대로 두면 같은 곡이 즉시 다시 시작되는 무한 루프라, `ExploreSceneBootstrap`이 그 자리를 `SuppressUntilExit`로 잠그고 **한 번 벗어나야** 다시 열린다. **이 개편에서 가장 미묘한 지점이다.**
+- **⚠ 로드는 단일(Single)이다.** 탐색 씬을 켜 둔 채 전투를 얹으면 라이트·오디오 리스너·`EventSystem`·플레이어가 둘씩 생긴다. `StageBackground`만 가산이다.
+- **무대 중심은 여전히 월드 원점**이라 §11-2의 배치·이격·프레이밍, §13의 배치표 좌표가 전부 그대로다 — **이 개편은 무대 안을 건드리지 않는다.** 씬 경계는 골목·계단참·안쪽 방의 문 같은 **좁고 시야가 막힌 통로**에만 둔다.
+- **⚠ 씬이 나뉘면서 §11-2의 "유일한 위험 지점"(플레이어 위치의 소유권)이 구조적으로 소멸했다** — 두 무버가 같은 씬에 없다. `PlayerModeDirector`는 남는다(`Cutscene`/`Overlay`가 각 씬 안에서 여전히 필요하다).
+- **아직 안 된 것은 씬 배선뿐이다** — `Explore_*`·`StageBackground_*` 씬이 없고 `BattleScene`에서 배경을 분리하지 않았다. 코드는 전부 있다(`Encounter`·`EncounterDirector`·`BattleSceneBootstrap`·`ExploreSceneBootstrap`·`GameProgress`·`ScreenFader`·`UnlockStep`·`SequenceZoneTrigger`).
+- 상세: `docs/SceneSplit/`
 
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
 - **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
-- **`Managers` 프리팹**(`03. Prefabs/Managers.prefab`): **씬을 넘어 살아남아야 하는** 매니저만 한 덩어리로 든다 — `GameSession` · `SoundManager` · `SfxManager`. 씬마다 이 프리팹 인스턴스를 하나 놓는다.
+- **`Managers` 프리팹**(`03. Prefabs/Managers.prefab`): **씬을 넘어 살아남아야 하는** 매니저만 한 덩어리로 든다 — `GameSession` · `SoundManager` · `SfxManager` · `ScreenFader`. 씬마다 이 프리팹 인스턴스를 하나 놓는다. (⚠ `ScreenFader`가 여기 있는 이유는 **씬이 언로드되는 동안에도 화면을 덮고 있어야** 하기 때문이다 — 씬에 두면 자기가 먼저 사라진다.)
   - 자식들이 전부 `Singleton<T>`(`DontDestroy => true`)이고 `Singleton.Awake`가 **`transform.root`**에 `DontDestroyOnLoad`를 건다 → **루트째 씬을 넘어간다.**
   - **⚠ 그래서 루트에도 `ManagerRoot`(= `Singleton<ManagerRoot>`)가 붙는다.** 없으면 다음 씬의 인스턴스는 자식들만 각자 파괴되고 **빈 `Managers` 껍데기가 남아** 하이어라키에 같은 이름이 둘 보인다(디버깅할 때 엉뚱한 쪽을 연다). 새 로직은 0줄이다.
   - **⚠ 이 프리팹이 없는 씬은 조용히 무음이다** — `SoundManager.Instance` 게터가 카탈로그가 빈 인스턴스를 런타임에 만들어 낸다(에러가 안 난다).
@@ -610,6 +660,8 @@ Assets/
 - 파일명 규칙: `docs/{주제폴더}/Research_{주제}.md`, `docs/{주제폴더}/Plan_{주제}.md` (예: `docs/PatternLine/Plan_PatternLine.md`)
 - Research와 Plan은 동일한 `{주제}` 이름과 동일한 폴더를 공유하여 한 쌍임을 알아볼 수 있도록 한다.
 - 사용 방법/가이드 문서는 **`docs/!Guides/`** 하위에 작성한다. 파일명: `Guide_{주제}.md`
+- **⚠ 새 용어를 함부로 만들지 않는다.** `CLAUDE.md`와 설계 문서는 코드베이스·엔진·이 문서에 **이미 있는 말**로 쓴다. 코드에 없는 비유(예: "리그", "티켓")를 새로 지으면 그 말을 아는 사람이 지은 사람 하나뿐이라, 읽는 쪽이 무엇을 가리키는지 코드에서 되짚을 수 없다.
+- 그래도 새 용어가 꼭 필요하면 **첫 등장 자리 바로 아래에 한 줄 주석으로 정의한다** — 무엇을 가리키는지와 대응하는 실제 코드·에셋이 무엇인지. 정의 없이 두 번째 등장부터 쓰지 않는다.
 
 ### 1단계 — Research 문서 작성
 - 설계를 시작하기 전, 해당 설계와 관련 있는 기존 파일들(스크립트, 씬, 에셋 등)을 분석한다.
@@ -666,9 +718,9 @@ Assets/
 - **가짜 흑막이 있다** — 「면을 쓴 자」(`Story_Overview.md` §4-3). 4스테이지 씬 **안의 두 번째 무대(4-b)**에서 그를 베지만 아무것도 끝나지 않는다. 그가 요구하는 신규 코드는 **`Encounter.clusterSizeOverride` 필드 하나뿐**이며(한 씬에 `Encounter`가 둘이라 `EnemyDirector.clusterSize`를 씬 단위로 못 둔다), 나머지는 전부 기존 파라미터(`killOnSuccess` 사슬 · `DeathSliceSet` 조각 교체 · 이격 규칙)다. ⚠ **그에게 목소리·발광·아웃라인·전용 스팅어를 주지 않는다.**
 - **⚠ 서사 진행과 전투는 같은 공간·같은 흐름 안에 있다**(`Story_Overview.md` §1-1) — 곡 선택 씬과 전투 씬을 오가던 구조는 스토리 모드에서 폐기됐다. **§9가 그 구조를, §11-2가 그 유일한 위험 지점(위치 소유권)을 다룬다.** 여기서는 그것이 서사에 요구하는 것만 적는다:
   - 튜토리얼·결과·수집·엔딩 **씬 4개가 폐기됐다** — 각각 1스테이지 시작 구간 / 무대 위 오버레이 / 오버레이 / 5스테이지 씬 안에서의 연속으로 흡수. **신규 씬은 심상세계 5 + 병실 1**뿐이다.
-  - **카시마의 브리핑은 화면이 아니라 자리다** — 무대로 가는 통로 옆에 서서 한 줄 하고 물러난다. ⚠ **그 장소를 처음 열 때만 재생된다**(되돌아가면 없다 — 반복되면 대사가 환경음이 되고 태도 곡선이 죽는다).
+  - **카시마의 브리핑은 화면이 아니라 자리다** — 무대로 가는 통로 옆에 서서 한 줄 하고 물러난다. ⚠ **그 장소를 처음 열 때만 재생된다**(되돌아가면 없다 — 반복되면 대사가 환경음이 되고 태도 곡선이 죽는다). 저작 수단은 §15의 시퀀스이고, 이동을 멈추지 않으므로 **`holdMode = Keep`**이다.
   - **⚠ 「등을 보인 사람」의 "다가갈 수 없다"는 근거가 바뀌었다.** 예전 근거(무대 원 8m 밖 = 구조적 도달 불가)는 탐색이 생기며 무효다. 지금은 **다가가면 페이드 아웃하고 다시 안 나타난다** — ⚠ 벽·프롬프트로 막지 않는다(막으면 "게임이 아껴 둔 캐릭터"가 된다).
-  - **⚠ 「닫힌 문」과 모든 배경 도상 앞에 상호작용 프롬프트를 두지 않는다.** 이제 걸어가서 들여다볼 수 있지만 **가까이 가도 아무 일이 없어야** 한다. 콜라이더는 이때 처음 필요해지지만 **무대 원 안에는 여전히 두지 않는다**(전투 이동이 물리를 안 본다).
+  - **⚠ 「닫힌 문」과 모든 배경 도상 앞에 상호작용 프롬프트를 두지 않는다.** (⚠ 이 규칙의 **유일한 예외는 `Retry` 상태의 무대**다 — §9. 그것도 기능 안내가 아니라 대사이며, 도상 쪽에 프롬프트가 하나라도 생기면 예외가 규칙을 잠식한 것이다.) 이제 걸어가서 들여다볼 수 있지만 **가까이 가도 아무 일이 없어야** 한다. 콜라이더는 이때 처음 필요해지지만 **무대 원 안에는 여전히 두지 않는다**(전투 이동이 물리를 안 본다).
   - **⚠ 탐색 구간에 목표 마커·미니맵·퀘스트 로그가 없다.** 길은 "괴물이 있는 쪽만 무너져 있다"가 정한다.
 - **서사가 요구하는 신규 코드는 이것이 전부다**(전부 미구현, 근거는 `Story_Overview.md` §9):
   0. **`PlayerExploreMover` · `EncounterDirector` + `Encounter` · 자리별 최고 등급 저장 · 일렁임 VFX on/off · `GameMode`(Story/FreePlay)** — §9의 개편분. 전부 작은 소비자이고 기존 전투 코드를 수정하지 않는다.
@@ -685,3 +737,25 @@ Assets/
 - **⚠ 무대 원 안은 반드시 평면이다**(반경 8m, 5스테이지는 3.5m). 플레이어·적 이동이 전부 `transform.position` **대입**이라 경사면을 못 탄다(§11-2) — 경사·계단·단차는 **무대 원 밖 배경으로만** 놓는다.
 - 무대 중심은 월드 원점이고 씬의 `Stage` 오브젝트가 거기 있다(§11-2) — 배치표도 그 전제 위에서 좌표를 적는다.
 - 상세: `docs/Story/`
+
+### 15. 시퀀스 (SequenceSystem)
+- **대사·브리핑·컷신을 에셋으로 저작하고 씬에서 재생한다.** 셋으로 갈린다 — **정의는 `SequenceAsset`(SO), 실행과 씬 배선은 `SequenceRunner`(씬), 로직은 `SequenceStep`(코드)**. 예전에는 씬에 상태 게임오브젝트를 여러 개 늘어놓는 방식이라 대사 한 줄 고치는 데 씬을 열어야 했고 씬 diff가 오염됐다.
+- **⚠ 제약 하나가 설계 전체를 정한다 — ScriptableObject는 씬 오브젝트를 참조할 수 없다.** 시퀀스가 씬 전용 일회성이어도 마찬가지다. 그래서 **위치는 좌표(`Vector3`)로 박고**(무대 중심이 월드 원점 고정이라 그 씬의 그 자리는 영원히 같은 값이다 — §11-2 · §13), 오브젝트가 필요할 때만 러너의 **슬롯**을 거친다.
+  - **슬롯 키가 전역 enum이 아니다** — 스테이지마다 시퀀스가 늘면 항목이 한 enum에 전부 쌓여 **대사 하나 추가하는 콘텐츠 작업이 코드 수정을 요구하게 된다.** 에셋이 `requiredBindings`로 자기 슬롯을 선언하고 러너 인스펙터가 그 이름마다 칸을 그린다. 스텝은 `[SequenceSlot]`이 붙은 문자열을 **드롭다운**으로 고르므로 오타가 불가능하다(스텝이 에셋 안에 직렬화돼 있어 드로어가 `serializedObject.targetObject`로 그 에셋을 되짚을 수 있다는 사실이 이걸 성립시킨다).
+  - ⚠ 슬롯은 **이름**으로 참조한다(인덱스가 아니라). 인덱스는 저작 중 순서를 바꾸면 조용히 다른 것을 가리킨다.
+- **⚠ `Time.timeScale`을 쓰지 않는다 — `SequenceAsset.holdMode`가 그 자리를 대신한다.** §7-3의 금지 사항이며(오디오는 timeScale 밖이라 판정이 영구 누적으로 어긋난다), 대사를 위해 시간을 멈출 것이 아니라 **조작과 위치의 주인을 정리**하면 된다. `Keep`(모드 유지 — 걸으면서 듣는 대사) / `Overlay`(멈춰 서서 보는 대사) / `Cutscene`(Timeline이 몬다).
+  - **이 필드 하나가 두 문제를 동시에 푼다** — timeScale 금지(§7-3)와 위치 소유권(§11-2). `MoveToStep`이 플레이어를 옮기려면 어차피 두 무버가 다 꺼져 있어야 하는데 `holdMode`가 그걸 이미 보장한다. `Keep`인데 플레이어를 옮기는 조합은 `OnValidate`가 경고한다.
+  - **⚠ 복구 경로가 셋이다** — 정상 종료 · `Stop()` · `OnDisable`. 하나라도 빠지면 *"시퀀스가 끝났는데 조작이 안 돌아온다"*가 된다(§14의 timeScale 복구와 같은 규율).
+- **⚠ 런타임 상태는 값 타입만 둔다.** 러너가 `CreateRuntimeCopy`(`MemberwiseClone`)로 **얕은 복사본**을 만들어 돌린다 — 안 그러면 경과 시간·완료 플래그가 **에셋에 그대로 직렬화된다.** 값 타입 필드는 갈라지지만 참조 타입은 공유하므로 **리스트에 `Add` 하는 식으로 수정하면 에셋 원본이 바뀐다.**
+- **⚠ 클래스 이름·네임스페이스를 바꾸면 저작해 둔 시퀀스가 끊긴다.** `[SerializeReference]`가 어셈블리·네임스페이스·이름으로 참조를 저장하기 때문(`Managed Reference missing`). 옮겨야 하면 `[MovedFrom]`을 붙인다. 네임스페이스는 `SequenceSpace`로 고정돼 있다.
+- **⚠ `IState`/`StateMachine`(`02. Scripts/StateMachine/`)을 공유하지 않는다.** 시퀀스는 선형 큐라 조건 전이도 AnyState도 없어 그쪽 기능이 전부 죽고, 인터페이스만 공유하면 `FixedExecute` 같은 빈 구현이 스텝마다 붙는다. **그 FSM은 현재 사용처가 0이다** — HFSM(`CompositeStateBase`)은 계층 전이를 표현할 수 없어 삭제했고, 전이 구성은 **실행 전에 확정한다**(해제 API를 두지 않는 이유이며 헤더 주석에 못박혀 있다).
+- **Timeline은 아래 계층이다 — 시퀀스가 위.** `TimelineStep`이 Timeline을 부르고 **Timeline은 시퀀스를 부르지 않는다**(양방향이면 주인이 둘이 된다). 조건부 대기·분기·대사는 시퀀스가, 정해진 시간축 연출·카메라 워크는 Timeline이 맡는다.
+  - **Timeline의 트랙 바인딩은 Timeline이 알아서 한다** — `PlayableDirector`가 씬에 들고 있으므로(우리 슬롯과 같은 해법) 우리는 *"어느 director인가"*만 배선한다.
+  - 타입이 `TimelineAsset`이 아니라 **`PlayableAsset`**이다(엔진 코어라 Timeline 패키지 어셈블리 의존이 안 생긴다). `extrapolationMode`는 재생 시작 시 코드가 `None`으로 못박는다 — 다른 값이면 끝나도 `Playing`이라 **스텝이 영원히 안 끝난다.**
+  - ⚠ Timeline Signal이 필요하면 `runner.SetFlag(...)`를 부르는 **단방향**으로만 붙인다(`WaitFlagStep`이 받는다).
+- **`WaitFlagStep`이 "스텝이 콜백을 직접 못 받는 조건"의 답이다** — 트리거 볼륨 진입, 버튼 누르기. 씬 쪽이 `SequenceRunner.SetFlag(name)`을 부르면 통과한다. 폴링이라 새 개념이 아니다(구 `FinishSequenceCondition`도 폴링이었다).
+- **저작의 체감 비용은 씬 뷰 핸들이 없앤다** — 러너를 선택하면 모든 `MoveToStep` 목적지에 `Handles.PositionHandle`이 뜨고 목적지들을 잇는 경로 폴리라인이 그려진다. *"MonoBehaviour가 편했다"*의 실체는 MonoBehaviour가 아니라 `Handles`가 주던 것이고, **경로 전체를 한눈에 보는 것은 오히려 예전 방식으로 못 하던 일이다.**
+- **대사 창은 `DialogUI` 하나이고 정적 `Instance`로 찾는다.** `Singleton<T>`를 안 쓰는 이유는 그 게터가 없을 때 **빈 게임오브젝트를 만들어 내기** 때문 — 자식 참조가 없는 껍데기보다 `null`이 낫다(`DialogStep`이 에러를 찍고 그 스텝만 건너뛴다). ⚠ 정렬 순서는 **`Canvas` 컴포넌트가 소유한다**(스크립트가 따로 들지 않는다). ⚠ 참조가 비면 `Awake`가 에러를 찍고 멈춘다 — 예전처럼 이름으로 자동 배선하면 인스펙터 배선을 매 실행 덮어써 프리팹 구조를 못 바꾼다.
+  - **⚠ UI 레지스트리(`UIManager`/`SubUIManager`)는 폐기됐다.** 씬의 UI 계층 6개 중 편입 대상이 하나도 없어 클라이언트가 `DialogUI` 하나뿐인 추상화였다. 특히 **`ScoreHudView`는 넣으면 안 된다** — `SubUIManager.Hide()`가 `SetActive(false)`인데 §14가 그것을 금지한다(`OnDisable`이 구독을 풀어 감춘 사이의 점수 변화를 놓친다). 새 화면(결과·일시정지·수집)도 같은 정적 접근자 4줄을 쓰고, **실제 클라이언트가 여럿 모이면 그때 레지스트리를 다시 만든다.**
+- **⚠ 아직 씬에 배선된 시퀀스가 하나도 없다.** 코드와 저작 도구만 있는 상태다. `SequenceRunner.Play()`를 부르는 것은 `SequenceZoneTrigger`(§9)이고 — **`EncounterDirector`가 아니다**(그쪽은 전투 진입만 맡는다) — 그 시퀀스의 마지막 `UnlockStep`이 다음 무대를 연다.
+- 사용법: `docs/!Guides/Guide_SequenceSystem.md` / 상세: `docs/GameFramework/`

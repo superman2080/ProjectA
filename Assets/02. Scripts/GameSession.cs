@@ -15,6 +15,30 @@ public class GameSession : Singleton<GameSession>
     /// </summary>
     public ScoreSpace.ScoreResult LastResult { get; set; }
 
+    /// <summary>
+    /// 떠난 탐색 씬의 이름. <b>비어 있으면 자유 연주다</b> — 곡 선택 씬으로 돌아가고
+    /// <see cref="GameProgress"/>에 아무것도 기록하지 않는다(CLAUDE.md §9).
+    /// </summary>
+    public string ReturnScene { get; set; }
+
+    /// <summary>떠난 자리. 돌아오면 여기 선다 — "그 자리에 선 채 세계가 이어진다".</summary>
+    public Vector3 ReturnPosition { get; set; }
+
+    /// <summary>떠난 방향(yaw).</summary>
+    public float ReturnYaw { get; set; }
+
+    /// <summary>어느 자리였나. 등급 기록의 키이며, 비면 기록하지 않는다.</summary>
+    public string EncounterId { get; set; }
+
+    /// <summary>완곡하면 서는 플래그(<c>Encounter.CompleteFlag</c>). 다음 무대의 해금이 이것을 읽는다.</summary>
+    public string CompleteFlag { get; set; }
+
+    /// <summary>배경 씬(<c>StageBackground_Stage{N}</c>) 선택에 쓴다.</summary>
+    public int StageIndex { get; set; }
+
+    /// <summary>그 무대의 적 수. 0이면 씬의 <c>EnemyDirector</c> 값을 그대로 쓴다.</summary>
+    public int ClusterSizeOverride { get; set; }
+
     protected override void Awake()
     {
         // 씬을 넘어와 이미 살아있는 인스턴스가 있으면(중복) 자신을 파기한다.

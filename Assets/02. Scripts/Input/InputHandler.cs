@@ -43,6 +43,12 @@ public class InputHandler : MonoBehaviour
     /// <summary>회피 입력(Player/Dodge = <c>&lt;Keyboard&gt;/space</c>). <c>Combat</c> 모드에서만 발행된다.</summary>
     public event Action OnDodgePressed;
 
+    /// <summary>
+    /// 상호작용 입력(Explore/Interact = <c>&lt;Keyboard&gt;/e</c>). <c>Explore</c> 모드에서만 발행된다.
+    /// 지금 이것을 듣는 것은 재도전 프롬프트 하나뿐이다.
+    /// </summary>
+    public event Action OnInteractPressed;
+
     /// <summary>지금 켜져 있는 맵.</summary>
     public PlayerInputMode Mode { get; private set; } = PlayerInputMode.Combat;
 
@@ -71,6 +77,12 @@ public class InputHandler : MonoBehaviour
         }
         inputActions.Player.Dodge.performed += HandleDodgePerformed;
 
+        // 자동생성 래퍼를 거치지 않고 이름으로 찾는다 - 위 Input1~9와 같은 관용구이며,
+        // 액션을 하나 더 넣어도 래퍼 재생성 타이밍에 컴파일이 걸리지 않는다.
+        interactAction = inputActions.Explore.Get().FindAction("Interact");
+        if (interactAction != null) interactAction.performed += HandleInteractPerformed;
+        else Debug.LogWarning("[InputHandler] Explore 맵에 Interact 액션이 없습니다 - 상호작용이 무반응입니다.", this);
+
         // 기본값은 전투다 — 배선만 하고 모드를 안 바꾼 씬은 예전과 똑같이 돈다.
         SetMode(Mode);
     }
@@ -95,13 +107,18 @@ public class InputHandler : MonoBehaviour
         else map.Disable();
     }
 
+    private InputAction interactAction;
+
     void OnDestroy()
     {
         inputActions.Player.Dodge.performed -= HandleDodgePerformed;
+        if (interactAction != null) interactAction.performed -= HandleInteractPerformed;
         inputActions.Player.Disable();
         inputActions.Explore.Disable();
         inputActions.Dispose();
     }
 
     private void HandleDodgePerformed(InputAction.CallbackContext _) => OnDodgePressed?.Invoke();
+
+    private void HandleInteractPerformed(InputAction.CallbackContext _) => OnInteractPressed?.Invoke();
 }
