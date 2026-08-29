@@ -276,6 +276,12 @@ public class CameraDirector : MonoBehaviour
     private float cameraYawVelocity;
 
     // 인트로 상태.
+    /// <summary>
+    /// 인트로 컷이 걸릴 때까지 지켜보는 최대 프레임 수. 실측은 3프레임이고, 넉넉히 잡아도
+    /// 스플라인 주행이 그만큼 늦게 시작될 뿐이라(60fps에서 0.1초 남짓) 대가가 거의 없다.
+    /// </summary>
+    private const int IntroCutGuardFrames = 8;
+
     private Coroutine introRoutine;
     private int introRestingPriority;
 
@@ -1085,14 +1091,24 @@ public class CameraDirector : MonoBehaviour
         introDolly.CameraPosition = 0f;
 
         // ⚠ 인트로에는 컷으로 들어간다. 우선순위가 올라가면 Brain은 게임플레이 vcam에서 이쪽으로 블렌드하는데,
-        // 그 블렌드가 도는 동안 화면의 구도는 여전히 게임플레이 카메라의 것이다 — 스플라인은 달리는데
-        // "정면을 보고 있다"로 읽히고, 블렌드가 카운트다운보다 길면 인트로 구도를 한 프레임도 못 본다.
+        // 그 블렌드가 도는 동안 화면의 구도는 여전히 게임플레이 카메라의 것이다 — 스플라인은 바닥에서 시작하는데
+        // 화면은 어깨너머 높이에서 출발하고, 블렌드가 카운트다운보다 길면 인트로 구도를 한 프레임도 못 본다.
         // 아래 blendTime은 마무리 블렌드(②) 몫으로만 쓰는데, 시작 블렌드(①)까지 같은 값을 먹으면
         // 창이 두 번 깎이는 것도 같은 이유로 잘못이다.
-        // ⚠ 한 프레임 기다린 뒤에 끊는다 — 블렌드는 Brain의 다음 갱신에서 만들어지므로 지금은 아직 없다.
         // 곡 시작 연출은 어차피 검은 화면에서 열리므로(BattleSceneBootstrap의 페이드) 컷이 보이지도 않는다.
-        yield return null;
-        brain.ActiveBlend = null;
+        //
+        // ⚠ 블렌드가 '나타날 때까지' 지켜본다. Brain이 우선순위 변화를 알아채는 프레임은 호출 시점과
+        // 스크립트 실행 순서에 따라 밀리므로, 한 프레임만 기다렸다 끊으면 아직 없는 것을 끊는 no-op이 되고
+        // 그 다음 프레임에 생긴 블렌드가 그대로 끝까지 돈다(실측: 씬 로드 경로에서 3프레임 뒤에 생겼다).
+        for (int guard = 0; guard < IntroCutGuardFrames; guard++)
+        {
+            yield return null;
+
+            bool introIsLive = ReferenceEquals(brain.ActiveVirtualCamera, introCamera);
+            if (introIsLive && !brain.IsBlending) break;
+
+            brain.ActiveBlend = null;
+        }
 
         // 곡 시작을 늦출 수는 없으므로, 블렌드가 창을 다 먹으면 인트로가 잘리는 쪽을 택한다.
         float travel = duration - brain.DefaultBlend.BlendTime;
