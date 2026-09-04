@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -30,6 +30,19 @@ public class SfxManager : Singleton<SfxManager>
             if (entry == null) continue;   // class라 리스트에 빈 칸이 생길 수 있다
             catalogByTrigger[entry.trigger] = entry;
         }
+
+        EnsureVoices();
+    }
+
+    /// <summary>
+    /// 보이스 풀을 채운다. <b>Awake가 아니라 사용 시점에도 부른다</b> —
+    /// 플레이 도중 스크립트가 리컴파일되면 직렬화 대상이 아닌 이 리스트만 비워진 채
+    /// 오브젝트가 살아남고 <c>Awake</c>는 다시 돌지 않는다. 그 상태로 재생하면
+    /// <c>voices[index]</c>가 범위를 벗어난다(에디터에서만 나는 증상이라 더 늦게 발견된다).
+    /// </summary>
+    private void EnsureVoices()
+    {
+        if (voices.Count > 0) return;
 
         for (int i = 0; i < voiceCount; i++)
         {
@@ -97,6 +110,9 @@ public class SfxManager : Singleton<SfxManager>
     private void PlayClip(AudioClip clip, float volume, float pitch)
     {
         if (clip == null) return;
+
+        EnsureVoices();
+        if (voices.Count == 0) return;
 
         int index = GetFreeVoiceIndex();
         AudioSource voice = voices[index];

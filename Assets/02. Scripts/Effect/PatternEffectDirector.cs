@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using EnemySpace;
 using PatternSpace;
 using UnityEngine;
@@ -46,6 +47,24 @@ public class PatternEffectDirector : MonoBehaviour
 
     [Tooltip("씬 시작 시 미리 인스턴스를 확보해 둘 패턴들. 곡 도중 Instantiate는 히치(=판정 손실)다.")]
     [SerializeField] private Pattern[] prewarmPatterns;
+
+    /// <summary>
+    /// 이 씬에서만 다른 프리팹으로 바꿔 끼운다. <b>패턴 에셋을 고치지 않는 것이 요지다</b> —
+    /// 튜토리얼의 표적은 짚단이라 피가 튀면 안 되는데, 그 패턴들은 실제 곡에서도 쓰여서
+    /// 큐를 고치면 전투에서 적한테 짚이 튄다.
+    ///
+    /// <para>무엇이 튀는지는 원래 <b>표적</b>의 성질인데 큐는 패턴이 소유한다(§7-4) —
+    /// 그 어긋남을 씬 단위로 메우는 자리다. 비우면 예전과 완전히 같다.</para>
+    /// </summary>
+    [Serializable]
+    public struct PrefabSwap
+    {
+        public GameObject from;
+        public GameObject to;
+    }
+
+    [Tooltip("이 씬에서 큐의 프리팹을 바꿔 끼운다(from -> to). 비우면 큐가 든 그대로 쓴다.")]
+    [SerializeField] private PrefabSwap[] prefabSwaps;
 
     /// <summary>패턴 인스턴스 하나의 결과. 예약과 조건이 <b>다른 시점에</b> 정해지므로 따로 든다.</summary>
     private sealed class PatternRun
@@ -95,6 +114,18 @@ public class PatternEffectDirector : MonoBehaviour
 
     void Awake()
     {
+        EnsurePool();
+    }
+
+    /// <summary>
+    /// 풀과 칼날 경로를 만든다. <b>Awake가 아니라 사용 시점에도 부른다</b> —
+    /// 플레이 도중 리컴파일되면 직렬화 대상이 아닌 이 둘만 null이 된 채 오브젝트가 살아남고
+    /// <c>Awake</c>는 다시 돌지 않아, 다음 큐 발사에서 NullReference가 난다(에디터 전용 증상).
+    /// </summary>
+    private void EnsurePool()
+    {
+        if (pool != null) return;
+
         var rootGo = new GameObject("[PatternEffectPool]");
         rootGo.transform.SetParent(transform, false);
         rootGo.SetActive(false);
@@ -360,12 +391,15 @@ public class PatternEffectDirector : MonoBehaviour
         // "정지"가 아니라 "소리가 끊겼다"로 읽힌다(카메라를 즉시 얼리는 규율과 같은 결).
         if (cue.Sfx != null) SfxManager.Instance.Play(cue.Sfx, cue.SfxVolume, cue.SfxPitch);
 
-        if (cue.Prefab == null) return;   // 소리 전용 큐는 여기서 끝
+        GameObject prefab = ResolvePrefab(cue.Prefab);
+        if (prefab == null) return;   // 소리 전용 큐는 여기서 끝
 
         Transform anchor = ResolveAnchor(cue.Anchor);
         if (anchor == null) return;   // 배선이 비면 그림만 조용히 빠진다
 
-        var view = pool.Rent(cue.Prefab, cue.PoolSize);
+        EnsurePool();
+
+        var view = pool.Rent(prefab, cue.PoolSize);
         if (view == null) return;
 
         Vector3 localPosition = cue.PositionOffset;
@@ -448,11 +482,27 @@ public class PatternEffectDirector : MonoBehaviour
 
                 // ⚠ IsUsable이 '소리만 있어도 true'로 넓어졌으므로 여기 null이 도달할 수 있다.
                 // 소리는 풀이 필요 없다 — SfxManager의 보이스 풀이 동시 재생을 감당한다.
-                if (cue.Prefab == null) continue;
+                GameObject prefab = ResolvePrefab(cue.Prefab);
+                if (prefab == null) continue;
 
-                pool.Prewarm(cue.Prefab, cue.PoolSize, cue.PoolSize);
+                pool.Prewarm(prefab, cue.PoolSize, cue.PoolSize);
             }
         }
+    }
+
+    /// <summary>
+    /// 이 씬에서 실제로 재생할 프리팹. <b>발사와 프리웜이 같은 함수를 거쳐야 한다</b> —
+    /// 한쪽만 거치면 곡 도중 <c>Instantiate</c>가 나서 히치가 그대로 판정 손실이 된다(§5).
+    /// </summary>
+    private GameObject ResolvePrefab(GameObject prefab)
+    {
+        if (prefab == null || prefabSwaps == null) return prefab;
+
+        for (int i = 0; i < prefabSwaps.Length; i++)
+            if (prefabSwaps[i].from == prefab && prefabSwaps[i].to != null)
+                return prefabSwaps[i].to;
+
+        return prefab;
     }
 
     /// <summary>뷰를 회수한다. <b>활성 목록에서 먼저 뺀다</b> — 히트스톱이 그 목록을 훑기 때문.</summary>

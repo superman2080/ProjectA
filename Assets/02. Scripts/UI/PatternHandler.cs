@@ -14,6 +14,18 @@ public class PatternHandler : MonoBehaviour
     [SerializeField] private float perfectWindow = 0.05f;
     [SerializeField] private float goodWindow = 0.10f;
 
+    [Tooltip("뒤에 대기 패턴이 없을 때, Deadline이 지난 뒤에도 마지막 노드 입력을 이만큼 더 받는다(초).\n" +
+             "판정 기준(Perfect/Good/Miss)과 임팩트 시각은 그대로다 - 늦은 입력은 여전히 Miss다.\n" +
+             "0이면 예전과 동일. 곡 재생 중에는 대기 패턴이 거의 항상 있어 사실상 튜토리얼용 손잡이다.")]
+    [Min(0f)]
+    [SerializeField] private float judgeGraceDuration = 0f;
+
+    [Tooltip("패턴이 완료된 직후 이만큼(초)은 입력을 받지 않는다. 마지막 타의 잔여 입력이 " +
+             "같은 프레임에 승계된 다음 패턴의 첫 노드로 새는 것을 막는다.\n" +
+             "채보의 엔트리 간 최소 간격이 0.4초라, 다음 패턴의 정상 입력은 완료로부터 최소 0.2초 뒤에 온다.")]
+    [Min(0f)]
+    [SerializeField] private float handoverIgnoreDuration = 0.08f;
+
     [Header("Line")]
     [SerializeField] private float lineFadeDuration = 0.2f;
 
@@ -160,6 +172,9 @@ public class PatternHandler : MonoBehaviour
     /// <summary>현재 입력을 받는 패턴. 선두 패턴이 완료/만료되면 즉시 다음 패턴으로 승계된다.</summary>
     private ActivePattern JudgeTarget => activePatterns.Count > 0 ? activePatterns[0] : null;
 
+    /// <summary>마지막으로 패턴이 완료/만료된 시각. 승계 직후의 잔여 입력을 거르는 데 쓴다.</summary>
+    private float lastCompletionTime = -999f;
+
     private readonly List<int> connectedIndices = new List<int>();
     private readonly bool[] hitAreaUsage = new bool[9];
     private readonly bool[] knobUsage = new bool[9];
@@ -271,7 +286,7 @@ public class PatternHandler : MonoBehaviour
         if (isKeyboardStroke)
         {
             var target = JudgeTarget;
-            if (target == null || Time.time > target.Deadline)
+            if (target == null || Time.time > ExpiryTimeOf(target))
                 EndStroke();
             return;
         }
@@ -294,7 +309,7 @@ public class PatternHandler : MonoBehaviour
     /// <summary>입력 시한(마지막 입력 시각 + goodWindow)이 지난 패턴을 종료한다. 남은 노드는 미입력이므로 전체 정답 보너스를 취소한다.</summary>
     private void ExpireOverduePatterns()
     {
-        while (JudgeTarget != null && Time.time > JudgeTarget.Deadline)
+        while (JudgeTarget != null && Time.time > ExpiryTimeOf(JudgeTarget))
         {
             var expired = JudgeTarget;
             if (!expired.IsComplete)
@@ -302,6 +317,30 @@ public class PatternHandler : MonoBehaviour
 
             CompletePattern(expired);
         }
+    }
+
+    /// <summary>
+    /// 패턴이 실제로 회수되는 시각. <b><see cref="ActivePattern.Deadline"/>과 다를 수 있다</b> —
+    /// Deadline은 임팩트 앵커(§6·§11)이자 판정 기준이라 절대 밀지 않고, 밀리는 것은 <b>회수</b>뿐이다.
+    ///
+    /// <para><b>왜 필요한가</b>: 중간 노드는 늦어도 입력이 먹지만(늦은 만큼 Miss로 판정되고 진행된다)
+    /// <b>마지막 노드만은 늦으면 패턴이 이미 없어서 아무 반응도 없다</b>. 그래서 마지막 노드의 지각 허용치만
+    /// 구조적으로 <c>goodWindow</c>(0.1초)로 좁고, 그 비대칭이 그대로 조작감이 된다.
+    /// <see cref="judgeGraceDuration"/>는 그 창만 늘린다 — <b>판정 결과는 그대로다</b>(늦으면 여전히 Miss).</para>
+    ///
+    /// <para><b>⚠ 뒤에 대기 패턴이 있으면 유예가 없다.</b> 늘린 만큼 다음 패턴의 승계가 밀리고,
+    /// 그 사이 입력이 이미 끝난 패턴으로 흘러 들어간다(채보는 엔트리 간격이 최소 0.4초다).
+    /// 유예는 <b>"다음 시퀀스가 아직 없을 때"</b>만 성립한다.</para>
+    ///
+    /// <para><b>⚠ 연타는 제외한다.</b> 연타의 입력 마감은 <c>MashInputDeadline</c>이 따로 들고 있어
+    /// 회수만 늦추면 <b>입력은 이미 닫혔는데 성패 확정과 마무리 일격만 늦게 오는</b> 어긋남이 된다.</para>
+    /// </summary>
+    private float ExpiryTimeOf(ActivePattern pattern)
+    {
+        if (judgeGraceDuration <= 0f) return pattern.Deadline;
+        if (pattern.IsMash || activePatterns.Count > 1) return pattern.Deadline;
+
+        return pattern.Deadline + judgeGraceDuration;
     }
 
     private const float DefaultExposureDuration = 0.5f;
@@ -435,6 +474,16 @@ public class PatternHandler : MonoBehaviour
 
     private void OnPointPressed(int index)
     {
+        // 승계 직후의 잔여 입력은 버린다. 완료(마지막 노드 판정)와 다음 패턴의 승계가 같은 프레임이라
+        // (CompletePattern), 마지막 타의 여운 - 더블탭 · 키 채터링 · 같은 Point 위에서 다시 튀는
+        // OnPointerEnter - 이 그대로 다음 패턴의 첫 노드 입력이 되어 큰 음수 delta로 Miss를 먹인다.
+        // ⚠ 이 위험은 연타가 이미 알고 막아 둔 것과 같은 것이다(연타는 완료를 미뤄 막는다).
+        //   일반 패턴은 완료를 미룰 수 없으므로(다음 패턴이 곧바로 판정 대상이어야 한다) 입력 쪽에서 막는다.
+        // ⚠ 정상 입력은 못 먹는다 - 다음 패턴의 첫 노드는 엔트리 최소 간격(0.4초) 때문에
+        //   완료로부터 최소 0.2초 뒤에야 자기 판정 창에 들어온다.
+        if (IsWithinHandover())
+            return;
+
         if (!IsDragging)
             BeginStroke();
 
@@ -450,7 +499,13 @@ public class PatternHandler : MonoBehaviour
         // 이번 패턴에서 이미 입력된 Point는 무시한다 (드래그 재진입 / 통과 노드 중복 방지).
         // connectedIndices는 패턴이 끝날 때마다 클리어되므로, 다음 패턴에서 같은 Point를 다시 쓸 수 있다.
         // (예전에는 이 역할을 Point.isBusy가 했는데, 그건 스트로크가 끝나야만 풀려 패턴 경계에서 입력이 삼켜졌다.)
-        if (connectedIndices.Contains(index))
+        //
+        // ⚠ 단 '지금 기다리는 노드'는 이 가드에서 빼야 한다. 이 기록에는 오답 입력도 함께 쌓이므로
+        //   (AppendPointToLine이 판정과 무관하게 부른다), 뒤에 나올 노드를 순서 전에 한 번 스치면
+        //   그 노드가 그 패턴에서 영영 막힌다 — 제때 눌러도 색도 소리도 없이 삼켜진다.
+        //   판정 대상은 Advance로 즉시 다음 노드로 넘어가고 한 패턴에 같은 인덱스가 두 번 나올 수 없으므로
+        //   (Pattern.OnValidate), 이 예외가 중복 판정을 만들지는 않는다.
+        if (connectedIndices.Contains(index) && index != JudgeTarget?.ExpectedPointIndex)
             return;
 
         if (connectedIndices.Count > 0)
@@ -464,6 +519,19 @@ public class PatternHandler : MonoBehaviour
         AddPattern(index);
     }
 
+    /// <summary>
+    /// 패턴 승계 직후의 무시 구간인가. <b>연타는 제외한다</b> — 연타는 창이 열린 순간부터
+    /// 타수를 세므로 앞머리를 버리면 그만큼 손해이고, 초과 타격 누수는 자기 완료 규칙이 이미 막는다.
+    /// </summary>
+    private bool IsWithinHandover()
+    {
+        if (handoverIgnoreDuration <= 0f) return false;
+        if (Time.time - lastCompletionTime >= handoverIgnoreDuration) return false;
+
+        var target = JudgeTarget;
+        return target == null || !target.IsMash;
+    }
+
     private void BeginStroke()
     {
         IsDragging = true;
@@ -474,16 +542,29 @@ public class PatternHandler : MonoBehaviour
             lineRenderer?.ClearLiveEndPoint();
     }
 
-    /// <summary>3x3 격자에서 a→b 직선이 정확히 통과하는 다른 노드의 인덱스를 반환한다. 없으면 -1.</summary>
+    /// <summary>
+    /// 3x3 격자에서 a→b 직선이 정확히 통과하는 <b>다른</b> 노드의 인덱스를 반환한다. 없으면 -1.
+    ///
+    /// <para><b>⚠ 같은 점은 자기 자신의 통과 노드가 아니다.</b> 중점 식은 <c>a == b</c>에 그 점을 그대로 돌려주므로
+    /// (중앙 4 → (1,1)과 (1,1)의 중점이 다시 (1,1)), 걸러내지 않으면 <see cref="OnPointPressed"/>가
+    /// <c>ForceDown</c>으로 자기를 다시 불러 <b>무한 재귀(StackOverflow)</b>가 된다.
+    /// 예전에는 중복 입력 가드가 그 재진입을 막아 드러나지 않았지만, 그 가드는 '지금 기다리는 노드'를 예외로 두므로
+    /// 종료를 거기에 기대면 안 된다 — 재귀를 끊는 책임은 이 함수에 있다.</para>
+    /// </summary>
     private static int GetPassThroughIndex(int a, int b)
     {
+        if (a == b) return -1;
+
         int rowA = a / 3, colA = a % 3;
         int rowB = b / 3, colB = b % 3;
 
         if ((rowA + rowB) % 2 != 0 || (colA + colB) % 2 != 0)
             return -1;
 
-        return (rowA + rowB) / 2 * 3 + (colA + colB) / 2;
+        int mid = (rowA + rowB) / 2 * 3 + (colA + colB) / 2;
+
+        // 중점이 두 끝점 중 하나면 '통과'가 아니다(대수적으로 a == b일 때만 나오지만, 재귀를 끊는 가드는 겹쳐 둔다).
+        return mid == a || mid == b ? -1 : mid;
     }
 
     private void OnPointReleased(int _)
@@ -760,6 +841,8 @@ public class PatternHandler : MonoBehaviour
     /// <summary>패턴을 종료하고 그 패턴에 속한 노드를 즉시 회수한 뒤, 다음 패턴을 판정 대상으로 승계한다.</summary>
     private void CompletePattern(ActivePattern pattern)
     {
+        lastCompletionTime = Time.time;
+
         activePatterns.Remove(pattern);
         ClearNodesOf(pattern);
 

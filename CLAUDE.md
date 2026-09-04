@@ -161,13 +161,16 @@ Assets/
 #### 통과 노드 자동 인식
 - 3x3 격자에서 a→b로 직선을 그을 때 정확히 가운데를 지나는 노드가 있으면(예: 1→3은 2를 통과) 자동으로 입력 처리한다.
 - 구현: `PatternHandler.GetPassThroughIndex(a, b)` → 통과 노드에 `ForceDown()`. 상세: `docs/PatternPassThrough/`
+- **⚠ 같은 점은 자기 자신의 통과 노드가 아니다**(`a == b`면 -1). 중점 식은 그 경우 자기를 그대로 돌려주는데, `ForceDown`이 `OnPointPressed`를 다시 부르므로 **무한 재귀(StackOverflow)**가 된다. 예전에는 중복 입력 가드가 그 재진입을 막아 드러나지 않았지만 그 가드는 '지금 기다리는 노드'를 예외로 두므로, **재귀를 끊는 책임은 이 함수에 있다**(가드에 기대면 안 된다).
 
 ### 2. 판정 시스템
 - `PatternHandler`가 판정을 담당한다. 윈도우(초): `perfectWindow`=0.05, `goodWindow`=0.10.
+  **⚠ 이 둘은 씬별 직렬화 값이다** — 난이도의 손잡이가 코드가 아니라 씬에 있다. `Tutorial` 씬은 0.10 / 0.25를 쓴다(연습이라 넓다). 값을 바꾸면 `Deadline`(= 마지막 노드 + `goodWindow`)도 같이 움직이고, 그것이 임팩트 앵커라 **절단·사망 클립·카메라·히트스톱이 전부 그만큼 뒤로 따라온다** — 어긋나는 게 아니라 같이 움직이므로 안전하다.
 - `AddPattern(int index)`가 입력을 판정한다:
   - **오답 인덱스**: `AllCorrect`만 취소하고 Miss 색 표시, 진행하지 않음(패턴 정체).
   - **정답 인덱스**: `delta = |Time.time - ExpectedTime|` → `Judge(delta)`로 Perfect/Good/Miss 결정. 정답 노드 위 "타이밍 Miss"는 진행(`Advance`)된다.
 - 판정 결과 `JudgementResult`(Perfect/Good/Miss)는 색상·이펙트·캐릭터 액션의 분기 키로 쓰인다.
+- **⚠ 지각 허용치가 노드마다 다르다 — 마지막 노드만 구조적으로 좁다.** 중간 노드는 아무리 늦어도 `Deadline` 전이면 입력이 먹고 진행되지만(늦은 만큼 Miss), 마지막 노드의 지각 허용치는 `goodWindow`(0.1초) 그 자체다 — 그 뒤엔 패턴이 이미 회수돼 **색도 소리도 없이 삼켜진다**. `PatternHandler.judgeGraceDuration`(기본 0 = 예전 동작)이 **회수만** 그만큼 미뤄 그 창을 넓힌다. **`Deadline` 자체는 안 민다** — 그것은 임팩트 앵커(§6·§11)라 밀면 절단·사망·카메라 정렬이 통째로 밀린다. 판정 결과도 안 바꾼다(늦으면 여전히 Miss). **뒤에 대기 패턴이 있으면 유예가 없고**(승계가 밀려 입력이 끝난 패턴으로 샌다) **연타도 제외**한다(입력 마감을 `MashInputDeadline`이 따로 든다). 곡 재생 중에는 대기 패턴이 거의 항상 있어 **사실상 튜토리얼용 손잡이**다.
 
 ### 2-1. 연타 노트 (MashNote)
 - **아무 노드나 눌러 타수를 채우는 구간.** 뮤즈대쉬 샌드백 · 태고의 달인 연타. `Pattern.isMash` + `mashTargetHits` + `mashHitClips`. **`Attacker.Player` 전용**이고 지정 타수를 채우면 성공, 못 채우면 실패다.
@@ -207,8 +210,10 @@ Assets/
 
 #### 입력 계층 규칙 (중요)
 - **중복 입력 방지의 진실의 원천은 `PatternHandler.connectedIndices` 하나다.** 이미 입력된 Point는 `OnPointPressed`의 가드에서 걸러진다. 이 기록은 **패턴이 끝날 때마다 클리어**되어 다음 패턴에서 같은 Point를 다시 쓸 수 있다. (예전 `Point.isBusy`는 스트로크가 끝나야 풀려 패턴 경계에서 입력을 삼켜 제거됨.)
+- **⚠ 그 가드에서 '지금 기다리는 노드'는 빠진다.** 이 기록에는 **오답 입력도 함께 쌓인다**(`AppendPointToLine`이 판정과 무관하게 부른다) — 그래서 예외가 없으면 **뒤에 나올 노드를 순서 전에 한 번 스친 순간 그 노드가 그 패턴에서 영영 막힌다.** 제때 눌러도 색도 소리도 없이 삼켜지므로 화면상 "마지막 노트만 입력이 안 되는" 것으로 보인다(`Pattern(6, 7, 3, 4)`처럼 손이 되돌아오는 배열에서 잘 난다). 판정 대상은 `Advance`로 즉시 다음 노드로 넘어가고 한 패턴에 같은 인덱스가 두 번 올 수 없으므로(`Pattern.OnValidate`), 이 예외가 중복 판정을 만들지는 않는다.
 - **`IsDragging`과 `IsMouseDragging`을 구분한다.** `IsDragging`은 키보드 스트로크 중에도 true다. `Point.OnPointerEnter`(지나가며 입력)는 반드시 **`IsMouseDragging`**을 봐야 한다(안 그러면 키보드 입력 중 마우스 호버만으로 입력됨).
 - 키보드 스트로크는 패턴 완료/만료 시 종료된다. **마우스 드래그는 패턴 경계에서 끊지 않는다**(다음 패턴으로 이어 그을 수 있어야 함).
+- **⚠ 승계 직후에는 입력을 잠깐 안 받는다**(`PatternHandler.handoverIgnoreDuration`, 기본 0.08초). 완료(마지막 노드 판정)와 다음 패턴의 승계가 **같은 프레임**이라(`CompletePattern`), 마지막 타의 여운 — 더블탭·키 채터링·같은 Point 위에서 다시 튀는 `OnPointerEnter` — 이 **그대로 다음 패턴 첫 노드의 입력이 되어 큰 음수 delta로 Miss를 먹인다.** 화면에서는 *"마지막 노트 근처만 판정이 이상하다"*로 보인다. §4가 말하듯 **이전 패턴의 마지막 노드와 다음 패턴의 첫 노드가 같은 Point인 쌍이 채보당 7~28개**라 흔하다. ⚠ **정상 입력은 못 먹는다** — 엔트리 최소 간격이 0.4초라 다음 패턴의 첫 노드는 완료로부터 최소 0.2초 뒤에야 자기 창에 들어온다. ⚠ **연타는 제외**한다(창이 열린 순간부터 타수를 세므로 앞머리를 버리면 손해이고, 초과 타격 누수는 §2-1의 완료 규칙이 이미 막는다). 이 위험을 연타는 처음부터 알고 막아 뒀고, 일반 패턴은 완료를 미룰 수 없어(다음 패턴이 곧바로 판정 대상이어야 한다) **입력 쪽에서** 막는다.
 - 상세: `docs/KeyboardInputStuck/`
 
 ### 4. 포커스 링 시스템
@@ -428,6 +433,7 @@ Assets/
 
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
+- **⚠ `Awake`에서 만드는 순수 C# 객체는 지연 생성으로 둔다**(`EnsurePool`/`EnsureVoices` 관용구). 플레이 도중 스크립트가 리컴파일되면 직렬화 대상이 아닌 그 필드만 null·빈 상태가 된 채 오브젝트가 살아남고 **`Awake`는 다시 돌지 않는다**. 증상이 원인과 멀다 — `EnemyDirector.pool`이 null이면 `PrepareStage`가 죽고 그것을 기다리던 `ChartPlayer` 코루틴이 끊겨 **곡이 아예 시작되지 않는다**. 현재 이 방식으로 자기 복구하는 곳: `EnemyDirector.pool` · `PatternEffectDirector.pool` · `SfxManager.voices` · `InputHandler.inputActions`(해제 가드).
 - **`Pool`**(Singleton): `PoolKey`(현재 `FallingNode`) → 프리팹 매핑(SerializedDictionary). `Get<T>(key, initializer)`로 대여, `Return(key, obj)`로 반납. 대여 대상은 `IPoolable`(OnSpawn/OnDespawn).
 - **`Managers` 프리팹**(`03. Prefabs/Managers.prefab`): **씬을 넘어 살아남아야 하는** 매니저만 한 덩어리로 든다 — `GameSession` · `SoundManager` · `SfxManager` · `ScreenFader`. 씬마다 이 프리팹 인스턴스를 하나 놓는다. (⚠ `ScreenFader`가 여기 있는 이유는 **씬이 언로드되는 동안에도 화면을 덮고 있어야** 하기 때문이다 — 씬에 두면 자기가 먼저 사라진다.)
   - 자식들이 전부 `Singleton<T>`(`DontDestroy => true`)이고 `Singleton.Awake`가 **`transform.root`**에 `DontDestroyOnLoad`를 건다 → **루트째 씬을 넘어간다.**
@@ -571,7 +577,7 @@ Assets/
 - **사슬 = `EnemyCue.killOnSuccess = false`의 연속.** 새 데이터 모델이 없다 — 상대가 비는 유일한 경로가 `KillOpponent`라, 안 죽이면 `BindReservation`의 `currentOpponent == null` 분기를 안 타고 **같은 적이 그대로 이어진다**(§11-1). 마무리는 `killOnSuccess`가 켜진 마지막 엔트리다.
 - **긴 패턴을 쪼개는 게 아니라 짧은 패턴을 잇는다.** 사슬 전체가 1~2초라, 그 구간은 무대를 가로지르는 대시가 아니라 **근거리 난타**로 읽힌다. ⚠ 사슬 동안 `TakeTargetForWindow`를 안 거치므로 **플레이어 이동이 0이다**(§11-2의 속도감이 그 구간만 멈춘다). 길게 저작하면 그대로 정지로 보인다.
 - **처치 = 마지막 타 성공 && 성공 수 >= `ceil(사슬 길이 × chainKillRatio)`.** 마지막 타 성공이 **필수**인 이유는 빗나간 임팩트에는 절단을 붙일 자리가 없기 때문이다(그 순간 적은 패링·회피 모션 중이다). 비율은 노브 하나로 "마지막 타만 본다"(0에 가까움)와 "전부 성공해야 한다"(1) 사이를 잇고, **비사슬 엔트리는 길이 1이라 어느 값에서도 1타 필요** — 기존 채보에 회귀가 없다.
-- **임계 미달로 살아남으면 카운터를 리셋하지 않는다.** 계속 맞아 온 적이라 다음 사슬의 성공이 누적돼 결국 죽는다 — 이게 "안 죽은 적이 곡 후반까지 쌓인다"를 막는 장치다.
+- **⚠ 카운터는 사슬 경계에서 접힌다 — 상대의 수명이 아니라 저작의 사슬이 단위다.** 사슬은 `killOnSuccess = false`가 이어지다 `true`인 엔트리에서 끝나고, **그 마지막 타를 해결하면 처치하지 못했어도 카운터를 0으로 되돌린다**(`ResolveReservation`). 그래야 위의 "비사슬 엔트리는 어느 값에서도 1타 필요"가 실제로 성립한다 — 예전에는 상대가 살아 있는 동안 계속 누적해서, **실패 한 번이 다음 길이-1 엔트리의 요구치를 2로 올렸다**(`hits=2, succ=1, 필요=ceil(1.2)=2`). 화면에서는 *"성공했는데 안 잘린다"*로 보이고, **실패가 없는 오토플레이에서는 절대 재현되지 않는다**(실측 채보 88엔트리 중 80개가 길이 1이라 흔했다). 사슬 <b>안</b>의 누적은 그대로다 — 중간 타를 놓쳐도 마지막 타까지의 성공 수가 임계를 채우면 죽는다.
 - **사슬 중간 타격에는 넉백이 없다**(`ResolveRetreatDistance`가 성공+`Attacker.Player`에 0을 돌려준다). 물러나면 재접근이 `TakeTargetForWindow`를 안 거쳐 매 타격 기어가는 구간이 생긴다(`docs/FailConverge/`). ⚠ `Attacker.Enemy`는 예외다 — 패링당해 밀려나는 것은 그 연출의 핵심이라 넉백이 살아 있고, 그래서 **사슬 안에 역할이 섞이면 그 타만 늘어진다**(굽기 툴이 경고한다).
 - **리액션은 패턴이 소유한다** — `Pattern.EnemyHit`(맞았는데 안 죽음) / `Pattern.EnemyParry`(막아냄). 고정 스테이트 이름이면 가로베기든 내려베기든 같은 모션이 나온다. 비우면 `EnemyView`의 `knockBack`/`parry` 스테이트로 폴백한다.
   - **⚠ `ImpactTime` 폴백 방향이 견제와 반대다.** 리액션은 **맞는 순간이 곧 시작**이라 미지정이면 임팩트에 시작한다(`ReactionLead`가 0). `ClipAlignment`의 기본 폴백(트림 끝 = 임팩트)을 그대로 쓰면 맞기도 전에 다 젖혀져 있다.

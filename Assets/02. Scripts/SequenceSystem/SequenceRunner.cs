@@ -53,7 +53,7 @@ namespace SequenceSpace
         void OnDisable()
         {
             // 복구 경로 셋 중 하나. 하나라도 빠지면 "시퀀스가 끝났는데 조작이 안 돌아온다"가 된다.
-            RestoreMode();
+            RestorePresentation();
         }
 
         /// <summary>처음부터 재생한다. 이미 재생 중이면 중단하고 다시 시작한다.</summary>
@@ -104,13 +104,13 @@ namespace SequenceSpace
         {
             if (!IsPlaying)
             {
-                RestoreMode();
+                RestorePresentation();
                 return;
             }
 
             runtimeSteps[stepIndex].Exit(context);
             runtimeSteps = null;
-            RestoreMode();
+            RestorePresentation();
         }
 
         /// <summary>씬 쪽(트리거 볼륨 등)이 <see cref="WaitFlagStep"/>을 통과시킬 때 부른다.</summary>
@@ -166,7 +166,7 @@ namespace SequenceSpace
             }
 
             runtimeSteps = null;
-            RestoreMode();
+            RestorePresentation();
             OnFinished?.Invoke();
         }
 
@@ -196,11 +196,17 @@ namespace SequenceSpace
         }
 
         /// <summary>
-        /// 재생 전 모드로 되돌린다. <b>멱등이다</b> — 종료 · <see cref="Stop"/> · <see cref="OnDisable"/>
-        /// 세 경로에서 전부 불리므로 여러 번 불려도 안전해야 한다.
+        /// 재생 전 모드로 되돌리고, 스텝이 화면에 남긴 것을 걷어낸다. <b>멱등이다</b> —
+        /// 종료 · <see cref="Stop"/> · <see cref="OnDisable"/> 세 경로에서 전부 불리므로
+        /// 여러 번 불려도 안전해야 한다.
         /// </summary>
-        private void RestoreMode()
+        private void RestorePresentation()
         {
+            // ⚠ 강조(HighlightStep)는 스텝이 끄지 않으면 화면에 남는다 - 켜고 끄는 것이 서로 다른 스텝이라
+            // 저작이 마지막 '끄기'를 빠뜨리거나 중단으로 거기에 닿지 못할 수 있다. 여기가 그 안전망이다.
+            // 씬에 강조 장치가 없으면 아무 일도 안 한다.
+            TutorialHighlightView.Instance?.Hide();
+
             if (!modeApplied) return;
 
             modeApplied = false;

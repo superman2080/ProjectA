@@ -1,3 +1,4 @@
+using Unity.Cinemachine;
 using UnityEngine;
 
 /// <summary>
@@ -27,15 +28,33 @@ public class PlayerExploreMover : MonoBehaviour
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
 
+    [Tooltip("LShift를 누르고 있을 때의 이동 속도 배수. 1이면 클립만 달리기로 바뀌고 속도는 그대로다.")]
+    [SerializeField] private float sprintSpeedMultiplier = 1.75f;
+
     [Tooltip("가는 쪽으로 도는 시간(초). 전투의 turnDuration과 별개다 — 저쪽은 상대를 보는 회전이고 이쪽은 진행 방향이다.")]
     [SerializeField] private float turnDuration = 0.12f;
+
+    [Header("Look")]
+    [Tooltip("마우스 시점으로 돌릴 탐색 vcam의 궤도. 비우면 시점 회전이 통째로 비활성된다.")]
+    [SerializeField] private CinemachineOrbitalFollow orbit;
+
+    [Tooltip("마우스 픽셀당 회전 각도. 마우스 델타는 이미 프레임 단위 이동량이라 deltaTime을 곱하지 않는다.")]
+    [SerializeField] private float lookSensitivity = 0.15f;
+
+    [SerializeField] private bool invertY = false;
 
     void Update()
     {
         if (inputHandler == null) return;
 
+        // 시점이 먼저다 - 같은 프레임에 이동이 새 yaw를 따라간다.
+        TickLook();
+
         Vector3 direction = ResolveDirection(inputHandler.MoveInput);
-        float speed = direction.sqrMagnitude > 1e-6f ? moveSpeed : 0f;
+        bool sprinting = inputHandler.SprintHeld;
+        float speed = direction.sqrMagnitude > 1e-6f
+            ? moveSpeed * (sprinting ? Mathf.Max(sprintSpeedMultiplier, 0.01f) : 1f)
+            : 0f;
 
         if (speed > 0f)
         {
@@ -49,7 +68,30 @@ public class PlayerExploreMover : MonoBehaviour
         }
 
         // 애니메이터는 CharacterActionPlayer만 안다 — 스테이트 이름을 여기서 복제하지 않는다.
-        if (actionPlayer != null) actionPlayer.SetExploreLocomotion(speed);
+        if (actionPlayer != null) actionPlayer.SetExploreLocomotion(speed, sprinting);
+    }
+
+    /// <summary>
+    /// 마우스 입력으로 궤도를 돌린다. <b>모드 가드가 없다</b> — 이 컴포넌트는 탐색에서만
+    /// <c>enabled</c>이고(<see cref="PlayerModeDirector"/>), 그것도 모자라 Explore 맵이 꺼지면
+    /// <c>LookInput</c>이 0이다(이중 안전).
+    ///
+    /// <para>범위·랩어라운드는 <c>InputAxis.Validate</c>가 든다 — 축의 성질이라 그 값을 여기서
+    /// 다시 클램프하면 진실의 원천이 둘이 된다.</para>
+    /// </summary>
+    // ponytail: 마우스(<Mouse>/delta) 기준 감도. 스틱은 축 값이라 deltaTime을 곱해야 맞는데,
+    // 지금 탐색은 마우스 전용이다. 패드를 실제로 지원할 때 장치별로 가른다.
+    private void TickLook()
+    {
+        if (orbit == null) return;
+
+        Vector2 look = inputHandler.LookInput * lookSensitivity;
+        if (look.sqrMagnitude < 1e-6f) return;
+
+        orbit.HorizontalAxis.Value += look.x;
+        orbit.VerticalAxis.Value += invertY ? look.y : -look.y;
+        orbit.HorizontalAxis.Validate();
+        orbit.VerticalAxis.Validate();
     }
 
     /// <summary>

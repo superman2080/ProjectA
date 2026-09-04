@@ -79,19 +79,42 @@ namespace SequenceSpace
             {
                 if (step == null) continue;
 
-                string slot = step switch
+                // 스텝 하나가 슬롯을 여럿 가리킬 수 있다(PatternDrillStep은 셋).
+                switch (step)
                 {
-                    MoveToStep move => move.ActorSlot,
-                    TimelineStep timeline => timeline.DirectorSlot,
-                    _ => null,
-                };
+                    case MoveToStep move:
+                        WarnIfUndeclared(step, move.ActorSlot);
+                        break;
 
-                if (string.IsNullOrEmpty(slot)) continue;
-                if (Array.IndexOf(requiredBindings, slot) >= 0) continue;
+                    case TimelineStep timeline:
+                        WarnIfUndeclared(step, timeline.DirectorSlot);
+                        break;
 
-                Debug.LogWarning($"[{name}] 스텝 {step.Label}이 선언되지 않은 슬롯 '{slot}'을 가리킵니다. " +
-                                 "Required Bindings에 추가하세요.", this);
+                    case PatternDrillStep drill:
+                        WarnIfUndeclared(step, drill.PatternHandlerSlot);
+                        WarnIfUndeclared(step, drill.TargetDirectorSlot);
+                        WarnIfUndeclared(step, drill.TargetAnchorSlot);
+                        break;
+
+                    case HighlightStep highlight:
+                        WarnIfUndeclared(step, highlight.TargetSlot);
+                        break;
+
+                    case WaitInputStep waitInput:
+                        WarnIfUndeclared(step, waitInput.PatternHandlerSlot);
+                        WarnIfUndeclared(step, waitInput.InputHandlerSlot);
+                        break;
+                }
             }
+        }
+
+        private void WarnIfUndeclared(SequenceStep step, string slot)
+        {
+            if (string.IsNullOrEmpty(slot)) return;
+            if (Array.IndexOf(requiredBindings, slot) >= 0) return;
+
+            Debug.LogWarning($"[{name}] 스텝 {step.Label}이 선언되지 않은 슬롯 '{slot}'을 가리킵니다. " +
+                             "Required Bindings에 추가하세요.", this);
         }
     }
 }

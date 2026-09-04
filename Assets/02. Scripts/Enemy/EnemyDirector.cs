@@ -666,6 +666,19 @@ namespace EnemySpace
 
         void Awake()
         {
+            EnsurePool();
+        }
+
+        /// <summary>
+        /// 적 풀을 만든다. <b>Awake가 아니라 사용 시점에도 부른다</b> —
+        /// 플레이 도중 리컴파일되면 직렬화 대상이 아닌 <c>pool</c>만 null이 된 채 오브젝트가 살아남고
+        /// <c>Awake</c>는 다시 돌지 않는다. 그 상태에서는 <see cref="PrepareStage"/>가 NullReference로 죽고,
+        /// 그 프리웜을 기다리던 <c>ChartPlayer</c>의 재생 코루틴이 통째로 끊겨 <b>곡이 시작되지 않는다</b>.
+        /// </summary>
+        private void EnsurePool()
+        {
+            if (pool != null) return;
+
             var rootGo = new GameObject("[EnemyPool]");
             rootGo.transform.SetParent(transform, false);
             rootGo.SetActive(false);
@@ -763,6 +776,7 @@ namespace EnemySpace
         /// </summary>
         private void Prewarm()
         {
+            EnsurePool();
             if (rosterPool == null) return;
 
             var seen = new HashSet<SliceSet>();
@@ -1626,6 +1640,17 @@ namespace EnemySpace
                         bool parried = !counterLanding && AttackerOf(r.template) != Attacker.Enemy && retreat <= 0f;
                         OnEnemyReacted?.Invoke(r.template, parried ? EnemyReaction.Parry : EnemyReaction.Evade, r.impactTime);
                     }
+
+                    // ⚠ 사슬의 마지막 타를 해결했으면 적이 살아남아도 카운터를 접는다.
+                    //    사슬의 정체성은 저작이 정한다 — killOnSuccess=false가 이어지다 true로 끝나는 구간 하나가 사슬이다.
+                    //    "같은 상대인 동안 계속 누적"으로 두면 런타임 정체성이 저작과 어긋나, 길이 1짜리 엔트리(이 채보의 88개 중 80개)에서
+                    //    실패 한 번이 다음 사슬의 요구치를 2로 올린다 — 화면에서는 "성공했는데 안 잘린다"가 되고,
+                    //    실패가 없는 오토플레이에서는 절대 재현되지 않는다.
+                    if (r.cue.killOnSuccess)
+                    {
+                        chainHits = 0;
+                        chainSuccesses = 0;
+                    }
                 }
             }
 
@@ -1653,6 +1678,11 @@ namespace EnemySpace
         /// (빗나간 임팩트에 절단을 붙이면 그 순간 적은 패링·회피 모션 중이라 처치 연출이 걸릴 자리가 없다).
         ///
         /// <para>비사슬 엔트리는 길이가 1이라 어느 비율에서도 1을 돌려준다 — <b>기존 채보에 회귀가 없다.</b></para>
+        ///
+        /// <para><b>⚠ 그 말이 성립하려면 카운터가 사슬 경계에서 접혀야 한다.</b> 여기 들어오는 <c>chainLength</c>는
+        /// "지금 사슬에서 해결한 엔트리 수"이고, 그 사슬은 <c>killOnSuccess = true</c>인 엔트리에서 끝난다 —
+        /// 처치하지 못한 채 끝났더라도 마찬가지다(<see cref="ResolveReservation"/>). 상대가 살아 있는 동안 계속 누적하면
+        /// 실패 하나가 다음 <b>길이 1</b> 엔트리의 요구치를 2로 올려 성공해도 안 죽는다.</para>
         /// </summary>
         private int RequiredHits(int chainLength) =>
             Mathf.Max(1, Mathf.CeilToInt(chainLength * chainKillRatio));

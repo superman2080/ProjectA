@@ -117,7 +117,12 @@ namespace SliceSpace
         /// </summary>
         /// <param name="token">패턴 인스턴스 토큰. <see cref="Resolve"/>가 같은 값으로 성패를 확정한다.</param>
         /// <param name="spawnOverride">발사 지점. 지정하면 <c>spawnAnchor</c> 대신 이 위치에서 날아온다(쏘는 적의 링 위치).</param>
-        public void Reserve(int token, SliceSet set, float startTime, float impactTime, Vector2 offset, Vector3? spawnOverride = null)
+        /// <param name="impactOverride">
+        /// 갈라지는 지점. 지정하면 씬의 <c>impactAnchor</c> 대신 이 위치를 쓴다.
+        /// 씬 앵커는 무대 정중앙 한 점이라 표적이 여러 자리에 서 있는 경우(튜토리얼의 다다미)를 표현할 수 없다.
+        /// <paramref name="spawnOverride"/>와 같은 값을 주면 표적은 이동하지 않고 그 자리에 선다.
+        /// </param>
+        public void Reserve(int token, SliceSet set, float startTime, float impactTime, Vector2 offset, Vector3? spawnOverride = null, Vector3? impactOverride = null)
         {
             if (set == null) return; // 무연출
 
@@ -142,7 +147,8 @@ namespace SliceSpace
             approach = Mathf.Max(approach, 0.01f);
 
             // 배치 오프셋은 스폰·임팩트 양쪽에 똑같이 실린다 — 경로가 기울지 않고 나란히 평행이동하도록.
-            Vector3 anchor = impactAnchor != null ? impactAnchor.position : transform.position;
+            Vector3 anchor = impactOverride
+                             ?? (impactAnchor != null ? impactAnchor.position : transform.position);
             var offset3 = new Vector3(offset.x, offset.y, 0f);
 
             reservations.Add(new Reservation

@@ -94,6 +94,12 @@ public class PlayerModeDirector : MonoBehaviour
         if (exploreCamera != null)
             exploreCamera.Priority = new PrioritySettings { Enabled = true, Value = explore ? explorePriority : 0 };
 
+        // 잠그는 것은 탐색 하나뿐이다 - 전투는 패턴인풋을 마우스로 이어 긋는다(CLAUDE.md §1).
+        // ⚠ 조건 대입만 쓴다. "if (explore) 잠그기" 형태면 반대 전이에서 푸는 것을 빠뜨려
+        //   곡 도중 커서가 사라진 채로 남는다.
+        Cursor.lockState = explore ? CursorLockMode.Locked : CursorLockMode.None;
+        Cursor.visible = !explore;
+
         WarnIfBothMoversLive();
     }
 

@@ -941,6 +941,15 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Sprint"",
+                    ""type"": ""Button"",
+                    ""id"": ""5b8f0f2a-1c44-4d67-9a13-2f0c5e8d7a31"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -1097,6 +1106,28 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
                     ""action"": ""Interact"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""9c1d4e77-3a52-42b8-8f0e-6d51c3b9a204"",
+                    ""path"": ""<Keyboard>/leftShift"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Sprint"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""2e7a6b10-8f39-4c0d-b5a7-14d8e0f6c93b"",
+                    ""path"": ""<Gamepad>/leftStickPress"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Sprint"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -1132,6 +1163,7 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         m_Explore_Move = m_Explore.FindAction("Move", throwIfNotFound: true);
         m_Explore_Look = m_Explore.FindAction("Look", throwIfNotFound: true);
         m_Explore_Interact = m_Explore.FindAction("Interact", throwIfNotFound: true);
+        m_Explore_Sprint = m_Explore.FindAction("Sprint", throwIfNotFound: true);
     }
 
     ~@IngameInputs()
@@ -1607,6 +1639,7 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Explore_Move;
     private readonly InputAction m_Explore_Look;
     private readonly InputAction m_Explore_Interact;
+    private readonly InputAction m_Explore_Sprint;
     /// <summary>
     /// Provides access to input actions defined in input action map "Explore".
     /// </summary>
@@ -1630,6 +1663,10 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Explore/Interact".
         /// </summary>
         public InputAction @Interact => m_Wrapper.m_Explore_Interact;
+        /// <summary>
+        /// Provides access to the underlying input action "Explore/Sprint".
+        /// </summary>
+        public InputAction @Sprint => m_Wrapper.m_Explore_Sprint;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1665,6 +1702,9 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
             @Interact.started += instance.OnInteract;
             @Interact.performed += instance.OnInteract;
             @Interact.canceled += instance.OnInteract;
+            @Sprint.started += instance.OnSprint;
+            @Sprint.performed += instance.OnSprint;
+            @Sprint.canceled += instance.OnSprint;
         }
 
         /// <summary>
@@ -1685,6 +1725,9 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
             @Interact.started -= instance.OnInteract;
             @Interact.performed -= instance.OnInteract;
             @Interact.canceled -= instance.OnInteract;
+            @Sprint.started -= instance.OnSprint;
+            @Sprint.performed -= instance.OnSprint;
+            @Sprint.canceled -= instance.OnSprint;
         }
 
         /// <summary>
@@ -1902,5 +1945,12 @@ public partial class @IngameInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnInteract(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Sprint" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnSprint(InputAction.CallbackContext context);
     }
 }

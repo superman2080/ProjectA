@@ -95,6 +95,8 @@ public class CharacterActionPlayer : MonoBehaviour
     [SerializeField] private AnimationClip quickshiftBackClip;
     [Tooltip("Sprint 스테이트의 Speed Multiplier 파라미터 이름.")]
     [SerializeField] private string sprintSpeedParam = "SprintSpeed";
+    [Tooltip("Sprint 스테이트에 물려 있는 클립. 탐색 걷기/달리기 교체의 키로 쓴다. 애니메이터의 Sprint 스테이트에 실제로 물린 그 클립이어야 한다(키가 안 맞으면 교체가 조용히 무시된다).")]
+    [SerializeField] private AnimationClip sprintClip;
     [Tooltip("Sprint 애니메이션이 1배속으로 보일 이동 속도(m/s). 배속 = 실제 이동속도 ÷ 이 값.\n" +
              "다리 회전이 실제 이동보다 빠르면(발이 미끄러지면) 이 값을 올리고, 느리면 내린다.\n" +
              "상한이 아니다 — 이 값을 넘는 속도로 이동하면 배속도 1을 넘는다.\n" +
@@ -619,6 +621,10 @@ public class CharacterActionPlayer : MonoBehaviour
             runSpeed = Mathf.Clamp(runSpeed, sprintSpeedRange.x, sprintSpeedRange.y);
             animator.SetFloat(sprintSpeedHash, runSpeed);
 
+            // ⚠ 매번 되돌린다. 탐색이 이 스테이트의 클립을 걷기로 갈아 놨을 수 있고,
+            //   그러면 결투 대시가 걷기 클립으로 나온다(ApplyQuickshiftClip과 같은 규율).
+            ApplySprintClip(sprintClip);
+
             // 배속이 바뀌었으므로 같은 스테이트라도 처음부터 다시 건다(SwitchBaseState는 같으면 조기 반환).
             animator.CrossFadeInFixedTime(sprintStateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
             currentBaseStateHash = sprintStateHash;
@@ -643,11 +649,23 @@ public class CharacterActionPlayer : MonoBehaviour
 
     // ── 탐색 로코모션 ────────────────────────────────────────────────────────
     [Header("Explore Locomotion")]
-    [Tooltip("이 속도 이상이면 Sprint, 미만이면 Idle. 걷기 클립이 없어 지금은 두 갈래뿐이다.")]
+    [Tooltip("이 속도 이상이면 걷기/달리기, 미만이면 Idle.")]
     [SerializeField] private float exploreMoveThreshold = 0.1f;
 
     [Tooltip("탐색이 base 레이어를 쥐고 있는 시간(초). 매 프레임 갱신되므로 짧아도 된다 — 탐색이 멈추면 저절로 풀린다.")]
     [SerializeField] private float exploreLocomotionLatch = 0.1f;
+
+    [Tooltip("탐색 걷기 클립(Walk). 비우면 Sprint 스테이트의 원본 클립 그대로 — 예전 동작.")]
+    [SerializeField] private AnimationClip exploreWalkClip;
+
+    [Tooltip("탐색 달리기 클립(Run). LShift를 누르고 있는 동안 이 클립으로 갈아 끼운다.")]
+    [SerializeField] private AnimationClip exploreRunClip;
+
+    [Tooltip("걷기 클립이 1배속으로 보일 이동 속도(m/s). sprintReferenceSpeed와 같은 뜻이고 클립이 달라 값만 다르다.")]
+    [SerializeField] private float exploreWalkReferenceSpeed = 1.6f;
+
+    [Tooltip("달리기 클립이 1배속으로 보일 이동 속도(m/s).")]
+    [SerializeField] private float exploreRunReferenceSpeed = 4.5f;
 
     /// <summary>
     /// 탐색 이동의 로코모션을 건다. <b>base 레이어의 주인을 <see cref="convergeUntil"/> 래치로 넘겨받는다</b> —
@@ -657,10 +675,11 @@ public class CharacterActionPlayer : MonoBehaviour
     /// <para>래치를 안 걸면 <see cref="Update"/>의 복귀 로직이 <b>다음 프레임에 즉시 Idle로 덮는다</b>
     /// (수렴 로코모션이 같은 이유로 <c>convergeUntil</c>을 쓴다).</para>
     ///
-    /// <para><b>⚠ 걷기 클립이 없다</b> — <c>PlayerAnimator</c>의 base 레이어는 Idle/Sprint/Quickshift 셋뿐이라
-    /// 지금은 Sprint의 배속으로만 표현된다. 걷기 블렌드 트리는 별건이다.</para>
+    /// <para><b>걷기와 달리기는 클립으로만 갈린다</b> — <c>PlayerAnimator</c>의 base 레이어는
+    /// Idle/Sprint/Quickshift 셋뿐이고, Sprint 스테이트의 클립을 Walk/Run으로 갈아 끼운다
+    /// (<see cref="ApplySprintClip"/>). 방향별 블렌드 트리는 여전히 별건이다.</para>
     /// </summary>
-    public void SetExploreLocomotion(float travelSpeed)
+    public void SetExploreLocomotion(float travelSpeed, bool sprinting = false)
     {
         if (animator == null || runningLayerIndex < 0) return;
 
@@ -673,12 +692,34 @@ public class CharacterActionPlayer : MonoBehaviour
             return;
         }
 
+        // 걷기/달리기는 스테이트가 아니라 클립으로 갈린다 — 새 스테이트도 새 파라미터도 없다
+        // (백스텝이 Quickshift 클립만 갈아 끼우는 것과 같은 관용구).
+        AnimationClip clip = sprinting ? exploreRunClip : exploreWalkClip;
+        ApplySprintClip(clip != null ? clip : sprintClip);
+
+        float reference = sprinting ? exploreRunReferenceSpeed : exploreWalkReferenceSpeed;
+
         // 발이 지면을 긁지 않도록 실제 이동 속도에 배속을 맞춘다(수렴 경로와 같은 식).
-        float runSpeed = Mathf.Clamp(travelSpeed / Mathf.Max(sprintReferenceSpeed, 0.01f),
+        float runSpeed = Mathf.Clamp(travelSpeed / Mathf.Max(reference, 0.01f),
                                      sprintSpeedRange.x, sprintSpeedRange.y);
         animator.SetFloat(sprintSpeedHash, runSpeed);
         SwitchBaseState(sprintStateHash);
     }
+
+    /// <summary>
+    /// Sprint 스테이트가 재생할 클립을 갈아 끼운다(탐색 걷기 ↔ 달리기 ↔ 결투 대시).
+    /// <b>키는 언제나 원본 <see cref="sprintClip"/></b>이다 — <see cref="ApplyQuickshiftClip"/>과 같은 규율.
+    /// </summary>
+    private void ApplySprintClip(AnimationClip clip)
+    {
+        if (overrideController == null || sprintClip == null || clip == null) return;
+        if (appliedSprintClip == clip) return; // 같은 클립을 다시 대입하면 재생이 리셋된다
+
+        overrideController[sprintClip] = clip;
+        appliedSprintClip = clip;
+    }
+
+    private AnimationClip appliedSprintClip;
 
     /// <summary>
     /// Quickshift 스테이트가 재생할 클립을 갈아 끼운다(전진 ↔ 백스텝).

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: PatternChain(4, 6)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
-  - index: 3
   - index: 4
+  - index: 6
   attacker: 1
   enemyAttack:
     clip: {fileID: 0}

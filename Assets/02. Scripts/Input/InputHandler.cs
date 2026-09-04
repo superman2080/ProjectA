@@ -61,6 +61,13 @@ public class InputHandler : MonoBehaviour
     /// <summary>탐색 시점 입력(마우스 델타 / 스틱).</summary>
     public Vector2 LookInput => inputActions != null ? inputActions.Explore.Look.ReadValue<Vector2>() : Vector2.zero;
 
+    /// <summary>
+    /// 탐색 달리기(Explore/Sprint = <c>&lt;Keyboard&gt;/leftShift</c>)를 <b>지금 누르고 있는가</b>.
+    /// 이벤트가 아닌 것은 "눌린 동안"이 곧 상태라서다 — 누름/뗌 두 이벤트로 같은 상태를 재조립하면
+    /// 모드 전환 도중 놓친 뗌이 그대로 굳는다(맵이 꺼지면 이 값은 저절로 false다).
+    /// </summary>
+    public bool SprintHeld => sprintAction != null && sprintAction.IsPressed();
+
     void Awake()
     {
         inputActions = new IngameInputs();
@@ -82,6 +89,10 @@ public class InputHandler : MonoBehaviour
         interactAction = inputActions.Explore.Get().FindAction("Interact");
         if (interactAction != null) interactAction.performed += HandleInteractPerformed;
         else Debug.LogWarning("[InputHandler] Explore 맵에 Interact 액션이 없습니다 - 상호작용이 무반응입니다.", this);
+
+        sprintAction = inputActions.Explore.Get().FindAction("Sprint");
+        if (sprintAction == null)
+            Debug.LogWarning("[InputHandler] Explore 맵에 Sprint 액션이 없습니다 - 탐색이 걷기로만 돕니다.", this);
 
         // 기본값은 전투다 — 배선만 하고 모드를 안 바꾼 씬은 예전과 똑같이 돈다.
         SetMode(Mode);
@@ -108,9 +119,14 @@ public class InputHandler : MonoBehaviour
     }
 
     private InputAction interactAction;
+    private InputAction sprintAction;
 
     void OnDestroy()
     {
+        // 플레이 도중 스크립트가 리컴파일되면 이 필드(직렬화 대상이 아니다)만 null이 된 채
+        // 오브젝트가 살아남아, 플레이를 끝낼 때 여기서 NullReference가 난다.
+        if (inputActions == null) return;
+
         inputActions.Player.Dodge.performed -= HandleDodgePerformed;
         if (interactAction != null) interactAction.performed -= HandleInteractPerformed;
         inputActions.Player.Disable();
