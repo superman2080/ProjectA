@@ -40,6 +40,10 @@ namespace EnemySpace
         [Tooltip("끄면 이 층만 죽는다 — 나머지 연출은 그대로 돈다(기존 연출 토글 규율).")]
         [SerializeField] private bool dodgeEnabled = true;
 
+        [Tooltip("켜면 ArmNext()로 무장한 창에서만 발동한다. 튜토리얼처럼 지정한 패턴에서만 내보낼 때 쓴다. " +
+                 "끄면(기본) 예전 그대로 조건이 맞는 창마다 발동한다 - 곡이 도는 씬은 이 값을 건드리지 않는다.")]
+        [SerializeField] private bool requireArm;
+
         [Header("Clips")]
         [Tooltip("기습 클립의 진짜 출처는 EnemyDefinition.AmbushAttacks다. 이건 미배선 종류용 폴백이며,\n" +
                  "둘 다 비면 그 적은 기습 후보에서 빠진다(무연출 기습 = 회피할 대상이 없는 닷지 포인트).")]
@@ -120,6 +124,7 @@ namespace EnemySpace
         private bool hasStagedPlayerSpot;
 
         private bool hasEvent;      // 이번 공백에 기습이 예약됐는가
+        private bool armed;         // requireArm일 때만 본다 — 텔레그래프가 실제로 시작되면 내려간다
         private bool fired;         // 적 클립을 걸었는가(텔레그래프 시작)
         private bool dodgePointShown;   // 링이 떴는가 — 이 전의 입력은 무시한다
         private bool resolved;      // 성패가 정해졌는가
@@ -185,9 +190,27 @@ namespace EnemySpace
         ///
         /// <para>붙여 놓고 발동을 안 해도 손해가 없다. 그냥 배회로 돌아간다(§11-6: 보이는 이동은 아무 일도 아니다).</para>
         /// </summary>
+        /// <summary>
+        /// <b>다음 기습 하나를 무장한다.</b> <see cref="requireArm"/>가 켜져 있을 때만 뜻이 있다 —
+        /// 그때는 이 호출 전까지 어떤 창도 기습을 만들지 않는다.
+        ///
+        /// <para><b>한 번 쓰고 마는 래치가 아니라 <u>실제로 발동할 때까지</u> 남는다.</b> 창이 열려도
+        /// 후보가 없거나 못 따라오면 그 창은 그냥 지나가는데(그게 정상 경로다), 거기서 내려 버리면
+        /// 지정한 자리에서 수업이 통째로 사라진다. 텔레그래프가 시작되는 순간(<see cref="Fire"/>)에 내린다.</para>
+        ///
+        /// <para>쿨다운도 같이 푼다 — "여기서는 반드시 낸다"가 요구인데 직전 기습의 쿨다운이 남아 있으면
+        /// 그 요구가 조용히 어긋난다.</para>
+        /// </summary>
+        public void ArmNext()
+        {
+            armed = true;
+            cooldownUntil = 0f;
+        }
+
         private void HandleDuelScheduled(EnemyDirector.DuelPlan plan)
         {
             if (!dodgeEnabled || enemyDirector == null) return;
+            if (requireArm && !armed) return;           // 무장 전에는 사전 접근도 안 한다(적이 헛되이 움직인다)
             if (hasEvent) return;                       // 진행 중인 기습이 있으면 새로 붙이지 않는다
             if (Time.time < cooldownUntil) return;
 
@@ -286,6 +309,7 @@ namespace EnemySpace
         private void HandleIdleWindow(float start, float end)
         {
             if (!dodgeEnabled || enemyDirector == null || dodgePoint == null) return;
+            if (requireArm && !armed) return;
 
             // ⚠ 숫자를 둘로 나눠 든다(정정 5) — 요구가 둘이고 시계가 서로 다르다.
             //  standing: 플레이어가 서 있는 구간. 판정과 구르기가 여기 들어가야 한다.
@@ -475,6 +499,7 @@ namespace EnemySpace
             }
 
             fired = true;
+            armed = false;   // 여기까지 와야 무장을 내린다 — 위 Abort는 fired == false라 다음 창이 다시 시도한다.
 
             // ⚠ 플레이어의 <b>갈 자리</b>다(정정 5 함정 1). 시전이 도착 전에 시작되므로 현재 위치로 잡으면
             // 아직 출발도 안 한 자리를 찌른다 — 정정 2 B와 같은 실수다.

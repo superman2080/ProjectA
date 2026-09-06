@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using EnemySpace;
 using PatternSpace;
 using SliceSpace;
 using UnityEngine;
@@ -44,12 +45,28 @@ namespace SequenceSpace
         [Tooltip("씬에 미리 서 있는 다다미 몸통 슬롯. 표적 위치와 플레이어 목적지를 함께 준다. 비우면 걷지도 베지도 않는다.")]
         [SerializeField] private string targetAnchorSlot;
 
+        [SequenceSlot]
+        [Tooltip("전투 지시(cue)를 넘길 EnemyDirector 슬롯. 비우면 폴백 cue가 쓰여 " +
+                 "그룹의 패턴마다 적이 하나씩 죽는다(사슬이면 넷).")]
+        [SerializeField] private string enemyDirectorSlot;
+
+        [SequenceSlot]
+        [Tooltip("드릴이 시작될 때 첫 노드 슬로우를 무장시킬 TutorialDirector 슬롯. 비우면 감속이 없다 - " +
+                 "\"드릴의 첫 노드\"를 아는 것이 드릴뿐이라 무장을 여기서 건다.")]
+        [SerializeField] private string tutorialDirectorSlot;
+
         [Tooltip("갈라질 조각 세트. 비우면 표적이 서 있기만 한다.")]
         [SerializeField] private SliceSet target;
 
         [Tooltip("켜면 표적 앞까지 가기만 하고 끝난다. 도착한 뒤에 설명하고 싶을 때 쓴다 - " +
                  "뒤따르는 드릴이 같은 앵커를 가리키면 그쪽 걷기는 저절로 no-op이 된다.")]
         [SerializeField] private bool walkOnly;
+
+        [Tooltip("성공하면 허물 하나를 벤다(기본). 끄면 그룹을 성공해도 상대가 살아남는다 - " +
+                 "방어처럼 막는 것 자체가 수업인 드릴에 쓴다. 안 끄면 막아 낸 순간 적이 갈라져 " +
+                 "\"공격을 막았다\"가 아니라 \"공격해서 베었다\"로 읽힌다. " +
+                 "끈 드릴은 상대를 놓아주지 않으므로 다음 드릴이 같은 허물을 이어 상대한다(사슬과 같은 경로).")]
+        [SerializeField] private bool killOnSuccess = true;
 
         [Header("Approach")]
         [Tooltip("다다미에서 이만큼 떨어진 곳에 선다(미터).")]
@@ -98,6 +115,8 @@ namespace SequenceSpace
         [NonSerialized] private PatternHandler handler;
         [NonSerialized] private SliceTargetDirector director;
         [NonSerialized] private Transform anchor;
+        [NonSerialized] private TutorialDirector tutorialDirector;
+        [NonSerialized] private EnemyDirector enemyDirector;
         [NonSerialized] private Transform player;
 
         // 애니메이터는 CharacterActionPlayer만 안다 - 스테이트 이름을 여기서 복제하지 않는다.
@@ -116,6 +135,8 @@ namespace SequenceSpace
         public string PatternHandlerSlot => patternHandlerSlot;
         public string TargetDirectorSlot => targetDirectorSlot;
         public string TargetAnchorSlot => targetAnchorSlot;
+        public string TutorialDirectorSlot => tutorialDirectorSlot;
+        public string EnemyDirectorSlot => enemyDirectorSlot;
 
         public override void Enter(SequenceContext context)
         {
@@ -136,6 +157,14 @@ namespace SequenceSpace
             anchor = string.IsNullOrEmpty(targetAnchorSlot)
                 ? null
                 : context.Bindings.ResolveTransform(targetAnchorSlot, context.Runner);
+
+            tutorialDirector = string.IsNullOrEmpty(tutorialDirectorSlot)
+                ? null
+                : context.Bindings.Resolve<TutorialDirector>(tutorialDirectorSlot, context.Runner);
+
+            enemyDirector = string.IsNullOrEmpty(enemyDirectorSlot)
+                ? null
+                : context.Bindings.Resolve<EnemyDirector>(enemyDirectorSlot, context.Runner);
 
             // walkOnly면 패턴이 없는 것이 정상이다 - 이 스텝은 이동만 한다.
             if (!walkOnly && (handler == null || patterns == null || patterns.Length == 0))
@@ -180,6 +209,8 @@ namespace SequenceSpace
             handler = null;
             director = null;
             anchor = null;
+            tutorialDirector = null;
+            enemyDirector = null;
             player = null;
             actionPlayer = null;
         }
@@ -282,18 +313,38 @@ namespace SequenceSpace
 
             failed = false;
             completed = 0;
-            handler.ClearAllPatterns();
+
+            // ⚠ notify: false — 큐만 비우고 무대는 그대로 둔다. true면 EnemyDirector가
+            // "곡이 끝났다"로 읽어 DissolveAll()을 돌려, 실패 한 번에 허물이 전부 사라진다.
+            handler.ClearAllPatterns(false);
+
+            // 걷어낸 패턴들의 예약은 완료 이벤트가 영영 안 와서 FIFO 앞머리에 남는다 — 같이 버린다.
+            enemyDirector?.CancelPending();
             Feed();
         }
 
         /// <summary>그룹 전체를 한 프레임에 큐로 밀어 넣는다. 큐 겹침은 정상이고 판정 대상은 선두 하나다.</summary>
         private void Feed()
         {
+            // 무장은 여기 하나로 족하다 - 첫 투입(BeginDrill)과 실패 후 재투입(TickDrill)이 둘 다 이 함수를 지난다.
+            // 그래서 다시 시도하는 플레이어에게도 보험이 살아 있다.
+            tutorialDirector?.ArmSlowMo();
+
             float cursor = leadTime;
+
+            // <b>그룹 하나가 허물 하나를 벤다</b> - 마지막 패턴에만 killOnSuccess를 준다.
+            // 사슬(패턴 넷)이 넷을 베던 것은 cue를 안 넘겨 EnemyDirector의 폴백(전부 true)을 탔기 때문이다.
+            // 이 규칙은 이 클래스가 이미 "단위는 패턴이 아니라 그룹"이라고 말해 온 것과 같다.
+            int remaining = CountUsablePatterns();
 
             foreach (Pattern pattern in patterns)
             {
                 if (pattern == null) continue;
+
+                remaining--;
+
+                // ⚠ SetPattern 직전에 넣는다 - cue 큐와 토큰 큐가 같은 FIFO로 흐른다(ChartPlayer와 같은 규율).
+                enemyDirector?.EnqueueCue(new EnemyCue { killOnSuccess = killOnSuccess && remaining == 0 });
 
                 if (pattern.IsMash)
                 {

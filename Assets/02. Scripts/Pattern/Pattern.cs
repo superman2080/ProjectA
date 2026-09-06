@@ -79,6 +79,11 @@ namespace PatternSpace
                  "런타임 배치 · 합주 프리뷰 · 슬라이서 칼 평면 유도가 전부 이 값을 읽는다.")]
         [SerializeField] private float duelDistanceOffset;
 
+        [Tooltip("성패로 적이 물러나는 거리(m). 적이 공격자일 때만 쓰인다(패링당해 밀려나는 거리). " +
+                 "음수면 EnemyDirector.failRetreatDistance를 쓴다(기본 - 기존 패턴은 전부 이쪽이다). " +
+                 "0이면 제자리에 선다. 물러날지 정하는 판단은 그대로고 거리만 이 값으로 바뀐다.")]
+        [SerializeField] private float retreatDistance = -1f;
+
         [Tooltip("패턴 진행 중 결투 간격(m). 키 시간 = 임팩트 기준 상대초(0 = 임팩트), 값 = 절대 간격.\n" +
                  "음수면 플레이어가 적을 지나쳐 뒤로 간다. 비우면 duelDistanceOffset 상수 경로 그대로.\n" +
                  "저작은 Tools/Animation Clip Trimmer. 구동 구간은 플레이어 클립 재생 구간이다.")]
@@ -285,6 +290,16 @@ namespace PatternSpace
         /// 그래서 씬 튜닝과 패턴 저작이 서로를 깨뜨리지 않는다.
         /// </summary>
         public float DuelDistanceOffset => duelDistanceOffset;
+
+        /// <summary>
+        /// 이 패턴에서 적이 물러날 거리(m). <b>음수면 "지정 안 함"</b>이고 디렉터의 기본값을 쓴다 -
+        /// 0은 이미 "제자리"라는 뜻을 갖고 있어(<c>EnemyView.Resolve</c>의 <c>parried</c> 식) 미지정으로 쓸 수 없다.
+        ///
+        /// <para><b>거리만 정한다.</b> 물러날지 말지(창이 감당하는가 · 사슬 중간인가 · 연타인가)는
+        /// 여전히 <c>EnemyDirector</c>가 정하며, 그 판단이 "물러난다"로 났을 때 쓰는 값이 여기다.</para>
+        /// </summary>
+        /// <remarks>적이 공격자일 때만 읽는다 - 그래서 인스펙터도 그때만 이 필드를 그린다(PatternEditor).</remarks>
+        public float RetreatDistance => retreatDistance;
 
         /// <summary>
         /// 패턴 진행 중 간격을 그리는 커브. 키 시간은 <b>임팩트 기준 상대초</b>(저작 배속 단위)이고

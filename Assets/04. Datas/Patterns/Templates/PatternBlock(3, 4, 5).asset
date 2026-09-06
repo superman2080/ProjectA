@@ -1,0 +1,94 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
+  m_Name: PatternBlock(3, 4, 5)
+  m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
+  patternDatas:
+  - index: 3
+  - index: 4
+  - index: 5
+  attacker: 0
+  enemyAttack:
+    clip: {fileID: 7400000, guid: b1f0dc9ad1c465647ae06bfa510aa351, type: 2}
+    startOffset: 0.01619485
+    duration: 0.3271212
+    impactTime: 0.27722535
+    speed: 1
+    extraImpactTimes: []
+  playerParry:
+    clip: {fileID: 7400000, guid: 3efab9f578775014591714bd6e907252, type: 2}
+    startOffset: 0
+    duration: 0.3271212
+    impactTime: 0.2772253
+    speed: 1
+    extraImpactTimes: []
+  playerAttack:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  playerLeadInClips: []
+  enemyFeint:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyDeath:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyHit:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  enemyParry:
+    clip: {fileID: 0}
+    startOffset: 0
+    duration: 0
+    impactTime: 0
+    speed: 1
+    extraImpactTimes: []
+  impactOffset: 0
+  duelDistanceOffset: 1.5
+  duelDistanceCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: -0.31
+      value: 3
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 34
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  isMash: 0
+  mashTargetHits: 10
+  mashStrikes: []
+  bladePlane:
+    normal: {x: 0, y: 0, z: 0}
+    distance: 0
+  hasBladePlane: 0
+  effectCues: []

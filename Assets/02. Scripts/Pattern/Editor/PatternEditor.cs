@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -22,6 +22,7 @@ namespace PatternSpace.EditorTools
     public class PatternEditor : Editor
     {
         private const string AttackerProperty = "attacker";
+        private const string RetreatDistanceProperty = "retreatDistance";
 
         // 역할별로 살아 있는 슬롯. 나머지는 접이식으로 내려간다.
         private static readonly string[] EnemyRoleSlots = { "enemyAttack", "playerParry" };
@@ -48,6 +49,10 @@ namespace PatternSpace.EditorTools
             // 블랙리스트 방식이라 나중에 필드를 추가해도 자동으로 인스펙터에 나타난다.
             var excluded = new List<string> { "m_Script" };
             excluded.AddRange(AllSlots);
+
+            // 밀려나는 거리는 적이 공격자일 때만 쓰인다(RetreatDistanceOf). 다른 역할에서 보이면
+            // 저작자가 조용히 무시되는 값을 채우게 된다 - 위 클립 슬롯과 같은 근거다.
+            if (!enemyIsAttacker) excluded.Add(RetreatDistanceProperty);
             DrawPropertiesExcluding(serializedObject, excluded.ToArray());
 
             EditorGUILayout.Space();

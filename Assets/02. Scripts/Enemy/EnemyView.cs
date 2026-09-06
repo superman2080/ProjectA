@@ -901,6 +901,17 @@ namespace EnemySpace
                 else CrossFadeReaction(knockBackStateName);
             }
 
+            // 적이 공격자면 <b>아직 시작 안 한 스윙도 살린다</b> — 그 스윙이 곧 이 패턴이고, 성공이든 실패든
+            // 화면에 나와야 한다. 위에서 버리던 이유는 "성패가 정해졌으니 안 닿을 칼"이지만,
+            // Attacker.Enemy에서는 정반대다: 확정(마지막 노드 입력)이 칼보다 goodWindow만큼 이를 뿐
+            // 칼은 여전히 임팩트에 도착한다. 그래서 성공하면 스윙이 통째로 사라지고
+            // 실패(Deadline 만료 = 이미 시작한 뒤)에만 보이는 비대칭이 났다.
+            //
+            // ⚠ 리액션이 스윙보다 먼저 시작하는 경우만 예전처럼 버린다 — 안 그러면 뒤늦게 시작한 스윙이
+            //    리액션을 덮어써 "맞고 젖혀졌다가 다시 휘두르는" 그림이 된다.
+            if (!hasPendingAttack && attackStillPending && attacker == Attacker.Enemy)
+                hasPendingAttack = !hasPendingReaction || pendingScheduleStart <= pendingReactionStart;
+
             Current = Phase.Recover;
 
             // 거리가 0이어도 ScheduleMove는 그대로 부른다 — retreatUntil이 곧바로 이어지는

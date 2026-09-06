@@ -90,6 +90,9 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     private int completedPatterns;
     private int totalPatterns;
 
+    // 채보가 없는 씬(튜토리얼)에서 저작자가 직접 세우는 무장. ArmNextSuccess 참조.
+    private bool armedByRequest;
+
     private bool armed;          // 마지막 패턴 성공을 확인했고 임팩트를 기다리는 중
     private float fireTime;
     private bool active;         // 실루엣이 화면에 올라가 있는 중
@@ -156,10 +159,15 @@ public class FinaleSilhouetteDirector : MonoBehaviour
         completedPatterns++;
 
         if (!silhouetteEnabled || silhouetteLayer < 0) return;
-        if (totalPatterns <= 0 || completedPatterns < totalPatterns) return;
+        if (!armedByRequest && (totalPatterns <= 0 || completedPatterns < totalPatterns)) return;
 
         // ⚠ 실패로 끝나면 아무 일도 없다 — 시계도 안 건드린다.
+        // ⚠ 무장은 여기서 안 내린다. 튜토리얼 드릴은 실패하면 같은 그룹을 다시 내므로,
+        // 여기서 내리면 한 번 놓친 플레이어는 마무리 연출을 영영 못 본다.
         if (!info.AllCorrect) return;
+
+        // 성공 하나에 한 번만 터진다(DodgeDirector의 기습 무장과 같은 성질).
+        armedByRequest = false;
 
         // 화면에서 사건이 일어나는 시각. §6·§7-1·§7-3과 같은 확장 메서드를 쓴다 —
         // 식을 손으로 다시 조립하면 언젠가 갈라진다.
@@ -182,7 +190,27 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     {
         completedPatterns = 0;
         totalPatterns = ResolveTotalPatterns();
+
+        // 전투 씬 재도전에서 무장이 새는 것을 막는다(튜토리얼에는 이 이벤트가 안 온다).
+        armedByRequest = false;
     }
+
+    /// <summary>
+    /// <b>다음 성공 패턴</b>을 마지막으로 취급해 마무리 실루엣을 터뜨린다.
+    ///
+    /// <para><b>왜 필요한가</b>: 평소 게이트는 <c>completedPatterns &gt;= totalPatterns</c>이고
+    /// 그 총량은 채보 길이(<c>ChartPlayer.ActiveChart.entries.Length</c>)에서 온다.
+    /// <b>튜토리얼 씬에는 채보가 없어</b>(드릴은 <c>PatternDrillStep</c>이 <c>Time.time</c>으로 직접 낸다)
+    /// 총량이 0이라 게이트가 언제나 막는다. 게다가 드릴은 실패하면 같은 그룹을 다시 내므로
+    /// <b>완료 횟수를 세는 방식 자체가 성립하지 않는다</b> — "마지막"을 아는 것은 시퀀스의 저작 순서다.</para>
+    ///
+    /// <para><b>⚠ 저작 위치가 곧 안전 보장이다.</b> §14가 <c>Time.timeScale</c>을 쓸 수 있는 근거는
+    /// "판정이 남아 있지 않다"인데, 이 무장은 <b>마지막 드릴 앞</b>에 두는 것이라 그 뒤에는 드릴이 없다.
+    /// 중간 드릴 앞에 두면 그 근거가 깨진다.</para>
+    ///
+    /// <para>발사·복구·레이어 스왑·렌더러 피처는 한 줄도 바뀌지 않는다 — 게이트만 우회한다.</para>
+    /// </summary>
+    public void ArmNextSuccess() => armedByRequest = true;
 
     void Update()
     {

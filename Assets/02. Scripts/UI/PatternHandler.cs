@@ -447,8 +447,16 @@ public class PatternHandler : MonoBehaviour
             OnJudgeTargetBegan?.Invoke(new JudgeTargetInfo(target.Template, target.FirstNodeTime, target.LastNodeTime, target.Deadline));
     }
 
-    /// <summary>곡 중단 등으로 진행 중인 모든 패턴과 포커스 링을 정리한다.</summary>
-    public void ClearAllPatterns()
+    /// <summary>
+    /// 곡 중단 등으로 진행 중인 모든 패턴과 포커스 링을 정리한다.
+    ///
+    /// <para><b>⚠ <paramref name="notify"/>는 "치우는 것"과 "끝난 것"을 가른다.</b>
+    /// <c>OnAllPatternsCleared</c>의 뜻은 <i>"곡이 끝났다 — 잔존물을 회수하라"</i>이고
+    /// <c>EnemyDirector</c>가 그것을 듣고 <b>무대의 적을 통째로 소멸시킨다</b>.
+    /// 그래서 <b>큐만 비우고 무대는 그대로 두어야 하는 호출</b>(튜토리얼 드릴의 실패 재시도)은 <c>false</c>를 넘긴다 —
+    /// 안 그러면 한 번 실패할 때마다 <b>허물이 전부 사라진 빈 무대에서 재시도</b>하게 된다.</para>
+    /// </summary>
+    public void ClearAllPatterns(bool notify = true)
     {
         for (int i = activeFocusRings.Count - 1; i >= 0; i--)
             ReleaseFocusRing(activeFocusRings[i].view);
@@ -461,7 +469,7 @@ public class PatternHandler : MonoBehaviour
         RefreshJudgeTargetVisuals();
         ApplyKnobVisibility(knobFadeDuration);
 
-        OnAllPatternsCleared?.Invoke();
+        if (notify) OnAllPatternsCleared?.Invoke();
     }
 
     /// <summary>씬/캔버스 참조가 아직 없으면(에디터에서 Play 모드 없이 굽는 툴이 호출하는 경우 포함) 초기화한다.</summary>

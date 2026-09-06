@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace EnemySpace
@@ -244,6 +244,21 @@ namespace EnemySpace
 
             Vector3 center = playerPosition + flat * distance;
             center.y = playerPosition.y;
+
+            // ⚠ 무대 원이 하드 제약이고 minPlayerDistance가 그것을 이길 수 없다.
+            // 위의 Max는 "플레이어 코앞에 무리를 두지 않는다"는 규칙인데, <b>플레이어가 무대 밖에 서 있으면</b>
+            // maxInside가 0으로 나오고 그 0을 minPlayerDistance가 되올려 무대 밖 좌표가 그대로 나간다
+            // (튜토리얼: 골목의 미오 기준으로 집결지가 무대에서 45m 떨어진 복도에 잡혔다).
+            // 방향은 살리고 거리만 잘라 원 안으로 되돌린다.
+            Vector3 offset = Flat(center - stageCenter);
+            float radius = offset.magnitude;
+            if (radius > stageRadius)
+            {
+                // 무대 중심과 겹치면 방향이 정의되지 않는다 - 그때는 이미 원 안이라 여기 오지 않는다.
+                center = stageCenter + offset / radius * stageRadius;
+                center.y = playerPosition.y;
+            }
+
             return center;
         }
 

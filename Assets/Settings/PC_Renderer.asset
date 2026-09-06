@@ -45,7 +45,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.RenderObjects
   m_Active: 0
   settings:
-    passTag: RenderObjectsFeature
+    passTag: CharacterOutline
     Event: 300
     filterSettings:
       RenderQueueType: 0
@@ -248,7 +248,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.RenderObjects
   m_Active: 1
   settings:
-    passTag: RenderObjectsFeature
+    passTag: AmbushOutline
     Event: 300
     filterSettings:
       RenderQueueType: 0

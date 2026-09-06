@@ -67,6 +67,7 @@ MonoBehaviour:
     extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  retreatDistance: 4
   duelDistanceCurve:
     serializedVersion: 2
     m_Curve: []

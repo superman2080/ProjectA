@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using EnemySpace;
 using NUnit.Framework;
 using UnityEngine;
@@ -315,6 +315,20 @@ public class EnemyRingTests
 
         Assert.That(new Vector2(center.x, center.z).magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
         Assert.That(Vector3.Distance(center, player), Is.LessThanOrEqualTo(10.01f), "grew past desired");
+    }
+
+    [Test]
+    public void PickClusterCenterStaysInsideStageWhenPlayerIsOutsideIt()
+    {
+        // 튜토리얼 회귀: PrepareStage가 골목(z=-40)에 선 미오를 기준으로 집결지를 정하면
+        // TravelInsideCircle이 0을 돌려주는데 그 다음 줄의 minPlayerDistance가 0을 되올려
+        // 무대에서 45m 떨어진 복도가 나왔다. 무대 원이 하드 제약이고 minPlayerDistance가 그것을 이길 수 없다.
+        Vector3 player = new Vector3(0f, 0f, -40f);
+        Vector3 center = EnemyRing.PickClusterCenter(
+            player, Vector3.back, desiredDistance: 4f,
+            stageCenter: Vector3.zero, stageRadius: 8f, minPlayerDistance: 5f);
+
+        Assert.That(new Vector2(center.x, center.z).magnitude, Is.LessThanOrEqualTo(8.01f), "left the stage");
     }
 
     [Test]

@@ -15,79 +15,219 @@ MonoBehaviour:
   holdMode: 0
   requiredBindings:
   - PatternHandler
-  - SliceTargetDirector
-  - Tatami1
-  - Tatami2
-  - Tatami3
-  - Tatami4
   - PatternInput
-  - Point4
   - Point5
+  - TutorialDirector
+  - CamCall
+  - CamArrival
+  - EnemyDirector
+  - Rift
+  - FinaleDebris
   steps:
-  - rid: 2916637801519775919
-  - rid: 2916637801519776245
-  - rid: 2916637801519776246
-  - rid: 2916637801519776247
-  - rid: 2916637801519776248
-  - rid: 2916637801519776249
-  - rid: 2916637801519776250
-  - rid: 2916637801519776251
-  - rid: 2916637801519776252
-  - rid: 2916637801519775920
-  - rid: 2916637801519776253
-  - rid: 2916637801519775921
-  - rid: 2916637801519776254
-  - rid: 2916637801519776255
-  - rid: 2916637801519776256
-  - rid: 2916637801519776257
-  - rid: 2916637801519775922
-  - rid: 2916637801519776258
-  - rid: 2916637801519775923
-  - rid: 2916637801519776259
-  - rid: 2916637801519776260
-  - rid: 2916637801519776261
-  - rid: 2916637801519776262
-  - rid: 2916637801519775924
-  - rid: 2916637801519776263
-  - rid: 2916637801519775925
-  - rid: 2916637801519776264
-  - rid: 2916637801519776265
-  - rid: 2916637801519776266
-  - rid: 2916637801519776267
-  - rid: 2916637801519776268
-  - rid: 2916637801519775926
-  - rid: 2916637801519776269
-  - rid: 2916637801519775927
-  - rid: 2916637801519775928
+  - rid: 9060497110594486391
+  - rid: 9060497124397154889
+  - rid: 9060497110594486393
+  - rid: 9060497110594486394
+  - rid: 9060497110594486395
+  - rid: 9060497110594486435
+  - rid: 9060497110594486396
+  - rid: 9060497110594486397
+  - rid: 9060497110594486398
+  - rid: 9060497110594486399
+  - rid: 9060497110594486400
+  - rid: 9060497110594486401
+  - rid: 9060497110594486402
+  - rid: 9060497138730926114
+  - rid: 9060497110594486403
+  - rid: 9060497110594486404
+  - rid: 9060497138730926113
+  - rid: 9060497124397155015
+  - rid: 9060497124397155016
+  - rid: 9060497124397155017
+  - rid: 9060497124397155026
+  - rid: 9060497124397155027
+  - rid: 9060497124397155028
+  - rid: 9060497124397155029
+  - rid: 9060497138730926112
+  - rid: 9060497110594486405
+  - rid: 9060497110594486406
+  - rid: 9060497138730926103
+  - rid: 9060497110594486407
+  - rid: 9060497110594486408
+  - rid: 9060497138730926102
+  - rid: 9060497138730926101
+  - rid: 9060497138730926100
+  - rid: 9060497138730926099
+  - rid: 9060497138730926098
+  - rid: 9060497110594486409
+  - rid: 9060497110594486410
   references:
     version: 2
     RefIds:
-    - rid: 2916637801519775919
+    - rid: 9060497110594486391
+      type: {class: CameraShotStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        cameraSlot: CamCall
+        priority: 15
+        duration: 0
+        ease:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        restoreOnExit: 0
+    - rid: 9060497110594486393
       type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         lines:
-        - printTime: 0.04
+        - printTime: 1
           name: "\uCE74\uC2DC\uB9C8"
-          script: "\uCC9C\uCC9C\uD788 \uD574\uB3C4 \uAD1C\uCC2E\uC544. \uC190\uC774
-            \uBA3C\uC800 \uAE30\uC5B5\uD560 \uD14C\uB2C8\uAE4C."
-          skipProgress: 0.75
-        - printTime: 0.04
+          script: "...\uC544, \uC544, \uC804\uD654 \uB4E4\uB9AC\uB098?"
+          skipProgress: 1
+        - printTime: 1
           name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC810\uC744 \uC21C\uC11C\uB300\uB85C \uC774\uC5B4 \uADF8\uC73C\uBA74
-            \uB3FC. \uADF8\uAC8C \uC804\uBD80\uC57C."
-          skipProgress: 0.75
-    - rid: 2916637801519775920
+          script: "\uBBF8\uC624. \uC790\uB294\uB370 \uBBF8\uC548\uD574. \uAE09\uD55C
+            \uC77C\uC774\uB77C \uC5B4\uCA54 \uC218 \uC5C6\uB124."
+          skipProgress: 1
+        - printTime: 1
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uBD81\uCABD \uC0C1\uAC00\uC5D0 <color=red>\uADE0\uC5F4</color>\uBC1C\uC0DD,
+            \uD06C\uC9C4 \uC54A\uC544."
+          skipProgress: 1
+    - rid: 9060497110594486394
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        action: 0
+        value: 5
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497110594486395
+      type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        lines:
+        - printTime: 1
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uD06C\uAE30\uAC00 \uC791\uC9C0 \uC54A\uC73C\uB2C8 \uCD08\uAE30\uC5D0
+            \uC9C4\uC555\uD558\uB294\uAC8C \uC88B\uC744\uAC70\uC57C. \uBE60\uB974\uAC8C
+            \uAC00\uC918."
+          skipProgress: 1
+        - printTime: 1
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uD30C\uC218\uAFBC \uBBF8\uC624. <color=red>\uADE0\uC5F4</color>\uC744
+            \uBD09\uC778\uD574\uB77C."
+          skipProgress: 1
+        - printTime: 1
+          name: "\uBBF8\uC624"
+          script: "\uD30C\uC218\uAFBC \uBBF8\uC624, \uBA85\uC744 \uBC1B\uC7A1\uACA0\uC2B5\uB2C8\uB2E4."
+          skipProgress: 1
+    - rid: 9060497110594486396
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        action: 2
+        value: 4
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497110594486397
+      type: {class: CameraShotStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        cameraSlot: CamArrival
+        priority: 16
+        duration: 3.5
+        ease:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        restoreOnExit: 1
+    - rid: 9060497110594486398
+      type: {class: CameraShotStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        cameraSlot: CamCall
+        priority: 0
+        duration: 0
+        ease:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 0
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        restoreOnExit: 0
+    - rid: 9060497110594486399
+      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        targetSlot: 
+        caption: "\uB9C1\uC774 \uC810 \uD06C\uAE30\uAC00 \uB420 \uB54C \uB204\uB978\uB2E4"
+        padding: 24
+        showKnob: 1
+    - rid: 9060497110594486400
       type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         patterns:
         - {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
         patternHandlerSlot: PatternHandler
-        targetDirectorSlot: SliceTargetDirector
-        targetAnchorSlot: Tatami1
-        target: {fileID: 11400000, guid: effe30dc99c6ff648af04a2505291c2f, type: 2}
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: TutorialDirector
+        target: {fileID: 0}
         walkOnly: 0
+        killOnSuccess: 1
         standOffDistance: 2.5
-        walkSpeed: 5.4
+        walkSpeed: 4
         runToTarget: 1
         arriveRadius: 0.15
         turnDuration: 0.15
@@ -96,35 +236,28 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
-    - rid: 2916637801519775921
-      type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
+    - rid: 9060497110594486401
+      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        lines:
-        - printTime: 0.04
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC6D0\uC774 \uC810 \uD06C\uAE30\uB85C \uC904\uC5B4\uB4DC\uB294
-            \uADF8 \uC21C\uAC04 - \uAC70\uAE30\uC5D0 \uBC15\uC774 \uC788\uC5B4. \uAE30\uB2E4\uB838\uB2E4\uAC00
-            \uACB9\uCE58\uBA74 \uB3FC."
-          skipProgress: 0.75
-        - printTime: 0.04
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC5EC\uAE30\uC120 \uBC15\uC744 \uB193\uCCD0\uB3C4 \uC9DA\uB2E8\uC740
-            \uC798\uB824. ...\uADF8\uAC83\uB4E4\uC740 \uC544\uB2C8\uC57C. \uBC15\uC774
-            \uC548 \uB9DE\uC73C\uBA74 \uD769\uC5B4\uC84C\uB2E4\uAC00 \uB2E4\uC2DC
-            \uC77C\uC5B4\uB098."
-          skipProgress: 0.75
-    - rid: 2916637801519775922
+        targetSlot: 
+        caption: "\uBC18\uD22C\uBA85\uD55C \uAE38\uC774 \uADF8\uC744 \uC21C\uC11C\uB2E4"
+        padding: 24
+        showKnob: 1
+    - rid: 9060497110594486402
       type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         patterns:
         - {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
         patternHandlerSlot: PatternHandler
-        targetDirectorSlot: SliceTargetDirector
-        targetAnchorSlot: Tatami2
-        target: {fileID: 11400000, guid: effe30dc99c6ff648af04a2505291c2f, type: 2}
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: TutorialDirector
+        target: {fileID: 0}
         walkOnly: 0
+        killOnSuccess: 1
         standOffDistance: 2.5
-        walkSpeed: 5.4
+        walkSpeed: 4
         runToTarget: 1
         arriveRadius: 0.15
         turnDuration: 0.15
@@ -133,16 +266,16 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
-    - rid: 2916637801519775923
+    - rid: 9060497110594486403
       type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         lines:
-        - printTime: 0.04
+        - printTime: 0.3
           name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC9E7\uC740 \uD68D\uC774 \uC774\uC5B4\uC9C8 \uB54C\uAC00 \uC788\uC5B4.
-            \uD558\uB098\uC529 \uB04A\uC9C0 \uB9D0\uACE0, \uD55C \uD638\uD761\uC73C\uB85C."
+          script: "\uC9E7\uC740 \uD68D\uC73C\uB85C. \uD558\uB098\uC529 \uB04A\uC9C0
+            \uB9D0\uACE0, \uD55C \uD638\uD761\uC73C\uB85C."
           skipProgress: 0.75
-    - rid: 2916637801519775924
+    - rid: 9060497110594486404
       type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         patterns:
@@ -151,52 +284,55 @@ MonoBehaviour:
         - {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
         - {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
         patternHandlerSlot: PatternHandler
-        targetDirectorSlot: SliceTargetDirector
-        targetAnchorSlot: Tatami3
-        target: {fileID: 11400000, guid: effe30dc99c6ff648af04a2505291c2f, type: 2}
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
         walkOnly: 0
+        killOnSuccess: 1
         standOffDistance: 2.5
-        walkSpeed: 5.4
+        walkSpeed: 4
         runToTarget: 1
         arriveRadius: 0.15
         turnDuration: 0.15
         leadTime: 1.5
         nodeInterval: 0.4286
-        patternGap: 0.4
+        patternGap: 0.55
         mashWindow: 4
         retryDelay: 1
-    - rid: 2916637801519775925
+    - rid: 9060497110594486405
       type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         lines:
-        - printTime: 0.04
+        - printTime: 0.3
           name: "\uCE74\uC2DC\uB9C8"
-          script: "\uBC15\uC744 \uC7A1\uC744 \uC218 \uC5C6\uB294 \uAC83\uB3C4 \uC788\uC5B4.
-            \uADF8\uB7F4 \uB550 \uBB34\uB108\uC9C8 \uB54C\uAE4C\uC9C0 \uB450\uB4DC\uB9AC\uBA74
-            \uB3FC."
+          script: "\uD55C \uBC88\uC758 \uBC15\uB3D9\uC73C\uB85C \uC7A1\uC744 \uC218
+            \uC5C6\uB294 \uAC83\uB3C4 \uC788\uC5B4. \uBB34\uB108\uC9C8 \uB54C\uAE4C\uC9C0
+            \uB450\uB4DC\uB824."
           skipProgress: 0.75
-        - printTime: 0.04
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC21C\uC11C\uB97C \uCC3E\uC9C0 \uB9C8. \uC774\uAC74 \uC138\uB294
-            \uAC8C \uC544\uB2C8\uB77C \uBBF8\uB294 \uAC70\uC57C."
-          skipProgress: 0.75
-        - printTime: 0.04
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC190\uC5D0 \uD798\uC744 \uBE7C. \uC138\uAC8C \uCE58\uB294 \uAC83\uBCF4\uB2E4
-            \uB04A\uAE30\uC9C0 \uC54A\uB294 \uAC8C \uB098\uC544."
-          skipProgress: 0.75
-    - rid: 2916637801519775926
+    - rid: 9060497110594486406
+      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        targetSlot: Point5
+        caption: "\uC544\uBB34 \uC810\uC774\uB4E0 \uBE60\uB974\uAC8C \uC5F0\uD0C0"
+        padding: 24
+        showKnob: 1
+    - rid: 9060497110594486407
       type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         patterns:
         - {fileID: 11400000, guid: 34f81ebb68cdb3f40a29b14eda9bd14d, type: 2}
         patternHandlerSlot: PatternHandler
-        targetDirectorSlot: SliceTargetDirector
-        targetAnchorSlot: Tatami4
-        target: {fileID: 11400000, guid: effe30dc99c6ff648af04a2505291c2f, type: 2}
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
         walkOnly: 0
+        killOnSuccess: 1
         standOffDistance: 2.5
-        walkSpeed: 5.4
+        walkSpeed: 4
         runToTarget: 1
         arriveRadius: 0.15
         turnDuration: 0.15
@@ -205,155 +341,84 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
-    - rid: 2916637801519775927
+    - rid: 9060497110594486408
+      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        targetSlot: 
+        caption: 
+        padding: 24
+        showKnob: 1
+    - rid: 9060497110594486409
       type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         lines:
-        - printTime: 0.04
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uC798\uD588\uC5B4. \uC774\uC81C \uC190\uC774 \uC54C\uACE0 \uC788\uC73C\uB2C8\uAE4C
-            - \uB098\uBA38\uC9C0\uB294 \uC228\uB9CC \uB9DE\uCD94\uBA74 \uB3FC."
+        - printTime: 2
+          name: "\uD5C8\uBB3C"
+          script: "<color=red>...\uBBF8\uC624...</color>"
+          skipProgress: 1
+        - printTime: 1
+          name: "\uBBF8\uC624"
+          script: "\u2026\u2026\uBC29\uAE08, \uC81C \uC774\uB984\uC744 \uBD80\uB978
+            \uAC83 \uAC19\uC740\uB370\uC694."
           skipProgress: 0.75
-    - rid: 2916637801519775928
+        - printTime: 0.5
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "...\uC2E0\uACBD\uC4F0\uC9C0 \uC54A\uC544\uB3C4 \uB3FC."
+          skipProgress: 0.75
+        - printTime: 0.5
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uAC00\uB054 \uC800\uB7F0 \uBCC0\uC885\uC774 \uB098\uC62C \uB54C\uAC00
+            \uC788\uC5B4."
+          skipProgress: 0.75
+    - rid: 9060497110594486410
       type: {class: UnlockStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         flagName: tutorial_done
-    - rid: 2916637801519776245
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+    - rid: 9060497110594486435
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        targetSlot: PatternInput
-        caption: "\uD654\uBA74 \uAC00\uC6B4\uB370 \uC544\uD649 \uAC1C\uC758 \uC810"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776246
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
+        action: 4
+        value: 4
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497124397154889
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        duration: 2.5
-    - rid: 2916637801519776247
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+        action: 1
+        value: 4
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497124397155015
+      type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        targetSlot: PatternInput
-        caption: "\uC22B\uC790\uD0A4 1~9\uB85C \uB204\uB974\uAC70\uB098, \uB9C8\uC6B0\uC2A4\uB85C
-          \uB204\uB978 \uCC44 \uC774\uC5B4 \uADF8\uC73C\uBA74 \uB41C\uB2E4"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776248
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 3.5
-    - rid: 2916637801519776249
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: Point4
-        caption: "\uC774 \uC810\uC740 \uC22B\uC790\uD0A4 4. \uB20C\uB7EC \uBCF4\uC790"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776250
-      type: {class: WaitInputStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        kind: 0
-        nodeIndex: 3
-        anyNode: 0
-        requiredCount: 1
-        patternHandlerSlot: PatternHandler
-        inputHandlerSlot: 
-        moveHoldDuration: 0.3
-    - rid: 2916637801519776251
+        lines:
+        - printTime: 0.3
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uC800\uCABD\uC774 \uBA3C\uC800 \uD718\uB450\uB97C \uB54C\uB3C4
+            \uC788\uC5B4. \uADF8\uAC74 \uBCA0\uB294 \uAC8C \uC544\uB2C8\uB77C \uBC1B\uC544\uB0B4\uB294
+            \uAC70\uC57C."
+          skipProgress: 0.75
+    - rid: 9060497124397155016
       type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         targetSlot: 
-        caption: 
+        caption: "\uC800\uCABD\uC774 \uD718\uB450\uB97C \uB550 \uAC19\uC740 \uC21C\uC11C\uB85C
+          \uBC1B\uC544\uB0B8\uB2E4"
         padding: 24
         showKnob: 1
-    - rid: 2916637801519776252
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: "\uBC18\uD22C\uBA85\uD55C \uAE38\uC774 \uC55E\uC73C\uB85C \uADF8\uC744
-          \uC21C\uC11C\uB2E4. \uADF8\uB300\uB85C \uC774\uC73C\uBA74 \uB41C\uB2E4."
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776253
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: 
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776254
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: "\uB204\uB978 \uC810\uC5D0 \uD310\uC815 \uC0C9\uC774 \uB72C\uB2E4.
-          \uD558\uB298\uC0C9\uC774 \uAC00\uC7A5 \uC815\uD655\uD558\uACE0, \uBE68\uAC15\uC740
-          \uB193\uCE5C \uAC83"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776255
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 2.5
-    - rid: 2916637801519776256
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: "\uB193\uCE58\uBA74 \uC9DA\uB2E8\uC774 \uADF8\uB300\uB85C \uB0A8\uB294\uB2E4.
-          \uC7A0\uC2DC \uB4A4 \uAC19\uC740 \uD328\uD134\uC774 \uB2E4\uC2DC \uB72C\uB2E4"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776257
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 3.5
-    - rid: 2916637801519776258
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: 
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776259
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: "\uBA40\uB9AC \uC774\uC744 \uB54C \uC0AC\uC774\uC5D0 \uB080 \uC810\uC740
-          \uC800\uC808\uB85C \uC9C0\uB098\uAC04\uB2E4"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776260
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 3.5
-    - rid: 2916637801519776261
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: "\uB137\uC774 \uC774\uC5B4\uC9C4\uB2E4. \uD558\uB098\uB77C\uB3C4
-          \uB193\uCE58\uBA74 \uB137\uC744 \uCC98\uC74C\uBD80\uD130"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776262
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 3
-    - rid: 2916637801519776263
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: 
-        caption: 
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776264
+    - rid: 9060497124397155017
       type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        patterns: []
+        patterns:
+        - {fileID: 11400000, guid: 7ae21e8dfeadce242949667a8896cf69, type: 2}
         patternHandlerSlot: PatternHandler
         targetDirectorSlot: 
-        targetAnchorSlot: Tatami4
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
         target: {fileID: 0}
-        walkOnly: 1
+        walkOnly: 0
+        killOnSuccess: 0
         standOffDistance: 2.5
-        walkSpeed: 5.4
+        walkSpeed: 4
         runToTarget: 1
         arriveRadius: 0.15
         turnDuration: 0.15
@@ -362,40 +427,158 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
-    - rid: 2916637801519776265
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
+    - rid: 9060497124397155026
+      type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
-        targetSlot: PatternInput
-        caption: "\uC774\uAC74 \uC21C\uC11C\uAC00 \uC5C6\uB2E4. \uC544\uBB34 \uC810\uC774\uB098
-          \uB450\uB4DC\uB9AC\uBA74 \uB41C\uB2E4"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776266
-      type: {class: WaitInputStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        kind: 0
-        nodeIndex: 0
-        anyNode: 1
-        requiredCount: 5
-        patternHandlerSlot: PatternHandler
-        inputHandlerSlot: 
-        moveHoldDuration: 0.3
-    - rid: 2916637801519776267
-      type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: Point5
-        caption: "\uCC3D\uC774 \uC5F4\uB9AC\uBA74 4\uCD08 \uC548\uC5D0 20\uBC88.
-          \uAC00\uC6B4\uB370 \uB9C1\uC758 \uC22B\uC790\uAC00 \uB0A8\uC740 \uD69F\uC218\uB2E4"
-        padding: 24
-        showKnob: 1
-    - rid: 2916637801519776268
-      type: {class: WaitStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        duration: 3.5
-    - rid: 2916637801519776269
+        lines:
+        - printTime: 0.3
+          name: "\uCE74\uC2DC\uB9C8"
+          script: "\uBBF8\uC624. \uD56D\uC0C1 \uC5ED\uACF5\uC5D0 \uB300\uBE44\uD574\uB77C."
+          skipProgress: 0.75
+    - rid: 9060497124397155027
       type: {class: HighlightStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         targetSlot: 
-        caption: 
+        caption: "\uAD6C\uC11D\uC5D0 \uD45C\uC2DD\uC774 \uB728\uBA74 Space\uB85C
+          \uD53C\uD55C\uB2E4"
         padding: 24
         showKnob: 1
+    - rid: 9060497124397155028
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        action: 5
+        value: 4
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497124397155029
+      type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        patterns:
+        - {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+        patternHandlerSlot: PatternHandler
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
+        walkOnly: 0
+        killOnSuccess: 1
+        standOffDistance: 2.5
+        walkSpeed: 4
+        runToTarget: 1
+        arriveRadius: 0.15
+        turnDuration: 0.15
+        leadTime: 1.5
+        nodeInterval: 0.571
+        patternGap: 0.6
+        mashWindow: 4
+        retryDelay: 1
+    - rid: 9060497138730926098
+      type: {class: ScreenFadeStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        mode: 1
+        waitForFinale: 0
+        tutorialDirectorSlot: 
+        finaleTimeout: 3
+    - rid: 9060497138730926099
+      type: {class: MoveToStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        actorSlot: 
+        destination: {x: 0, y: 0, z: 0}
+        speed: 50
+        arriveRadius: 0.15
+        faceMoveDirection: 0
+        turnDuration: 0.12
+        overrideFacing: 1
+        facingYaw: 0
+    - rid: 9060497138730926100
+      type: {class: SetActiveStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        targetSlot: FinaleDebris
+        active: 1
+    - rid: 9060497138730926101
+      type: {class: SetActiveStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        targetSlot: Rift
+        active: 0
+    - rid: 9060497138730926102
+      type: {class: ScreenFadeStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        mode: 0
+        waitForFinale: 1
+        tutorialDirectorSlot: TutorialDirector
+        finaleTimeout: 3
+    - rid: 9060497138730926103
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        action: 6
+        value: 4
+        tutorialDirectorSlot: TutorialDirector
+    - rid: 9060497138730926112
+      type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        patterns:
+        - {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+        patternHandlerSlot: PatternHandler
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
+        walkOnly: 0
+        killOnSuccess: 1
+        standOffDistance: 2.5
+        walkSpeed: 4
+        runToTarget: 1
+        arriveRadius: 0.15
+        turnDuration: 0.15
+        leadTime: 1.5
+        nodeInterval: 0.571
+        patternGap: 0.6
+        mashWindow: 4
+        retryDelay: 1
+    - rid: 9060497138730926113
+      type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        patterns:
+        - {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+        patternHandlerSlot: PatternHandler
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
+        walkOnly: 0
+        killOnSuccess: 1
+        standOffDistance: 2.5
+        walkSpeed: 4
+        runToTarget: 1
+        arriveRadius: 0.15
+        turnDuration: 0.15
+        leadTime: 1.5
+        nodeInterval: 0.571
+        patternGap: 0.6
+        mashWindow: 4
+        retryDelay: 1
+    - rid: 9060497138730926114
+      type: {class: PatternDrillStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        patterns:
+        - {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+        patternHandlerSlot: PatternHandler
+        targetDirectorSlot: 
+        targetAnchorSlot: 
+        enemyDirectorSlot: EnemyDirector
+        tutorialDirectorSlot: 
+        target: {fileID: 0}
+        walkOnly: 0
+        killOnSuccess: 1
+        standOffDistance: 2.5
+        walkSpeed: 4
+        runToTarget: 1
+        arriveRadius: 0.15
+        turnDuration: 0.15
+        leadTime: 1.5
+        nodeInterval: 0.571
+        patternGap: 0.6
+        mashWindow: 4
+        retryDelay: 1

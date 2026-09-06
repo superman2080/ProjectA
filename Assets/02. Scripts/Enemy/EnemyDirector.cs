@@ -718,6 +718,22 @@ namespace EnemySpace
         public void SetClusterSize(int value) => clusterSize = Mathf.Max(value, 1);
 
         /// <summary>
+        /// 이 무대가 <b>평생 스폰할 적의 총수</b>. 음수(기본)면 무제한 — 곡은 끝날 때까지 사망 하나당 하나씩
+        /// 보충해야 하므로 그것이 정상 경로다.
+        ///
+        /// <para><b>유한한 자리가 따로 있다</b> — 튜토리얼처럼 <b>처치 횟수가 저작으로 정해진</b> 구간에서는
+        /// 무한 보충이 "적이 끝없이 걸어 들어오는" 그림이 된다. 예산을 걸면 다 쓴 뒤로는 조용히 안 나온다.</para>
+        ///
+        /// <para><b>⚠ 새 분기를 만들지 않는다.</b> 예산이 떨어지면 <see cref="SpawnAt"/>이 <c>null</c>을 돌려주고,
+        /// 그 경로는 <b>풀이 마른 경우로 이미 전부 처리돼 있다</b>(<see cref="SpawnCluster"/>는 멈추고
+        /// <see cref="SpawnOneIntoStaged"/>는 건너뛴다).</para>
+        /// </summary>
+        public void SetSpawnBudget(int value) => spawnBudget = value;
+
+        // 음수면 무제한. SpawnAt이 하나 태울 때마다 하나씩 깎는다.
+        private int spawnBudget = -1;
+
+        /// <summary>
         /// 곡 시작 전에 링을 채운다. <b>곡 도중에는 Instantiate가 한 번도 일어나지 않아야 한다</b> —
         /// 스키닝 메쉬 생성 한 프레임이 히치가 되고, 그게 곧 판정 손실이다.
         /// <c>ChartPlayer</c>가 카운트다운 구간에서 호출한다.
@@ -733,11 +749,18 @@ namespace EnemySpace
                 activeCluster.Clear();
                 stagedCluster.Clear();
 
+                // ⚠ 기준은 플레이어가 아니라 <b>무대 중심</b>이다. 이 호출은 곡이 시작되기 전(카운트다운·대사 구간)이라
+                // 플레이어가 아직 무대 밖에 있을 수 있고, 그러면 <b>가는 길목에 허물이 선다</b>
+                // (튜토리얼: 골목에 선 미오 코앞에 무리가 섰다). 무대는 월드에 고정된 상수이므로(§11-2)
+                // 여기가 그 상수를 쓰기에 정확히 맞는 자리다 — 플레이어가 무대 중심에 서는 전투 씬에서는 값이 같다.
                 Vector3 activeCenter = EnemyRing.PickClusterCenter(
-                    PlayerPosition, Vector3.forward, minTargetDistance * 2f, Center, stageRadius, minPlayerDistance);
+                    Center, Vector3.forward, minTargetDistance * 2f, Center, stageRadius, minPlayerDistance);
                 SpawnCluster(activeCluster, activeCenter);
 
-                DesignateStagedCenter();
+                // ⚠ 바로 위와 같은 이유로 여기도 <b>무대 중심</b> 기준이다. 예전에는 이 호출만 PlayerPosition을 써서,
+                // 골목에 선 미오 기준으로 집결지가 무대 밖에 잡혔다 - 그 뒤 사망마다 보충되는 허물이
+                // 통째로 그 복도에 서 있다가, 무리가 승격되는 순간 전투가 무대를 벗어났다.
+                DesignateStagedCenter(Center);
             }
             else
             {
@@ -831,6 +854,9 @@ namespace EnemySpace
         /// </summary>
         private EnemyView SpawnIntoStage()
         {
+            // 예산이 떨어지면 더 태우지 않는다(음수 = 무제한). 호출부는 이미 null을 다룰 줄 안다.
+            if (spawnBudget == 0) return null;
+
             var definition = PickDefinition();
             if (definition == null) return null;
 
@@ -862,6 +888,7 @@ namespace EnemySpace
             view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
             ring.Add(view);
+            if (spawnBudget > 0) spawnBudget--;
             return view;
         }
 
@@ -898,6 +925,9 @@ namespace EnemySpace
         /// </summary>
         private EnemyView SpawnAt(Vector3 slot, System.Func<Vector3, bool> isVisible, Vector3 viewPosition, float delay)
         {
+            // 예산이 떨어지면 더 태우지 않는다(음수 = 무제한). 호출부는 이미 null을 다룰 줄 안다.
+            if (spawnBudget == 0) return null;
+
             var definition = PickDefinition();
             if (definition == null) return null;
 
@@ -921,6 +951,7 @@ namespace EnemySpace
             view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
             ring.Add(view);
+            if (spawnBudget > 0) spawnBudget--;
             return view;
         }
 
@@ -932,7 +963,12 @@ namespace EnemySpace
         /// 플레이 결과 <b>적들이 우르르 몰려다니는 그림</b>이 되어 폐기했다. 거리를 음악에 맞추는 일은
         /// 이 한 번의 지정이 하고, 그 뒤로는 <b>적이 하나씩 걸어와 합류</b>할 뿐이다.</para>
         /// </summary>
-        private void DesignateStagedCenter()
+        /// <param name="origin">
+        /// 집결지를 재는 기준점. <b>전투 중에는 플레이어</b>(거리를 음악에 맞추는 것이 이 함수의 일이다)이지만,
+        /// <see cref="PrepareStage"/>는 플레이어가 아직 무대 밖일 수 있어 <see cref="Center"/>를 넘긴다.
+        /// 플레이어가 무대 중심에 서는 전투 씬에서는 두 값이 사실상 같다.
+        /// </param>
+        private void DesignateStagedCenter(Vector3 origin)
         {
             // 사망 시점에는 창을 알 수 없다. BindReservation이 지나가며 남긴 마지막 목표 거리를 쓴다.
             float desired = lastDesiredDistance > 0f ? lastDesiredDistance : minTargetDistance * 2f;
@@ -942,16 +978,16 @@ namespace EnemySpace
             float ceiling = Mathf.Min(stageRadius * 2f, Mathf.Max(stagedMaxDistance, minTargetDistance));
             desired = Mathf.Clamp(desired, minTargetDistance, ceiling);
 
-            Vector3 avoidCenter = ClusterCenterOf(activeCluster, PlayerPosition);
+            Vector3 avoidCenter = ClusterCenterOf(activeCluster, origin);
             float avoidRadius = activeCluster.Count > 0 ? clusterRadius * 2f : 0f;
 
             // 방향은 매번 새로 뽑는다 — 무리가 통째로 안 움직이므로 요동이 생길 여지가 없다.
             stagedDirection = EnemyRing.PickClusterDirection(
-                PlayerPosition, Vector3.zero, Center, stageRadius, desired,
+                origin, Vector3.zero, Center, stageRadius, desired,
                 avoidCenter, avoidRadius, () => UnityEngine.Random.value);
 
             stagedCenter = EnemyRing.PickClusterCenter(
-                PlayerPosition, stagedDirection, desired, Center, stageRadius, minPlayerDistance);
+                origin, stagedDirection, desired, Center, stageRadius, minPlayerDistance);
         }
 
         /// <summary>
@@ -1074,7 +1110,8 @@ namespace EnemySpace
             reinforcedThisCluster = false;
 
             // 무리가 비었으니 다음 집결지를 새로 지정한다. 이후 사망마다 한 명씩 여기로 걸어온다.
-            DesignateStagedCenter();
+            // ⚠ 여기는 전투 중이라 <b>플레이어 기준이 맞다</b> - 거리를 음악(창)에 맞추는 것이 이 함수의 일이다.
+            DesignateStagedCenter(PlayerPosition);
         }
 
         /// <summary>
@@ -1687,11 +1724,22 @@ namespace EnemySpace
         private int RequiredHits(int chainLength) =>
             Mathf.Max(1, Mathf.CeilToInt(chainLength * chainKillRatio));
 
+        /// <summary>
+        /// 이 패턴이 물러날 거리. 패턴이 값을 들고 있으면 그것을, 없으면(음수) 디렉터 기본값을 쓴다.
+        /// <b>거리만 갈아끼운다</b> - 물러날지 말지의 판단은 <see cref="ResolveRetreatDistance"/>가 그대로 든다.
+        /// </summary>
+        private float RetreatDistanceOf(Pattern template) =>
+            template != null && AttackerOf(template) == Attacker.Enemy && template.RetreatDistance >= 0f
+                ? template.RetreatDistance
+                : failRetreatDistance;
+
         private float ResolveRetreatDistance(Reservation r, bool playerSucceeded)
         {
+            float retreat = RetreatDistanceOf(r.template);
+
             // 적이 공격자인 패턴의 결말은 어느 쪽이든 물러난다 — 성공은 패링당해 밀려나는 것이고,
             // 실패는 벤 뒤의 여파다. 둘 다 회피가 아니므로 창을 보지 않는다.
-            if (AttackerOf(r.template) == Attacker.Enemy) return failRetreatDistance;
+            if (AttackerOf(r.template) == Attacker.Enemy) return retreat;
 
             // 상호 공격의 실패는 적이 이기는 결말이다 — 물러나면 자기 칼이 안 닿는다.
             // 성공(넉백 0)과 같은 값이지만 근거가 반대라 분기를 따로 둔다.
@@ -1728,10 +1776,10 @@ namespace EnemySpace
             // 그보다 이르다(Attacker.Player 패턴은 적 클립이 없어 arriveTime이 임팩트 그 자체가 된다).
             // 스윙 시작은 CharacterActionPlayer만 알고 OnJudgeTargetBegan은 이 시점 뒤에 오므로 여기서는 못 본다.
             // 그 간격을 retreatWindowMargin이 흡수한다 — 회피가 빠듯해 보이면 그 값을 키운다.
-            float travel = failRetreatDistance * playerShare / Mathf.Max(cruiseSpeed, 0.01f);
+            float travel = retreat * playerShare / Mathf.Max(cruiseSpeed, 0.01f);
             float needed = retreatDuration + travel + retreatWindowMargin;
 
-            return (arriveTime - Time.time) >= needed ? failRetreatDistance : 0f;
+            return (arriveTime - Time.time) >= needed ? retreat : 0f;
         }
 
         /// <summary>
@@ -1940,7 +1988,16 @@ namespace EnemySpace
             ReleaseEnemy(opponent);
         }
 
-        private void HandleAllCleared()
+        /// <summary>
+        /// 접수해 둔 것을 전부 버린다 — cue · 토큰 · 예약 · 투사체 · 대기 중인 교체.
+        /// <b>무대는 그대로 둔다</b>(적을 소멸시키지 않는다).
+        ///
+        /// <para><b>큐만 비우는 호출이 따로 있기 때문이다</b> — 튜토리얼 드릴의 실패 재시도는
+        /// 아직 판정되지 않은 패턴들을 <c>PatternHandler</c>에서 걷어내는데, 그것들의 예약은
+        /// <b>완료 이벤트가 영영 안 와서 FIFO 앞머리에 남는다</b>. 그대로 두면 다음 그룹의 완료가
+        /// 남의 예약을 해소해 <c>killOnSuccess</c>가 한 칸씩 밀린다.</para>
+        /// </summary>
+        public void CancelPending()
         {
             pendingCues.Clear();
             pendingTokens.Clear();
@@ -1953,7 +2010,11 @@ namespace EnemySpace
                 if (pending.opponent != null) ReleaseEnemy(pending.opponent);
             }
             pendingKills.Clear();
+        }
 
+        private void HandleAllCleared()
+        {
+            CancelPending();
             DissolveAll();
         }
 

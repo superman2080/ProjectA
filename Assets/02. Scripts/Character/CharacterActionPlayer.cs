@@ -222,7 +222,11 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     private float convergeUntil;
     private int currentBaseStateHash; // 현재 base 레이어가 향하는 스테이트(중복 CrossFade 방지)
-    private bool releaseTriggered; // 이번 액션에서 Release로 넘어갔는지
+    // 이번 액션에서 Release로 넘어갔는지. ⚠ 초기값이 true인 것이 핵심이다 — 액션을 한 번도 재생하지 않은
+    // 씬 시작 시점에는 actionEndTime/recoveryEndTime이 전부 0이라 Update가 곧바로 '연계 X' 경로로 떨어져,
+    // 아무 공격도 없었는데 Release가 재생되고 Attack 레이어 웨이트가 1로 올라간다(달리기가 그만큼 늦는다).
+    // PlaySlot이 액션 시작마다 false로 되돌리므로 정상 경로에는 영향이 없다.
+    private bool releaseTriggered = true;
     private float releaseEndTime;  // Release 재생이 끝나는 시각(= 트리거 시각 + releaseDuration)
     private int hitIndex;         // Hit 클립 번갈아 재생용 커서
     private AnimationClip appliedQuickshiftClip; // Quickshift 자리에 지금 물려 있는 클립(전진/백스텝)
@@ -679,7 +683,12 @@ public class CharacterActionPlayer : MonoBehaviour
     /// Idle/Sprint/Quickshift 셋뿐이고, Sprint 스테이트의 클립을 Walk/Run으로 갈아 끼운다
     /// (<see cref="ApplySprintClip"/>). 방향별 블렌드 트리는 여전히 별건이다.</para>
     /// </summary>
-    public void SetExploreLocomotion(float travelSpeed, bool sprinting = false)
+    /// <param name="instant">
+    /// 켜면 블렌드 없이 <b>그 프레임에 바로</b> 갈아탄다. 첫 호출이 Idle에서 시작할 때 쓴다 —
+    /// 곡·시퀀스가 시작하자마자 달리는 그림이어야 하는 자리에서 <c>baseCrossFadeDuration</c>만큼
+    /// Idle이 비쳐 보이기 때문이다. 매 프레임 호출에는 쓰지 않는다(스테이트가 같으면 어차피 무시된다).
+    /// </param>
+    public void SetExploreLocomotion(float travelSpeed, bool sprinting = false, bool instant = false)
     {
         if (animator == null || runningLayerIndex < 0) return;
 
@@ -688,7 +697,7 @@ public class CharacterActionPlayer : MonoBehaviour
 
         if (travelSpeed < exploreMoveThreshold)
         {
-            SwitchBaseState(idleStateHash);
+            SwitchBaseState(idleStateHash, instant ? 0f : baseCrossFadeDuration);
             return;
         }
 
@@ -703,7 +712,7 @@ public class CharacterActionPlayer : MonoBehaviour
         float runSpeed = Mathf.Clamp(travelSpeed / Mathf.Max(reference, 0.01f),
                                      sprintSpeedRange.x, sprintSpeedRange.y);
         animator.SetFloat(sprintSpeedHash, runSpeed);
-        SwitchBaseState(sprintStateHash);
+        SwitchBaseState(sprintStateHash, instant ? 0f : baseCrossFadeDuration);
     }
 
     /// <summary>
@@ -771,10 +780,12 @@ public class CharacterActionPlayer : MonoBehaviour
         SwitchBaseState(stateHash);
     }
 
-    private void SwitchBaseState(int stateHash)
+    private void SwitchBaseState(int stateHash) => SwitchBaseState(stateHash, baseCrossFadeDuration);
+
+    private void SwitchBaseState(int stateHash, float fadeDuration)
     {
         if (runningLayerIndex < 0 || stateHash == currentBaseStateHash) return;
-        animator.CrossFadeInFixedTime(stateHash, baseCrossFadeDuration, runningLayerIndex, 0f);
+        animator.CrossFadeInFixedTime(stateHash, fadeDuration, runningLayerIndex, 0f);
         currentBaseStateHash = stateHash;
     }
 

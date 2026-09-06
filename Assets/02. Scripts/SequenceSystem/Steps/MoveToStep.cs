@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace SequenceSpace
@@ -35,6 +35,14 @@ namespace SequenceSpace
         [Tooltip("도는 데 걸리는 시간(초).")]
         [Min(0.01f)]
         [SerializeField] private float turnDuration = 0.12f;
+
+        [Tooltip("도착한 뒤 바라볼 방위를 직접 지정한다. 끄면 기존 동작 그대로다. " +
+                 "⚠ faceMoveDirection은 <b>이동 방향</b>만 보므로 이미 목적지에 서 있으면 " +
+                 "첫 프레임에 도착 판정이 나 회전이 한 번도 안 걸린다 — 그때 쓰는 손잡이다.")]
+        [SerializeField] private bool overrideFacing;
+
+        [Tooltip("도착 방위(월드 Y 오일러, 도). overrideFacing이 켜져 있을 때만 쓴다.")]
+        [SerializeField] private float facingYaw;
 
         [NonSerialized] private Transform actor;
         [NonSerialized] private bool resolved;
@@ -88,6 +96,16 @@ namespace SequenceSpace
         {
             if (!resolved) return true;
             return (destination - actor.position).sqrMagnitude <= arriveRadius * arriveRadius;
+        }
+
+        public override void Exit(SequenceContext context)
+        {
+            // 도착 방위는 떠날 때 대입한다 — Tick의 Slerp와 같은 프레임에 싸우지 않는다.
+            if (resolved && overrideFacing && actor != null)
+                actor.rotation = Quaternion.Euler(0f, facingYaw, 0f);
+
+            actor = null;
+            resolved = false;
         }
 
         public override string Label
