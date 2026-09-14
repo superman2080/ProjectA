@@ -1,6 +1,5 @@
 ﻿using ChartGen;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>곡 선택 씬에서 SongChart를 선택하고 게임플레이 씬으로 전환한다.</summary>
 public class SongSelectManager : MonoBehaviour
@@ -18,6 +17,6 @@ public class SongSelectManager : MonoBehaviour
         }
 
         GameSession.Instance.SelectedChart = chart;
-        SceneManager.LoadScene(gameplaySceneName);
+        SceneTransition.Instance?.Load(gameplaySceneName);
     }
 }

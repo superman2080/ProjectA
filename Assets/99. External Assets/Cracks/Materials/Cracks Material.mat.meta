@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 144ca03c8d9270b42aefc8fc4f945ecc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Materials/Cracks Material.mat
+  uploadId: 329945

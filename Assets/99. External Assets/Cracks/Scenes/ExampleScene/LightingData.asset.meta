@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f11a58befc5db8a43bd4bd194680ae1c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 112000000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Scenes/ExampleScene/LightingData.asset
+  uploadId: 329945

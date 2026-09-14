@@ -99,7 +99,7 @@ public class BattleSceneBootstrap : MonoBehaviour
             GameProgress.SetFlag(session.CompleteFlag);
         }
 
-        StartCoroutine(ReturnRoutine());
+        Return();
     }
 
     /// <summary>목숨이 0. <b>아무것도 기록하지 않는다</b> — 그 무대는 아직 완곡한 적이 없는 자리다.</summary>
@@ -109,21 +109,18 @@ public class BattleSceneBootstrap : MonoBehaviour
         resolved = true;
 
         chartPlayer?.Stop();
-        StartCoroutine(ReturnRoutine());
+        Return();
     }
 
-    private IEnumerator ReturnRoutine()
+    private void Return()
     {
         Unsubscribe();
-
-        ScreenFader fader = ScreenFader.Instance;
-        if (fader != null) yield return fader.FadeOut();
 
         GameSession session = GameSession.Instance;
         string scene = session != null && !string.IsNullOrEmpty(session.ReturnScene)
             ? session.ReturnScene
             : freePlayReturnScene;
 
-        SceneManager.LoadScene(scene);
+        SceneTransition.Instance?.Load(scene);
     }
 }

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 53ced92be9ea2174cbb15d9ef4de8e66
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Scripts/CrackParameterHandler.cs
+  uploadId: 329945

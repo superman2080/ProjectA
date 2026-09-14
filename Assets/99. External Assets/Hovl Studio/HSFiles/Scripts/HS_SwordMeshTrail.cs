@@ -21,10 +21,10 @@ namespace Hovl
     {
         public enum AutomaticAxis
         {
-            Longest,
-            LocalX,
-            LocalY,
-            LocalZ
+            Longest = 0,
+            LocalX = 1,
+            LocalY = 2,
+            LocalZ = 3
         }
 
         [Header("Preset")]
@@ -49,9 +49,17 @@ namespace Hovl
         [Tooltip("Minimum time between generated trail sections. Set to 0 to sample every frame.")]
         [SerializeField, Min(0f)] private float sampleInterval = 0f;
 
-        [Tooltip("Additional vertex lines running along the trail. " +
-                 "The complete trail still uses one square 0-1 UV layout.")]
+        [Tooltip("Additional vertex lines running along the trail. This also defines the number of custom intermediate points when that option is enabled. The complete trail still uses one square 0-1 UV layout.")]
         [SerializeField, Range(0, 10)] private int linesAlongTrail = 2;
+
+        [Header("Custom Intermediate Points")]
+        [Tooltip("Uses movable child transforms instead of evenly interpolated positions for the intermediate lines. When disabled, the original lightweight Lerp path is used.")]
+        public bool useCustomIntermediatePoints = false;
+
+        [Tooltip("Created automatically from Lines Along Trail. Their local positions can be edited independently for each object.")]
+        [SerializeField]
+        private List<Transform> customIntermediatePoints =
+            new List<Transform>();
 
         [Tooltip("When enabled, vertex alpha fades from the newest to the oldest trail sections using Alpha Over Lifetime.")]
         [SerializeField] private bool fadeAlphaOverLifetime = true;
@@ -64,6 +72,10 @@ namespace Hovl
         [SerializeField] private bool startActive;
         [SerializeField] private bool clearPreviousTrailOnStart = true;
 
+        [Header("Mobile Optimization")]
+        [Tooltip("Reduces CPU and GPU cost for mobile devices. Sampling, mesh rebuilding, and dissolve updates are limited to 30 Hz, width subdivisions and smoothing are capped, shadows are disabled, and empty trails stop doing heavy per-frame work.")]
+        [SerializeField] private bool optimizeForMobile;
+
         [Header("Low FPS Curve Smoothing")]
         [Tooltip("Adds intermediate mesh sections along a smoothed Catmull-Rom curve instead of connecting low-FPS samples with straight segments.")]
         [SerializeField] private bool smoothLowFps = true;
@@ -74,7 +86,7 @@ namespace Hovl
         [Tooltip("Maximum number of additional curved sections generated between two recorded trail samples.")]
         [SerializeField, Range(0, 32)] private int maxIntermediateSectionsPerFrame = 8;
 
-        [Header("Automatic trail points")]
+        [Header("Automatic Trail Top and Bottom")]
         [Tooltip("The component creates these two empty child objects automatically.")]
         [SerializeField] private Transform pointA;
         [SerializeField] private Transform pointB;
@@ -85,10 +97,10 @@ namespace Hovl
         [Tooltip("Recalculate point positions automatically when the scene starts. Disable this after manually adjusting the points.")]
         [SerializeField] private bool recalculatePointsOnAwake = true;
 
-        [Tooltip("Move Point A inward from its automatically calculated end.")]
+        [Tooltip("Move Trail Top inward from its automatically calculated end.")]
         [SerializeField, Min(0f)] private float pointAInset;
 
-        [Tooltip("Move Point B inward from its automatically calculated end.")]
+        [Tooltip("Move Trail Bottom inward from its automatically calculated end.")]
         [SerializeField, Min(0f)] private float pointBInset;
 
         [Tooltip("Extra distance added outside both ends. Negative values shorten the line.")]
@@ -99,10 +111,17 @@ namespace Hovl
         [SerializeField] private bool receiveShadows;
         [SerializeField] private ShadowCastingMode shadowCastingMode = ShadowCastingMode.Off;
 
-        private const string PointAName = "Trail Point A";
-        private const string PointBName = "Trail Point B";
-        private const string LegacyPointAName = "HS Trail Point A";
-        private const string LegacyPointBName = "HS Trail Point B";
+        [SerializeField, HideInInspector]
+        private bool lockAutomaticEditorUpdates = false;
+
+        private const string TrailTopName = "Trail Top";
+        private const string TrailBottomName = "Trail Bottom";
+        private const string IntermediatePointNamePrefix =
+            "Trail Intermediate Point ";
+        private const float MobileUpdateInterval = 1f / 30f;
+        private const int MobileMaximumLinesAlongTrail = 1;
+        private const int MobileMaximumIntermediateSections = 2;
+        private const float MobileMinimumSmoothedSectionDistance = 0.12f;
 
         private sealed class RuntimeTrailLayer
         {
@@ -138,6 +157,13 @@ namespace Hovl
 
         private readonly List<TrailSection> sections = new List<TrailSection>(128);
         private readonly List<TrailSection> smoothedSections = new List<TrailSection>(256);
+        // Keep the optional buffers without a backing array until custom points
+        // are actually used. Disabled trails therefore do not reserve the extra
+        // sample memory.
+        private readonly List<Vector3> sectionIntermediatePositions =
+            new List<Vector3>();
+        private readonly List<Vector3> smoothedIntermediatePositions =
+            new List<Vector3>();
         private readonly List<Vector3> vertices = new List<Vector3>(512);
         private readonly List<Vector3> normals = new List<Vector3>(512);
         private readonly List<Vector2> uvs = new List<Vector2>(512);
@@ -158,10 +184,17 @@ namespace Hovl
         private bool isEmitting;
         private float lastSampleTime = float.NegativeInfinity;
         private float trailStopTime = float.NegativeInfinity;
+        private float nextMobileMeshUpdateTime = float.NegativeInfinity;
+        private float nextMobileDissolveUpdateTime = float.NegativeInfinity;
         private bool dissolveWasStarted;
         private bool missingMaterialWarningShown;
+        private bool meshContainsGeometry;
+        private bool rendererSettingsDirty = true;
+        private int sampledIntermediatePointCount;
+        private List<Vector3> activeRenderIntermediatePositions;
+        private bool trailPointValidationQueued;
 
-        // Automatically refreshed from all descendants of Trail Point A.
+        // Automatically refreshed from all descendants of Trail Top.
         // No ParticleSystem references need to be assigned in the Inspector.
         private ParticleSystem[] pointAParticleSystems = System.Array.Empty<ParticleSystem>();
 
@@ -169,11 +202,15 @@ namespace Hovl
         public Transform PointB => pointB;
         public bool IsEmitting => isEmitting;
         public HS_SwordTrailPreset Preset => preset;
+        public bool OptimizeForMobile => optimizeForMobile;
+        public bool UseCustomIntermediatePoints => useCustomIntermediatePoints;
+        public bool LockAutomaticEditorUpdates => lockAutomaticEditorUpdates;
 
         private void Reset()
         {
             EnsureTrailPoints();
             RecalculateTrailPoints();
+            EnsureCustomIntermediatePoints();
             EnsureAnimationEventsComponent();
         }
 
@@ -182,13 +219,15 @@ namespace Hovl
             ApplyPresetValues();
             EnsureTrailPoints();
             EnsureAnimationEventsComponent();
-            EnsurePresetPointAEffects();
+            RefreshPresetPointAEffects();
             RefreshPointAParticleSystems();
 
             if (recalculatePointsOnAwake)
             {
                 RecalculateTrailPoints();
             }
+
+            EnsureCustomIntermediatePoints();
 
             EnsureTrailObjects();
         }
@@ -254,7 +293,7 @@ namespace Hovl
 
         /// <summary>
         /// Copies all reusable settings from the assigned preset, rebuilds its
-        /// material layers and refreshes the effect prefabs under Trail Point A.
+        /// material layers and refreshes the effect prefabs under Trail Top.
         /// </summary>
         [ContextMenu("Apply Trail Preset")]
         public void ApplyTrailPreset()
@@ -266,6 +305,8 @@ namespace Hovl
             {
                 RecalculateTrailPoints();
             }
+
+            EnsureCustomIntermediatePoints();
 
             RefreshPresetPointAEffects();
             DestroyRuntimeLayers();
@@ -298,16 +339,18 @@ namespace Hovl
             alphaOverLifetime = preset.alphaOverLifetime;
             startActive = preset.startActive;
             clearPreviousTrailOnStart = preset.clearPreviousTrailOnStart;
+            optimizeForMobile = preset.optimizeForMobile;
             smoothLowFps = preset.smoothLowFps;
             maximumSmoothedSectionDistance = preset.maximumSmoothedSectionDistance;
             maxIntermediateSectionsPerFrame = preset.maxIntermediateSectionsPerFrame;
-            automaticAxis = preset.automaticAxis;
+            automaticAxis = (AutomaticAxis)preset.automaticAxis;
             recalculatePointsOnAwake = preset.recalculatePointsOnAwake;
             pointAInset = preset.pointAInset;
             pointBInset = preset.pointBInset;
             endpointPadding = preset.endpointPadding;
             receiveShadows = preset.receiveShadows;
             shadowCastingMode = preset.shadowCastingMode;
+            rendererSettingsDirty = true;
         }
 
         private void OnEnable()
@@ -325,9 +368,21 @@ namespace Hovl
                 return;
             }
 
-            EnsureTrailObjects();
-
             float currentTime = Time.time;
+            bool hasPendingDissolve =
+                dissolveWasStarted &&
+                !isEmitting &&
+                !float.IsNegativeInfinity(trailStopTime);
+
+            // A stopped and completely faded trail sleeps here. Particle
+            // Systems continue simulating independently and need no polling.
+            if (!isEmitting && sections.Count == 0 && !hasPendingDissolve)
+            {
+                ClearGeneratedMeshIfNeeded();
+                return;
+            }
+
+            EnsureTrailObjects();
 
             if (isEmitting)
             {
@@ -335,8 +390,30 @@ namespace Hovl
             }
 
             RemoveExpiredSections(currentTime);
-            RebuildMesh(currentTime);
-            UpdateDissolveProperties(currentTime);
+
+            bool shouldUpdateMesh =
+                !optimizeForMobile ||
+                currentTime >= nextMobileMeshUpdateTime;
+
+            if (sections.Count >= 2 && shouldUpdateMesh)
+            {
+                RebuildMesh(currentTime);
+                nextMobileMeshUpdateTime =
+                    currentTime + MobileUpdateInterval;
+            }
+            else if (sections.Count < 2)
+            {
+                ClearGeneratedMeshIfNeeded();
+            }
+
+            if (hasPendingDissolve &&
+                (!optimizeForMobile ||
+                 currentTime >= nextMobileDissolveUpdateTime))
+            {
+                UpdateDissolveProperties(currentTime);
+                nextMobileDissolveUpdateTime =
+                    currentTime + MobileUpdateInterval;
+            }
         }
 
         private void OnDisable()
@@ -370,6 +447,16 @@ namespace Hovl
 
         private void OnValidate()
         {
+#if UNITY_EDITOR
+            // A finalized scene can opt out of every automatic Edit Mode
+            // mutation. Runtime initialization in Awake remains unaffected.
+            if (!Application.isPlaying && lockAutomaticEditorUpdates)
+            {
+                rendererSettingsDirty = true;
+                return;
+            }
+#endif
+
             ApplyPresetValues();
             trailLifetime = Mathf.Max(0.01f, trailLifetime);
             minimumSectionDistance = Mathf.Max(0f, minimumSectionDistance);
@@ -383,12 +470,26 @@ namespace Hovl
             pointAInset = Mathf.Max(0f, pointAInset);
             pointBInset = Mathf.Max(0f, pointBInset);
 
-            ApplyRendererSettings();
+            rendererSettingsDirty = true;
+
+            if (runtimeLayers.Count > 0)
+            {
+                ApplyRendererSettings();
+                rendererSettingsDirty = false;
+            }
 
 #if UNITY_EDITOR
             if (!Application.isPlaying && appliedEffectPreset != preset)
             {
                 EditorApplication.delayCall += ApplyPresetAfterValidation;
+            }
+
+            if (!Application.isPlaying &&
+                !trailPointValidationQueued)
+            {
+                trailPointValidationQueued = true;
+                EditorApplication.delayCall +=
+                    EnsureTrailPointsAfterValidation;
             }
 #endif
         }
@@ -401,8 +502,39 @@ namespace Hovl
                 return;
             }
 
-            Vector3 arrowStart = pointB.position;
-            Vector3 arrowDirection = pointA.position - arrowStart;
+            List<Vector3> arrowPoints = new List<Vector3>();
+            arrowPoints.Add(pointB.position);
+
+            if (useCustomIntermediatePoints &&
+                customIntermediatePoints != null)
+            {
+                int usedPointCount = Mathf.Min(
+                    linesAlongTrail,
+                    customIntermediatePoints.Count);
+
+                for (int i = usedPointCount - 1; i >= 0; i--)
+                {
+                    Transform intermediatePoint = customIntermediatePoints[i];
+                    if (intermediatePoint != null)
+                    {
+                        arrowPoints.Add(intermediatePoint.position);
+                    }
+                }
+            }
+
+            arrowPoints.Add(pointA.position);
+
+            Vector3 arrowDirection = Vector3.zero;
+
+            for (int i = arrowPoints.Count - 2; i >= 0; i--)
+            {
+                arrowDirection = pointA.position - arrowPoints[i];
+                if (arrowDirection.sqrMagnitude > 0.00000001f)
+                {
+                    break;
+                }
+            }
+
             float arrowLength = arrowDirection.magnitude;
 
             if (arrowLength <= 0.0001f)
@@ -411,7 +543,7 @@ namespace Hovl
             }
 
             Handles.color = new Color(0.1f, 0.9f, 1f, 0.95f);
-            Handles.DrawAAPolyLine(3f, arrowStart, pointA.position);
+            Handles.DrawAAPolyLine(3f, arrowPoints.ToArray());
 
             Vector3 direction = arrowDirection / arrowLength;
             Vector3 cameraForward = SceneView.currentDrawingSceneView != null &&
@@ -450,9 +582,26 @@ namespace Hovl
 
         private void ApplyPresetAfterValidation()
         {
-            if (this != null && !Application.isPlaying && appliedEffectPreset != preset)
+            if (this != null &&
+                !Application.isPlaying &&
+                !lockAutomaticEditorUpdates &&
+                appliedEffectPreset != preset)
             {
                 ApplyTrailPreset();
+            }
+        }
+
+        private void EnsureTrailPointsAfterValidation()
+        {
+            trailPointValidationQueued = false;
+
+            if (this != null &&
+                !Application.isPlaying &&
+                !lockAutomaticEditorUpdates)
+            {
+                EnsureTrailPoints();
+                EnsureCustomIntermediatePoints();
+                EditorUtility.SetDirty(this);
             }
         }
 #endif
@@ -463,6 +612,7 @@ namespace Hovl
         public void StartTrail()
         {
             EnsureTrailPoints();
+            EnsureCustomIntermediatePoints();
             EnsureTrailObjects();
 
             if (isEmitting)
@@ -486,6 +636,8 @@ namespace Hovl
             isEmitting = true;
             lastSampleTime = float.NegativeInfinity;
             trailStopTime = float.NegativeInfinity;
+            nextMobileMeshUpdateTime = float.NegativeInfinity;
+            nextMobileDissolveUpdateTime = float.NegativeInfinity;
             dissolveWasStarted = true;
 
             // Always restore the dissolve override from the material before
@@ -508,6 +660,7 @@ namespace Hovl
             if (isEmitting)
             {
                 trailStopTime = Time.time;
+                nextMobileDissolveUpdateTime = trailStopTime;
             }
 
             isEmitting = false;
@@ -515,7 +668,7 @@ namespace Hovl
         }
 
         /// <summary>
-        /// Finds every ParticleSystem below Trail Point A, including systems on
+        /// Finds every ParticleSystem below Trail Top, including systems on
         /// inactive child objects. This is refreshed automatically whenever the
         /// trail starts or stops, so manually adding effect prefabs requires no
         /// Inspector references.
@@ -598,12 +751,30 @@ namespace Hovl
         public void ClearTrail()
         {
             sections.Clear();
+            sectionIntermediatePositions.Clear();
+            smoothedIntermediatePositions.Clear();
+            activeRenderIntermediatePositions = null;
+            sampledIntermediatePointCount = 0;
             lastSampleTime = float.NegativeInfinity;
+            nextMobileMeshUpdateTime = float.NegativeInfinity;
 
             if (generatedMesh != null)
             {
                 generatedMesh.Clear(false);
             }
+
+            meshContainsGeometry = false;
+        }
+
+        private void ClearGeneratedMeshIfNeeded()
+        {
+            if (!meshContainsGeometry || generatedMesh == null)
+            {
+                return;
+            }
+
+            generatedMesh.Clear(false);
+            meshContainsGeometry = false;
         }
 
         /// <summary>
@@ -638,49 +809,27 @@ namespace Hovl
             pointB.localRotation = Quaternion.identity;
             pointA.localScale = Vector3.one;
             pointB.localScale = Vector3.one;
+
+            EnsureCustomIntermediatePoints();
         }
 
-        [ContextMenu("Create Missing Trail Points")]
+        [ContextMenu("Create Missing Trail Top and Bottom")]
         public void EnsureTrailPoints()
         {
             if (pointA == null)
             {
-                Transform existing = transform.Find(PointAName);
-
-                if (existing == null)
-                {
-                    existing = transform.Find(LegacyPointAName);
-                    if (existing != null)
-                    {
-                        existing.name = PointAName;
-                    }
-                }
-
-                pointA = existing != null ? existing : CreateChildPoint(PointAName);
-            }
-            else if (pointA.name == LegacyPointAName)
-            {
-                pointA.name = PointAName;
+                Transform existing = transform.Find(TrailTopName);
+                pointA = existing != null
+                    ? existing
+                    : CreateChildPoint(TrailTopName);
             }
 
             if (pointB == null)
             {
-                Transform existing = transform.Find(PointBName);
-
-                if (existing == null)
-                {
-                    existing = transform.Find(LegacyPointBName);
-                    if (existing != null)
-                    {
-                        existing.name = PointBName;
-                    }
-                }
-
-                pointB = existing != null ? existing : CreateChildPoint(PointBName);
-            }
-            else if (pointB.name == LegacyPointBName)
-            {
-                pointB.name = PointBName;
+                Transform existing = transform.Find(TrailBottomName);
+                pointB = existing != null
+                    ? existing
+                    : CreateChildPoint(TrailBottomName);
             }
         }
 
@@ -693,6 +842,132 @@ namespace Hovl
             pointTransform.localRotation = Quaternion.identity;
             pointTransform.localScale = Vector3.one;
             return pointTransform;
+        }
+
+        [ContextMenu("Create Missing Custom Intermediate Points")]
+        public void EnsureCustomIntermediatePoints()
+        {
+            if (!useCustomIntermediatePoints || linesAlongTrail <= 0)
+            {
+                return;
+            }
+
+            EnsureTrailPoints();
+
+            if (customIntermediatePoints == null)
+            {
+                customIntermediatePoints = new List<Transform>();
+            }
+
+            while (customIntermediatePoints.Count < linesAlongTrail)
+            {
+                customIntermediatePoints.Add(null);
+            }
+
+            for (int i = 0; i < linesAlongTrail; i++)
+            {
+                if (customIntermediatePoints[i] != null)
+                {
+                    continue;
+                }
+
+                string pointName = IntermediatePointNamePrefix + (i + 1);
+                Transform intermediatePoint = transform.Find(pointName);
+
+                if (intermediatePoint == null)
+                {
+                    intermediatePoint = CreateChildPoint(pointName);
+                    float widthV = (float)(i + 1) / (linesAlongTrail + 1);
+                    intermediatePoint.localPosition = Vector3.Lerp(
+                        pointA.localPosition,
+                        pointB.localPosition,
+                        widthV);
+                }
+
+                customIntermediatePoints[i] = intermediatePoint;
+            }
+        }
+
+        private int GetCustomIntermediatePointCountForSampling()
+        {
+            if (!useCustomIntermediatePoints ||
+                linesAlongTrail <= 0 ||
+                customIntermediatePoints == null)
+            {
+                return 0;
+            }
+
+            int configuredPointCount = Mathf.Min(
+                linesAlongTrail,
+                customIntermediatePoints.Count);
+
+            return optimizeForMobile
+                ? Mathf.Min(
+                    configuredPointCount,
+                    MobileMaximumLinesAlongTrail)
+                : configuredPointCount;
+        }
+
+        private Vector3 GetCurrentIntermediatePointPosition(
+            int intermediateIndex,
+            int intermediateCount)
+        {
+            float widthV =
+                (float)(intermediateIndex + 1) / (intermediateCount + 1);
+            return EvaluateCurrentCustomShape(widthV);
+        }
+
+        private Vector3 EvaluateCurrentCustomShape(float widthV)
+        {
+            int configuredPointCount = Mathf.Min(
+                linesAlongTrail,
+                customIntermediatePoints.Count);
+            int shapeSegmentCount = configuredPointCount + 1;
+            float scaledPosition =
+                Mathf.Clamp01(widthV) * shapeSegmentCount;
+            int leftControlIndex = Mathf.Min(
+                Mathf.FloorToInt(scaledPosition),
+                shapeSegmentCount);
+            int rightControlIndex = Mathf.Min(
+                leftControlIndex + 1,
+                shapeSegmentCount);
+            float interpolation = scaledPosition - leftControlIndex;
+
+            return Vector3.Lerp(
+                GetCurrentCustomControlPoint(
+                    leftControlIndex,
+                    configuredPointCount),
+                GetCurrentCustomControlPoint(
+                    rightControlIndex,
+                    configuredPointCount),
+                interpolation);
+        }
+
+        private Vector3 GetCurrentCustomControlPoint(
+            int controlIndex,
+            int configuredPointCount)
+        {
+            if (controlIndex <= 0)
+            {
+                return pointA.position;
+            }
+
+            if (controlIndex > configuredPointCount)
+            {
+                return pointB.position;
+            }
+
+            Transform intermediatePoint =
+                customIntermediatePoints[controlIndex - 1];
+
+            if (intermediatePoint != null)
+            {
+                return intermediatePoint.position;
+            }
+
+            float widthV =
+                (float)controlIndex / (configuredPointCount + 1);
+            return Vector3.Lerp(pointA.position, pointB.position, widthV);
         }
 
         private void EnsureTrailObjects()
@@ -756,9 +1031,15 @@ namespace Hovl
                         propertyBlock = new MaterialPropertyBlock()
                     });
                 }
+
+                rendererSettingsDirty = true;
             }
 
-            ApplyRendererSettings();
+            if (rendererSettingsDirty)
+            {
+                ApplyRendererSettings();
+                rendererSettingsDirty = false;
+            }
         }
 
         private void ApplyRendererSettings()
@@ -775,8 +1056,11 @@ namespace Hovl
                 Material material = GetLayerMaterial(i);
                 renderer.sharedMaterial = material;
                 renderer.sortingOrder = GetLayerSortingOrder(i);
-                renderer.receiveShadows = receiveShadows;
-                renderer.shadowCastingMode = shadowCastingMode;
+                renderer.receiveShadows =
+                    optimizeForMobile ? false : receiveShadows;
+                renderer.shadowCastingMode = optimizeForMobile
+                    ? ShadowCastingMode.Off
+                    : shadowCastingMode;
                 renderer.lightProbeUsage = LightProbeUsage.Off;
                 renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
                 renderer.motionVectorGenerationMode =
@@ -940,6 +1224,13 @@ namespace Hovl
                 layer.meshRenderer.SetPropertyBlock(layer.propertyBlock);
                 layer.lastDissolveValue = dissolveValue;
             }
+
+            if (!isEmitting && dissolveProgress >= 1f)
+            {
+                dissolveWasStarted = false;
+                trailStopTime = float.NegativeInfinity;
+                nextMobileDissolveUpdateTime = float.NegativeInfinity;
+            }
         }
 
         private bool UsesPresetMaterialLayers()
@@ -1043,6 +1334,7 @@ namespace Hovl
             }
 
             runtimeLayers.Clear();
+            rendererSettingsDirty = true;
         }
 
         private void RefreshPresetPointAEffects()
@@ -1070,15 +1362,19 @@ namespace Hovl
                 else
 #endif
                 {
+                    // Destroy is deferred in Play Mode. Disable the previous
+                    // instance immediately so a forced runtime refresh cannot
+                    // play both the old and new effects for one frame.
+                    instance.SetActive(false);
                     Destroy(instance);
                 }
             }
 
             presetPointAEffectInstances.Clear();
 
-            if (preset != null && preset.pointAEffectPrefabs != null)
+            if (preset != null && preset.trailTopEffectPrefabs != null)
             {
-                foreach (GameObject effectPrefab in preset.pointAEffectPrefabs)
+                foreach (GameObject effectPrefab in preset.trailTopEffectPrefabs)
                 {
                     if (effectPrefab == null)
                     {
@@ -1098,7 +1394,7 @@ namespace Hovl
                         {
                             Undo.RegisterCreatedObjectUndo(
                                 instance,
-                                "Create Trail Point A Effect");
+                                "Create Trail Top Effect");
                         }
                     }
                     else
@@ -1121,11 +1417,11 @@ namespace Hovl
         {
             int expectedCount = 0;
 
-            if (preset != null && preset.pointAEffectPrefabs != null)
+            if (preset != null && preset.trailTopEffectPrefabs != null)
             {
-                for (int i = 0; i < preset.pointAEffectPrefabs.Count; i++)
+                for (int i = 0; i < preset.trailTopEffectPrefabs.Count; i++)
                 {
-                    if (preset.pointAEffectPrefabs[i] != null)
+                    if (preset.trailTopEffectPrefabs[i] != null)
                     {
                         expectedCount++;
                     }
@@ -1163,6 +1459,22 @@ namespace Hovl
 
             Vector3 currentPointA = pointA.position;
             Vector3 currentPointB = pointB.position;
+            int currentIntermediatePointCount =
+                GetCustomIntermediatePointCountForSampling();
+
+            if (sections.Count > 0 &&
+                currentIntermediatePointCount != sampledIntermediatePointCount)
+            {
+                // A runtime setting change would invalidate the flat sample
+                // buffer, so begin a new compatible trail instead.
+                ClearTrail();
+            }
+
+            if (sections.Count == 0)
+            {
+                sampledIntermediatePointCount =
+                    currentIntermediatePointCount;
+            }
 
             if (sections.Count == 0)
             {
@@ -1173,8 +1485,12 @@ namespace Hovl
 
             if (!force)
             {
-                if (sampleInterval > 0f &&
-                    currentTime - lastSampleTime < sampleInterval)
+                float effectiveSampleInterval = optimizeForMobile
+                    ? Mathf.Max(sampleInterval, MobileUpdateInterval)
+                    : sampleInterval;
+
+                if (effectiveSampleInterval > 0f &&
+                    currentTime - lastSampleTime < effectiveSampleInterval)
                 {
                     return;
                 }
@@ -1185,7 +1501,32 @@ namespace Hovl
                 float movementB =
                     Vector3.Distance(previousSection.pointB, currentPointB);
 
-                if (Mathf.Max(movementA, movementB) < minimumSectionDistance)
+                float maximumMovement = Mathf.Max(movementA, movementB);
+
+                for (int i = 0; i < sampledIntermediatePointCount; i++)
+                {
+                    int previousFlatIndex =
+                        (sections.Count - 1) *
+                        sampledIntermediatePointCount + i;
+
+                    if (previousFlatIndex >=
+                        sectionIntermediatePositions.Count)
+                    {
+                        break;
+                    }
+
+                    float intermediateMovement = Vector3.Distance(
+                        sectionIntermediatePositions[previousFlatIndex],
+                        GetCurrentIntermediatePointPosition(
+                            i,
+                            sampledIntermediatePointCount));
+
+                    maximumMovement = Mathf.Max(
+                        maximumMovement,
+                        intermediateMovement);
+                }
+
+                if (maximumMovement < minimumSectionDistance)
                 {
                     return;
                 }
@@ -1223,6 +1564,14 @@ namespace Hovl
                 sectionPointB,
                 spawnTime,
                 accumulatedDistance));
+
+            for (int i = 0; i < sampledIntermediatePointCount; i++)
+            {
+                sectionIntermediatePositions.Add(
+                    GetCurrentIntermediatePointPosition(
+                        i,
+                        sampledIntermediatePointCount));
+            }
         }
 
         private void RemoveExpiredSections(float currentTime)
@@ -1238,6 +1587,18 @@ namespace Hovl
             if (expiredCount > 0)
             {
                 sections.RemoveRange(0, expiredCount);
+
+                int expiredIntermediatePositionCount =
+                    expiredCount * sampledIntermediatePointCount;
+
+                if (expiredIntermediatePositionCount > 0)
+                {
+                    sectionIntermediatePositions.RemoveRange(
+                        0,
+                        Mathf.Min(
+                            expiredIntermediatePositionCount,
+                            sectionIntermediatePositions.Count));
+                }
             }
         }
 
@@ -1250,7 +1611,7 @@ namespace Hovl
 
             if (sections.Count < 2)
             {
-                generatedMesh.Clear(false);
+                ClearGeneratedMeshIfNeeded();
                 return;
             }
 
@@ -1258,7 +1619,7 @@ namespace Hovl
 
             if (renderSections.Count < 2)
             {
-                generatedMesh.Clear(false);
+                ClearGeneratedMeshIfNeeded();
                 return;
             }
 
@@ -1268,7 +1629,11 @@ namespace Hovl
             colors.Clear();
             triangles.Clear();
 
-            int widthSegments = linesAlongTrail + 1;
+            int effectiveLinesAlongTrail = optimizeForMobile
+                ? Mathf.Min(linesAlongTrail, MobileMaximumLinesAlongTrail)
+                : linesAlongTrail;
+
+            int widthSegments = effectiveLinesAlongTrail + 1;
             int verticesPerSide = widthSegments + 1;
             int verticesPerSection = verticesPerSide * 2;
 
@@ -1277,10 +1642,15 @@ namespace Hovl
             float trailDistance = newestDistance - oldestDistance;
             bool hasDistance = trailDistance > 0.000001f;
             Vector3 previousNormal = Vector3.up;
+            Bounds meshBounds = new Bounds(
+                renderSections[0].pointA,
+                Vector3.zero);
 
             for (int i = 0; i < renderSections.Count; i++)
             {
                 TrailSection section = renderSections[i];
+                meshBounds.Encapsulate(section.pointA);
+                meshBounds.Encapsulate(section.pointB);
                 Vector3 midpoint = (section.pointA + section.pointB) * 0.5f;
 
                 Vector3 previousMidpoint = i > 0
@@ -1330,10 +1700,13 @@ namespace Hovl
                 for (int widthIndex = 0; widthIndex <= widthSegments; widthIndex++)
                 {
                     float widthV = (float)widthIndex / widthSegments;
-                    vertices.Add(Vector3.Lerp(
-                        section.pointA,
-                        section.pointB,
-                        widthV));
+                    Vector3 widthPosition = EvaluateRenderWidthPoint(
+                        renderSections,
+                        i,
+                        widthV);
+
+                    vertices.Add(widthPosition);
+                    meshBounds.Encapsulate(widthPosition);
 
                     normals.Add(normal);
                     uvs.Add(new Vector2(trailU, widthV));
@@ -1344,9 +1717,9 @@ namespace Hovl
                 for (int widthIndex = 0; widthIndex <= widthSegments; widthIndex++)
                 {
                     float widthV = (float)widthIndex / widthSegments;
-                    vertices.Add(Vector3.Lerp(
-                        section.pointA,
-                        section.pointB,
+                    vertices.Add(EvaluateRenderWidthPoint(
+                        renderSections,
+                        i,
                         widthV));
 
                     normals.Add(-normal);
@@ -1399,8 +1772,86 @@ namespace Hovl
             generatedMesh.SetNormals(normals);
             generatedMesh.SetColors(colors);
             generatedMesh.SetUVs(0, uvs);
-            generatedMesh.SetTriangles(triangles, 0, true);
-            generatedMesh.RecalculateBounds();
+            generatedMesh.SetTriangles(triangles, 0, false);
+            generatedMesh.bounds = meshBounds;
+            meshContainsGeometry = true;
+        }
+
+        private Vector3 EvaluateRenderWidthPoint(
+            List<TrailSection> renderSections,
+            int sectionIndex,
+            float widthV)
+        {
+            TrailSection section = renderSections[sectionIndex];
+
+            if (sampledIntermediatePointCount <= 0 ||
+                activeRenderIntermediatePositions == null)
+            {
+                return Vector3.Lerp(
+                    section.pointA,
+                    section.pointB,
+                    widthV);
+            }
+
+            int requiredPositionCount =
+                renderSections.Count * sampledIntermediatePointCount;
+
+            if (activeRenderIntermediatePositions.Count < requiredPositionCount)
+            {
+                return Vector3.Lerp(
+                    section.pointA,
+                    section.pointB,
+                    widthV);
+            }
+
+            int shapeSegmentCount = sampledIntermediatePointCount + 1;
+            float scaledPosition =
+                Mathf.Clamp01(widthV) * shapeSegmentCount;
+            int leftControlIndex = Mathf.Min(
+                Mathf.FloorToInt(scaledPosition),
+                shapeSegmentCount);
+            int rightControlIndex = Mathf.Min(
+                leftControlIndex + 1,
+                shapeSegmentCount);
+            float interpolation = scaledPosition - leftControlIndex;
+
+            Vector3 leftPosition = GetRenderControlPoint(
+                renderSections,
+                sectionIndex,
+                leftControlIndex);
+            Vector3 rightPosition = GetRenderControlPoint(
+                renderSections,
+                sectionIndex,
+                rightControlIndex);
+
+            return Vector3.Lerp(
+                leftPosition,
+                rightPosition,
+                interpolation);
+        }
+
+        private Vector3 GetRenderControlPoint(
+            List<TrailSection> renderSections,
+            int sectionIndex,
+            int controlIndex)
+        {
+            TrailSection section = renderSections[sectionIndex];
+
+            if (controlIndex <= 0)
+            {
+                return section.pointA;
+            }
+
+            if (controlIndex > sampledIntermediatePointCount)
+            {
+                return section.pointB;
+            }
+
+            int flatIndex =
+                sectionIndex * sampledIntermediatePointCount +
+                controlIndex - 1;
+
+            return activeRenderIntermediatePositions[flatIndex];
         }
 
         /// <summary>
@@ -1411,15 +1862,33 @@ namespace Hovl
         /// </summary>
         private List<TrailSection> GetRenderSections()
         {
+            activeRenderIntermediatePositions =
+                sampledIntermediatePointCount > 0
+                    ? sectionIntermediatePositions
+                    : null;
+
+            float effectiveSmoothedSectionDistance = optimizeForMobile
+                ? Mathf.Max(
+                    maximumSmoothedSectionDistance,
+                    MobileMinimumSmoothedSectionDistance)
+                : maximumSmoothedSectionDistance;
+
+            int effectiveMaximumIntermediateSections = optimizeForMobile
+                ? Mathf.Min(
+                    maxIntermediateSectionsPerFrame,
+                    MobileMaximumIntermediateSections)
+                : maxIntermediateSectionsPerFrame;
+
             if (!smoothLowFps ||
-                maximumSmoothedSectionDistance <= 0f ||
-                maxIntermediateSectionsPerFrame <= 0 ||
+                effectiveSmoothedSectionDistance <= 0f ||
+                effectiveMaximumIntermediateSections <= 0 ||
                 sections.Count < 3)
             {
                 return sections;
             }
 
             smoothedSections.Clear();
+            smoothedIntermediatePositions.Clear();
 
             TrailSection first = sections[0];
             smoothedSections.Add(new TrailSection(
@@ -1427,19 +1896,25 @@ namespace Hovl
                 first.pointB,
                 first.spawnTime,
                 0f));
+            AppendSourceIntermediatePositions(
+                0,
+                smoothedIntermediatePositions);
 
             for (int segmentIndex = 0;
                  segmentIndex < sections.Count - 1;
                  segmentIndex++)
             {
-                TrailSection section0 = sections[
-                    Mathf.Max(segmentIndex - 1, 0)];
+                int section0Index = Mathf.Max(segmentIndex - 1, 0);
+                int section1Index = segmentIndex;
+                int section2Index = segmentIndex + 1;
+                int section3Index = Mathf.Min(
+                    segmentIndex + 2,
+                    sections.Count - 1);
 
-                TrailSection section1 = sections[segmentIndex];
-                TrailSection section2 = sections[segmentIndex + 1];
-
-                TrailSection section3 = sections[
-                    Mathf.Min(segmentIndex + 2, sections.Count - 1)];
+                TrailSection section0 = sections[section0Index];
+                TrailSection section1 = sections[section1Index];
+                TrailSection section2 = sections[section2Index];
+                TrailSection section3 = sections[section3Index];
 
                 float movementA = Vector3.Distance(
                     section1.pointA,
@@ -1451,13 +1926,27 @@ namespace Hovl
 
                 float maximumMovement = Mathf.Max(movementA, movementB);
 
+                // A custom middle point can move farther than either endpoint.
+                // Include it when choosing the Catmull-Rom subdivision count so
+                // an animated uneven profile remains smooth between samples.
+                for (int i = 0; i < sampledIntermediatePointCount; i++)
+                {
+                    float intermediateMovement = Vector3.Distance(
+                        GetSampledIntermediatePosition(section1Index, i),
+                        GetSampledIntermediatePosition(section2Index, i));
+
+                    maximumMovement = Mathf.Max(
+                        maximumMovement,
+                        intermediateMovement);
+                }
+
                 int intermediateCount = Mathf.CeilToInt(
-                    maximumMovement / maximumSmoothedSectionDistance) - 1;
+                    maximumMovement / effectiveSmoothedSectionDistance) - 1;
 
                 intermediateCount = Mathf.Clamp(
                     intermediateCount,
                     0,
-                    maxIntermediateSectionsPerFrame);
+                    effectiveMaximumIntermediateSections);
 
                 for (int i = 1; i <= intermediateCount; i++)
                 {
@@ -1486,15 +1975,82 @@ namespace Hovl
                         curvedPointA,
                         curvedPointB,
                         interpolatedTime);
+                    AppendCurvedIntermediatePositions(
+                        section0Index,
+                        section1Index,
+                        section2Index,
+                        section3Index,
+                        t);
                 }
 
                 AddSmoothedSection(
                     section2.pointA,
                     section2.pointB,
                     section2.spawnTime);
+                AppendSourceIntermediatePositions(
+                    section2Index,
+                    smoothedIntermediatePositions);
             }
 
+            activeRenderIntermediatePositions =
+                sampledIntermediatePointCount > 0
+                    ? smoothedIntermediatePositions
+                    : null;
             return smoothedSections;
+        }
+
+        private void AppendCurvedIntermediatePositions(
+            int section0Index,
+            int section1Index,
+            int section2Index,
+            int section3Index,
+            float t)
+        {
+            for (int i = 0; i < sampledIntermediatePointCount; i++)
+            {
+                smoothedIntermediatePositions.Add(EvaluateCatmullRom(
+                    GetSampledIntermediatePosition(section0Index, i),
+                    GetSampledIntermediatePosition(section1Index, i),
+                    GetSampledIntermediatePosition(section2Index, i),
+                    GetSampledIntermediatePosition(section3Index, i),
+                    t));
+            }
+        }
+
+        private void AppendSourceIntermediatePositions(
+            int sectionIndex,
+            List<Vector3> destination)
+        {
+            for (int i = 0; i < sampledIntermediatePointCount; i++)
+            {
+                destination.Add(
+                    GetSampledIntermediatePosition(sectionIndex, i));
+            }
+        }
+
+        private Vector3 GetSampledIntermediatePosition(
+            int sectionIndex,
+            int intermediateIndex)
+        {
+            int flatIndex =
+                sectionIndex * sampledIntermediatePointCount +
+                intermediateIndex;
+
+            if (flatIndex >= 0 &&
+                flatIndex < sectionIntermediatePositions.Count)
+            {
+                return sectionIntermediatePositions[flatIndex];
+            }
+
+            TrailSection section = sections[sectionIndex];
+            float widthV =
+                (float)(intermediateIndex + 1) /
+                (sampledIntermediatePointCount + 1);
+
+            return Vector3.Lerp(
+                section.pointA,
+                section.pointB,
+                widthV);
         }
 
         private void AddSmoothedSection(
@@ -1724,4 +2280,111 @@ namespace Hovl
             }
         }
     }
+
+#if UNITY_EDITOR
+    [CustomEditor(typeof(HS_SwordMeshTrail))]
+    [CanEditMultipleObjects]
+    public class HS_SwordMeshTrailEditor : Editor
+    {
+        private SerializedProperty lockAutomaticEditorUpdatesProperty;
+
+        private void OnEnable()
+        {
+            lockAutomaticEditorUpdatesProperty =
+                serializedObject.FindProperty("lockAutomaticEditorUpdates");
+        }
+
+        public override void OnInspectorGUI()
+        {
+            serializedObject.Update();
+
+            SerializedProperty scriptProperty =
+                serializedObject.FindProperty("m_Script");
+
+            if (scriptProperty != null)
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.PropertyField(scriptProperty);
+                }
+            }
+
+            DrawPropertiesExcluding(
+                serializedObject,
+                "m_Script",
+                "lockAutomaticEditorUpdates");
+
+            EditorGUILayout.Space(10f);
+            EditorGUILayout.LabelField(
+                "Final Scene Protection",
+                EditorStyles.boldLabel);
+
+            if (lockAutomaticEditorUpdatesProperty == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "The editor-update lock property could not be found.",
+                    MessageType.Error);
+                serializedObject.ApplyModifiedProperties();
+                return;
+            }
+
+            EditorGUI.showMixedValue =
+                lockAutomaticEditorUpdatesProperty.hasMultipleDifferentValues;
+
+            EditorGUI.BeginChangeCheck();
+            bool requestedLock = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    "Lock Automatic Editor Updates",
+                    "Enable only after the trail and preset are fully configured. " +
+                    "This prevents automatic Edit Mode changes when the scene opens."),
+                lockAutomaticEditorUpdatesProperty.boolValue);
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (requestedLock)
+                {
+                    bool confirmed = EditorUtility.DisplayDialog(
+                        "Lock Automatic Editor Updates?",
+                        "Enable this only after the trail has been fully configured.\n\n" +
+                        "While locked, opening the scene will not automatically " +
+                        "apply preset changes, create missing trail points, create " +
+                        "intermediate points, or refresh Trail Top effects.\n\n" +
+                        "Play Mode will still apply the selected preset and initialize " +
+                        "the trail normally.",
+                        "Lock Updates",
+                        "Cancel");
+
+                    if (confirmed)
+                    {
+                        lockAutomaticEditorUpdatesProperty.boolValue = true;
+                    }
+                }
+                else
+                {
+                    lockAutomaticEditorUpdatesProperty.boolValue = false;
+                }
+            }
+
+            EditorGUI.showMixedValue = false;
+
+            if (lockAutomaticEditorUpdatesProperty.boolValue)
+            {
+                EditorGUILayout.HelpBox(
+                    "Automatic Edit Mode updates are locked. Play Mode still applies " +
+                    "the selected preset. Use Apply Trail Preset or the component " +
+                    "context commands when you intentionally want to update the scene.",
+                    MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "Enable this only after final setup. Locking prevents the trail " +
+                    "from automatically changing or dirtying the scene when it opens.",
+                    MessageType.Warning);
+            }
+
+            serializedObject.ApplyModifiedProperties();
+        }
+    }
+#endif
 }

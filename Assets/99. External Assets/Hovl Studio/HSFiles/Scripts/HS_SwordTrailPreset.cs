@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 namespace Hovl
 {
@@ -10,6 +11,14 @@ namespace Hovl
         menuName = "Hovl/Sword Trail Preset")]
     public class HS_SwordTrailPreset : ScriptableObject
     {
+        public enum AutomaticAxis
+        {
+            Longest = 0,
+            LocalX = 1,
+            LocalY = 2,
+            LocalZ = 3
+        }
+
         [Serializable]
         public class MaterialLayer
         {
@@ -27,6 +36,7 @@ namespace Hovl
         [Min(0.01f)] public float trailLifetime = 0.35f;
         [Min(0f)] public float minimumSectionDistance = 0.015f;
         [Min(0f)] public float sampleInterval;
+        [Tooltip("Additional vertex lines. The trail component also uses this value as the custom intermediate-point count when its local option is enabled.")]
         [Range(0, 10)] public int linesAlongTrail = 2;
 
         [Tooltip("When enabled, vertex alpha fades from the newest to the oldest trail sections using Alpha Over Lifetime.")]
@@ -38,6 +48,10 @@ namespace Hovl
         public bool startActive;
         public bool clearPreviousTrailOnStart = true;
 
+        [Header("Mobile Optimization")]
+        [Tooltip("Reduces runtime cost on mobile devices. Sampling, mesh rebuilding, and dissolve updates are limited to 30 Hz, width subdivisions and smoothing are capped, shadows are disabled, and empty trails stop doing heavy per-frame work.")]
+        public bool optimizeForMobile;
+
         [Header("Low FPS Curve Smoothing")]
         [Tooltip("Adds intermediate mesh sections along a smoothed Catmull-Rom curve instead of connecting low-FPS samples with straight segments.")]
         public bool smoothLowFps = true;
@@ -48,9 +62,8 @@ namespace Hovl
         [Tooltip("Maximum number of additional curved sections generated between two recorded trail samples.")]
         [Range(0, 32)] public int maxIntermediateSectionsPerFrame = 8;
 
-        [Header("Automatic Trail Points")]
-        public HS_SwordMeshTrail.AutomaticAxis automaticAxis =
-            HS_SwordMeshTrail.AutomaticAxis.Longest;
+        [Header("Automatic Trail Top and Bottom")]
+        public AutomaticAxis automaticAxis = AutomaticAxis.Longest;
 
         public bool recalculatePointsOnAwake = true;
         [Min(0f)] public float pointAInset;
@@ -68,9 +81,10 @@ namespace Hovl
         public bool receiveShadows;
         public ShadowCastingMode shadowCastingMode = ShadowCastingMode.Off;
 
-        [Header("Trail Point A Effects")]
-        [Tooltip("These prefabs are instantiated as children of Trail Point A when the preset is applied.")]
-        public List<GameObject> pointAEffectPrefabs = new List<GameObject>();
+        [Header("Trail Top Effects")]
+        [Tooltip("These prefabs are instantiated as children of Trail Top when the preset is applied.")]
+        [FormerlySerializedAs("pointAEffectPrefabs")]
+        public List<GameObject> trailTopEffectPrefabs = new List<GameObject>();
 
         private void OnValidate()
         {
@@ -100,9 +114,9 @@ namespace Hovl
                 }
             }
 
-            if (pointAEffectPrefabs == null)
+            if (trailTopEffectPrefabs == null)
             {
-                pointAEffectPrefabs = new List<GameObject>();
+                trailTopEffectPrefabs = new List<GameObject>();
             }
         }
     }

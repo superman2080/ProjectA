@@ -1,8 +1,8 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Runtime.Serialization.Formatters;
-using System;
 using UnityEngine;
+
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Hovl
 {
@@ -25,8 +25,28 @@ namespace Hovl
 
         private void Update()
         {
-            if (Input.GetKeyDown("h"))
+            if (WasGuiTogglePressed())
                 GUIswitcher = !GUIswitcher;
+        }
+
+        private bool WasGuiTogglePressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null &&
+                Keyboard.current[Key.H].wasPressedThisFrame)
+            {
+                return true;
+            }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+            if (Input.GetKeyDown(KeyCode.H))
+            {
+                return true;
+            }
+#endif
+
+            return false;
         }
 
         private void OnGUI()

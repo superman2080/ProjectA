@@ -6,16 +6,9 @@ using UnityEngine;
 namespace ChartGen
 {
     /// <summary>SongChart를 오디오 재생 시각에 맞춰 순차적으로 PatternHandler.SetPattern에 흘려보내는 재생 글루.</summary>
-    public class ChartPlayer : MonoBehaviour
+    public class ChartPlayer : MusicPlayerBase
     {
         [SerializeField] private SongChart debugChart;
-        [SerializeField] private AudioSource audioSource;
-
-        /// <summary>
-        /// 곡이 흐르는 오디오 소스. <b>읽기 전용</b>이다 — 연출이 배속·볼륨을 만질 때
-        /// <c>GetComponent</c>로 추측하지 않게 하려고 연다(같은 오브젝트에 있는 것은 배선의 우연이다).
-        /// </summary>
-        public AudioSource SongSource => audioSource;
         [SerializeField] private PatternHandler patternHandler;
 
         [Tooltip("전투 연출. 비우면 적 없이 패턴만 재생된다(기존 동작).")]
@@ -53,49 +46,17 @@ namespace ChartGen
                 ? GameSession.Instance.SelectedChart
                 : debugChart;
 
+        /// <summary>재생 중인 채보의 템포. 채보가 없으면 0(=모른다)이다.</summary>
+        public override float Bpm => ActiveChart != null ? ActiveChart.bpm : 0f;
+
         private void Start()
         {
             if (playOnStart)
                 Play();
         }
 
-        // 구독한 대상을 그대로 들고 있다가 그 대상에서 해제한다. OnDisable에서 SoundManager.Instance를 다시 부르면
-        // 종료 순서상 SoundManager가 먼저 죽었을 때 게터가 새 인스턴스를 만들어 씬에 미아 오브젝트를 남긴다.
-        private SoundManager subscribedSoundManager;
-
-        private void OnEnable()
-        {
-            subscribedSoundManager = SoundManager.Instance;
-
-            if (subscribedSoundManager != null)
-                subscribedSoundManager.OnVolumeChanged += HandleVolumeChanged;
-
-            ApplyMusicVolume();
-        }
-
-        private void OnDisable()
-        {
-            if (subscribedSoundManager == null)
-                return;
-
-            subscribedSoundManager.OnVolumeChanged -= HandleVolumeChanged;
-            subscribedSoundManager = null;
-        }
-
-        private void HandleVolumeChanged(VolumeChannel channel)
-        {
-            if (channel == VolumeChannel.Music || channel == VolumeChannel.Master)
-                ApplyMusicVolume();
-        }
-
-        private void ApplyMusicVolume()
-        {
-            if (audioSource != null)
-                audioSource.volume = SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Music);
-        }
-
         [ContextMenu("Play")]
-        public void Play()
+        public override void Play()
         {
             if (ActiveChart == null)
             {
@@ -120,7 +81,7 @@ namespace ChartGen
         }
 
         [ContextMenu("Stop")]
-        public void Stop()
+        public override void Stop()
         {
             if (playCoroutine != null)
             {

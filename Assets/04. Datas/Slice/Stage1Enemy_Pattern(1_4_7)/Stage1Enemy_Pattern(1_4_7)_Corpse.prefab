@@ -379,6 +379,8 @@ MonoBehaviour:
   minimumSectionDistance: 0.015
   sampleInterval: 0
   linesAlongTrail: 2
+  useCustomIntermediatePoints: 0
+  customIntermediatePoints: []
   fadeAlphaOverLifetime: 1
   alphaOverLifetime:
     serializedVersion: 2
@@ -406,6 +408,7 @@ MonoBehaviour:
     m_RotationOrder: 4
   startActive: 0
   clearPreviousTrailOnStart: 1
+  optimizeForMobile: 0
   smoothLowFps: 1
   maximumSmoothedSectionDistance: 0.08
   maxIntermediateSectionsPerFrame: 8
@@ -419,6 +422,7 @@ MonoBehaviour:
   sortingOrder: 0
   receiveShadows: 0
   shadowCastingMode: 0
+  lockAutomaticEditorUpdates: 0
   presetPointAEffectInstances: []
   appliedEffectPreset: {fileID: 11400000, guid: d106f0d079a852b41a5243961ffacaf0, type: 2}
 --- !u!1 &885679272139824983

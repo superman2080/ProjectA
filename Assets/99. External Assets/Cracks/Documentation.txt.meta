@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 123049496ae9d17439eaa10f84ad6e40
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Documentation.txt
+  uploadId: 329945

@@ -1,0 +1,26 @@
+Procedural Cracks Documentation (Updated 7/20/2019)
+------------------------------------------------------
+
+Overview:
+
+Thank you for purchasing my asset!  With Procedural Cracks
+you'll be able to add randomized breaking effects to any
+surface.  The asset comes with the Cracks shader
+that is applied to any cracks object.
+
+Setup:
+
+Apply a material using the Cracks/Cracks shader to an object.
+
+Cracks.shader Properties:
+-Inner Color - Sets the upper-side near-the-surface color of the cracks.
+-Core Color - Sets the bottom half's color.
+-Edge Color - Sets the color of the adjustable edge effect.
+-Edge Height - Sets the height of the edge effect.
+-Inner Texture (RGB) - Sets the texture of the inside of the cracks
+-Mask Texture - Sets the mask that the cracks will render on
+-Height Scale - Determines how deep the cracks should sink.
+-Parallax Samples - Determines how many steps to render the cracks.  Higher means better quality at the cost of performance.
+-Cracks Size - Determines the amount of cracks rendered
+-Crack Thickness - Sets the width of the cracks
+-Noise Offset - Offsets the noise function

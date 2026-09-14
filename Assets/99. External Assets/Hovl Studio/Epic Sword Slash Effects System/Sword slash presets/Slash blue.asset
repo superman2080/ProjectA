@@ -43,6 +43,7 @@ MonoBehaviour:
     m_RotationOrder: 4
   startActive: 0
   clearPreviousTrailOnStart: 1
+  optimizeForMobile: 0
   smoothLowFps: 1
   maximumSmoothedSectionDistance: 0.08
   maxIntermediateSectionsPerFrame: 8

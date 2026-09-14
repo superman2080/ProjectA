@@ -50,7 +50,7 @@ Assets/
 │   │   ├── SequenceStep.cs          # 스텝 추상 베이스([SerializeReference])
 │   │   ├── SequenceBindings.cs      # 슬롯 이름 → 씬 오브젝트
 │   │   ├── SequenceContext.cs       # 스텝이 씬 세계에 닿는 유일한 통로
-│   │   ├── Steps/                   # Wait · MoveTo · Dialog · WaitFlag · Timeline
+│   │   ├── Steps/                   # Wait · MoveTo · Dialog · WaitFlag · Timeline · LoadScene
 │   │   └── Editor/                  # 씬 뷰 핸들 저작 + 슬롯 드롭다운
 │   ├── StateMachine/                # 평평한 FSM(IState·StateBase·StateMachine) — ⚠ 현재 사용처 0
 │   ├── ChartGen/                    # 채보 데이터·재생·굽기(온셋 분석) 시스템
@@ -104,6 +104,7 @@ Assets/
 │   ├── Util/
 │   │   └── Singleton.cs             # MonoBehaviour 싱글톤 베이스
 │   ├── GameSession.cs               # 씬 간 SelectedChart 전달(DontDestroyOnLoad 싱글톤)
+│   ├── SceneTransition.cs           # 씬 전환의 유일 관리 지점(§9-1)
 │   ├── PlayerHealth.cs              # 목숨(§7-6)
 │   └── SongSelectManager.cs         # 곡 선택 → GameSession 등록 → 씬 전환
 ├── 03. Prefabs/StoryProps/          # 배경 프롭 낱개 프리팹(툴 산출물, §13)
@@ -237,8 +238,10 @@ Assets/
   - 일괄 도구: `killOnSuccess` 전부 켜기/끄기 / 매 N번째만. `killOnSuccess` 기본값은 **켜짐**.
 
 ### 6. 캐릭터 액션 (CharacterActionPlayer)
-- `PatternHandler.OnPatternComplete` 구독. **완주 성공(AllCorrect)이면 패턴별 베기 클립(`Pattern.PlayerAttack`, 적이 공격자면 `PlayerParry`)** 재생. 슬롯이 비면 무연출이다 — 구 `SuccessAnimationClip` + 트림 4필드 폴백은 제거됐다(전 템플릿이 `ClipAlignment`로 이관 완료).
-- **⚠ 실패는 역할로 갈린다.** 피격(Hit) 클립은 **`Attacker.Enemy`일 때만**, 그것도 첫 미스 순간이 아니라 **`impactTime`에 예약해서** 재생한다(그때 적 칼이 닿는다). **`Attacker.Player`면 피격 자체가 없다** — 적이 애초에 휘두르지 않았으므로 헛스윙으로 끝나고, `OnPlayerHit`이 안 나므로 **카메라 피격 큐(`PatternMiss`)도 체력 감소도 없다**. 그 실패의 화면상 사실은 "적이 막았다" 하나뿐이다(§11-2의 패링).
+- **⚠ 구독하는 것은 `OnJudgeTargetBegan`이다**(`OnPatternComplete`가 아니다 — 그 이벤트는 이 클래스에 배선돼 있지 않다). 판정 대상이 되는 순간 **패턴별 베기 클립(`Pattern.PlayerAttack`, 적이 공격자면 `PlayerParry`)을 예약**하고, 임팩트에서 와인드업만큼 역산한 시각에 시작한다. 슬롯이 비면 무연출이다 — 구 `SuccessAnimationClip` + 트림 4필드 폴백은 제거됐다(전 템플릿이 `ClipAlignment`로 이관 완료).
+- **⚠ 실패해도 칼은 나간다 — 취소는 '맞는 패턴'에서만 한다.** 예약 시작이 **대개 마지막 노드보다 이르므로**(와인드업 실측 p50 0.26초 > `goodWindow` 0.1초), 첫 미스에서 예약을 버리면 **미스가 이를수록 클립이 통째로 사라지고 늦으면 나오는 비대칭**이 난다. 화면에 남아야 하는 사실은 "안 휘둘렀다"가 아니라 **"휘둘렀는데 막혔다"**다. **⚠ 그 경로에서 `RaiseSwingEnded`를 부르면 안 된다** — `swingActive`가 내려가 히트스톱 가드가 풀리고 칼날 트레일이 스윙 도중에 꺼진다.
+- **⚠ 정렬은 실패 경로에서도 그대로 성립한다** — 미스는 `Deadline`을 움직이지 않으므로(오답은 패턴을 정체시키고 만료로 끝나며, 정답 노드 위의 타이밍 Miss는 진행만 한다) `impact = Deadline + ImpactOffset`이 불변이다.
+- **⚠ 취소하는 경우는 둘뿐이고 둘 다 '맞는다'.** 피격(Hit) 클립은 **`Attacker.Enemy`**(막기 실패)와 **상호 공격**(`Pattern.CountersOnFail`, §11-10)에서만, 그것도 첫 미스 순간이 아니라 **`impactTime`에 예약해서** 재생한다(그때 적 칼이 닿는다). 그 외에는 `OnPlayerHit`이 안 나므로 **카메라 피격 큐(`PatternMiss`)도 체력 감소도 없다** — 그 실패의 화면상 사실은 "적이 막았다" 하나뿐이다(§11-2).
 - **⚠ 두 배우를 맞추는 규칙 — 공유하는 것은 임팩트 순간 하나뿐이다.** 플레이어 공격과 적 클립(공격/패링/사망)은 길이도, 저작 배속도, 압축을 유발하는 제약도 다르다(플레이어는 다음 패턴까지의 여유, 적은 처치 확정~임팩트 간격). **배속이 같아질 이유가 없으므로 시작이나 끝을 맞추는 정렬은 원리적으로 성립하지 않는다.** 각 배우는 `Deadline + Pattern.ImpactOffset`이라는 **같은 절대 시각**에 **자기 임팩트 프레임**이 오도록 **자기 시작 시점과 자기 배속을 역산**한다(`ClipAlignment.ResolveScheduleStart` / `ResolvePlaySpeed`가 전부 `impactAlignTime`을 받는 이유). 시작·끝·배속이 서로 달라도 칼이 닿는 순간은 구조적으로 일치한다.
 - **⚠ 배속은 클립 전체에 걸린다**(Animator Speed Multiplier). `ResolvePlaySpeed`는 **임팩트 이전** 구간만 보고 배속을 정하지만 그 값이 이후에도 적용된다 → **`ImpactTime`을 뒤에 찍을수록 마무리 동작까지 빨라진다.** 사망 클립에서 특히 직접적이다(§11-3).
 - **정렬 앵커는 '임팩트 프레임'이다.** 칼날이 표적을 지나가는 프레임(`Pattern.AnimationImpactTime`, 클립 절대 초)이 **표적이 갈라지는 시각과 같은 식**(`Deadline + Pattern.ImpactOffset`)에 오도록 시작 시점과 배속을 역산한다 — 트림 끝을 `LastNodeTime`에 맞추던 예전 방식은 "칼은 지나갔는데 뒤늦게 갈라지는" 어긋남을 낳았다. 임팩트 **이후** 잔여 트림 구간은 같은 배속으로 이어 재생되어 마무리 동작이 뒤에 남는다. 미오서링(0 이하/범위 밖)이면 트림 끝으로 폴백. 오서링은 `Tools/Animation Clip Trimmer`(Start/**Impact**/End 세 마크). 상세: `docs/SliceImpactFrame/`
@@ -431,6 +434,20 @@ Assets/
 - **아직 안 된 것은 씬 배선뿐이다** — `Explore_*`·`StageBackground_*` 씬이 없고 `BattleScene`에서 배경을 분리하지 않았다. 코드는 전부 있다(`Encounter`·`EncounterDirector`·`BattleSceneBootstrap`·`ExploreSceneBootstrap`·`GameProgress`·`ScreenFader`·`UnlockStep`·`SequenceZoneTrigger`).
 - 상세: `docs/SceneSplit/`
 
+### 9-1. 씬 전환 (SceneTransition)
+
+- **모든 씬 전환은 `SceneTransition.Instance.Load(sceneName)` 하나로 간다.** `SceneManager.LoadScene`을 직접 부르는 곳은 이제 없다 — 유일한 예외는 `BattleSceneBootstrap.LoadStageBackground`의 **가산 배경 로드**이고, 그것은 씬 전환이 아니다.
+- **덮기 → 비동기 로드 → 최소 지속시간 → 넘기기**가 한 코루틴이다. `LoadSceneAsync` + `allowSceneActivation = false`로 읽어 두고, `minBlackDuration`(0.5초)과 `progress >= 0.9f`를 **둘 다** 만족해야 켠다. 짧은 씬이 깜빡 지나가지 않게 하는 하한이지 로딩 화면이 아니다 — **진행바도 퍼센트도 문구도 없다**(§9의 "이음매가 안 보인다").
+- **⚠ 페이드 인은 안 한다.** 걷어내는 것은 받는 씬의 부트스트랩이 든다(`CoverInstantly` → 준비 → `FadeIn`). 여기서 같이 걷으면 준비가 안 끝난 씬이 새어 보인다.
+- **`ScreenFader`는 한 줄도 안 고쳤다** — 그 클래스의 규율("여기는 알파만 민다")이 그대로 남고, *무엇을 덮을지*를 정하는 쪽이 이 클래스다. **⚠ 이미 덮여 있으면 `FadeOut` 코루틴이 즉시 끝나므로**, 시퀀스가 먼저 덮어 둔 경로(`ScreenFadeStep` → `LoadSceneStep`)와 겹쳐도 화면이 두 번 깜빡이지 않는다.
+- **로딩 링은 `Image` 하나다**(`Managers/ScreenFader/LoadingRing`, 우하단 고정). **재사용하는 것은 `FocusRing`의 그림이지 `FocusRingView` 클래스가 아니다** — 그쪽은 판정 타이밍 전용(`OnArrived`·`IPoolable`)이라 로딩과 아무 관계가 없다.
+  - Radial360 `Image`가 주는 축은 셋뿐이라(`fillOrigin`·`fillClockwise`·`fillAmount`) 두 단계가 이렇게 갈린다 — **채움**은 `clockwise = true`로 0→1, **비움**은 `clockwise = false`로 1→0. **⚠ 비움이 반시계인 것이 요구 그 자체다**: 반시계로 잰 호가 줄면 *사라지는 쪽*이 하단부터 시계방향이 된다. `fillOrigin`은 두 단계가 같아서(Bottom) 코드가 안 건드린다.
+  - 배선이 비면 **아이콘만 안 뜨고 전환은 성립한다**(`Managers` 없이 진입하는 `SongSelectScene` 경로).
+- **⚠ 시계가 전부 unscaled다.** 마무리 실루엣(§14)이 `Time.timeScale = 0.1`을 걸어 둔 채로 전환에 들어올 수 있다.
+- **시퀀스에서는 `LoadSceneStep`이 부른다.** ⚠ 그 스텝은 **일부러 안 끝난다**(`IsFinished`가 언제나 false) — 씬이 바뀌면 러너째 사라지므로 뒤에 올 스텝이 있을 수 없고, 끝났다고 말하면 로드가 도는 동안 남은 스텝이 실행된다. **시퀀스의 마지막에 둔다.**
+- **튜토리얼은 마무리 실루엣이 걷히면 대사 없이 바로 넘어간다** — `Highlight(해제) → ScreenFadeStep(Out, waitForFinale) → UnlockStep → LoadSceneStep(Explore_Stage1)`. ⚠ `UnlockStep`이 **앞**이어야 한다(뒤면 씬이 넘어가 영영 안 돈다). 예전의 파편 배치·이동·페이드 인 네 스텝은 **오직 그 대사를 보여 주려고** 있었으므로 같이 지웠다 — 남기면 걷어냈다가 곧바로 다시 덮는다(`Rift`·`FinaleDebris` 슬롯도 그래서 사라졌다, **씬 오브젝트는 남아 있다**).
+- 상세: `docs/SceneTransition/`
+
 ### 10. 인프라
 - **`Singleton<T>`**: `Instance` 게터가 최초 1회 인스턴스를 캐시/생성. `DontDestroy` 플래그로 씬 유지 여부 결정.
 - **⚠ `Awake`에서 만드는 순수 C# 객체는 지연 생성으로 둔다**(`EnsurePool`/`EnsureVoices` 관용구). 플레이 도중 스크립트가 리컴파일되면 직렬화 대상이 아닌 그 필드만 null·빈 상태가 된 채 오브젝트가 살아남고 **`Awake`는 다시 돌지 않는다**. 증상이 원인과 멀다 — `EnemyDirector.pool`이 null이면 `PrepareStage`가 죽고 그것을 기다리던 `ChartPlayer` 코루틴이 끊겨 **곡이 아예 시작되지 않는다**. 현재 이 방식으로 자기 복구하는 곳: `EnemyDirector.pool` · `PatternEffectDirector.pool` · `SfxManager.voices` · `InputHandler.inputActions`(해제 가드).
@@ -471,8 +488,9 @@ Assets/
 - **다음 표적은 창이 고른다** — 여기가 속도감의 심장이다(`TakeTargetForWindow`). 창은 음악이 정해 0.5~2.1초로 4배 흔들리므로, 거리를 고정하면 속도가 그만큼 흔들린다. 거꾸로 `목표거리 = cruiseSpeed × 창 / playerShare + duelDistance`로 잡으면 **체감 속도가 일정**해지고 짧은 구간은 근거리 난타, 긴 구간은 무대 횡단 대시로 갈린다. **`playerShare`로 나누는 항을 빼면 비율을 올릴수록 오히려 느려진다.**
 - **만나는 지점의 비율은 `playerShare`(현재 1.0 — 적은 제자리에 선다)**. 예전엔 0.5 고정 + 리시 1.5m라 플레이어가 **초속 1m, 걷는 것보다 느렸고**, 그 뒤 0.85로 올렸다. 지금 1인 이유: **적이 정지 표적으로 보이는 것을 막는 일을 '마중 한 걸음'이 아니라 견제 클립(`Pattern.EnemyFeint`, §11-4)이 한다.** 1보다 낮추면 적 이동이 창에 **비례**해 커져(`목표거리 = cruiseSpeed × 창 / playerShare`) 견제 구간이 `0.735 × 창`으로 잘린다 — 실측상 2초짜리 클립이 들어갈 확률이 0%가 된다. **플레이어 속도는 share와 무관하다**(거리를 `cruiseSpeed × 창`으로 잡으므로 share가 오르면 목표 거리가 오히려 줄어든다). `EnemyView.EarliestArrival`은 그대로 남아 있다 — 이동이 남는 경로(후퇴 후 복귀·링 등장)에서 여전히 필요하다.
 - **상대 선택은 `BindReservation`이 한다** — 창을 알 수 있는 유일한 시점이기 때문(§11-1). `KillOpponent`는 죽은 상대를 놓아주기만 한다. 둘은 `ResolveReservation` 한 호출 안이라 같은 프레임이다.
-- **⚠ 실패한 적의 반응은 창이 고른다**(`EnemyDirector.ResolveRetreatDistance` → `EnemyView.Resolve`). **다음 패턴의 창이 후퇴+재접근을 감당하면 회피**(`evadeStateName`, `failRetreatDistance`), **못 감당하면 제자리 패링**(`parryStateName`, 거리 0). 조건: `창 >= retreatDuration + failRetreatDistance×playerShare/cruiseSpeed + retreatWindowMargin`. 다음 예약이 없으면(곡 공백) 물러나지 않는다 — 돌아올 사람이 없다. **`Attacker.Enemy` 실패는 언제나 물러난다**(벤 뒤의 여파이지 회피가 아니다).
-- **왜 조건부인가**: 재접근은 `TakeTargetForWindow`를 안 거친다(같은 적이 유지되므로) → **거리를 창에 맞추는 §11-2 규율이 빠져 있어** `failRetreatDistance`가 거리를 통째로 정한다. 창이 짧으면 그대로 늘어져 **0.9 m/s로 기어가고**, 그 사이 Attack 레이어 웨이트가 1이라(`recoveryHold` + `Release` ≈1.15초) **로코모션조차 안 보인다**. 제자리 패링이면 이동 거리가 `convergeMinDistance`(0.15m) 아래라 수렴 로코모션을 **아예 안 건다**. ⚠ 판정에 쓰는 `arriveTime`은 **낙관적**이다 — 진짜 마감은 플레이어 자기 스윙 시작인데 그 값은 `OnJudgeTargetBegan` 뒤에야 알 수 있어 못 본다. `retreatWindowMargin`이 그 간격을 흡수한다. 상세: `docs/FailConverge/`
+- **⚠ `Attacker.Player`의 결말은 성패와 무관하게 제자리다**(`EnemyDirector.ResolveRetreatDistance`가 0을 돌려준다 → `EnemyView.Resolve`의 `parried` 식 → `Pattern.EnemyParry`, 없으면 `parryStateName`). **`Attacker.Enemy`만 물러난다**(성공은 패링당해 밀려나는 것, 실패는 벤 뒤의 여파 — 둘 다 회피가 아니다).
+- **근거가 둘이고 서로 다르다.** **실패**가 0인 것은 §6 때문이다 — 플레이어의 베기가 미스 뒤에도 임팩트까지 나가므로, 적이 물러나면 **닿고 있는 칼을 두고 혼자 뒷구르기하는 그림**이 된다. **성공(사슬 중간)**이 0인 것은 재접근이 `TakeTargetForWindow`를 안 거쳐(같은 적이 유지되므로) **거리를 창에 맞추는 규율이 빠지기** 때문이다 — 창이 짧으면 **0.9 m/s로 기어가고** 그 사이 Attack 레이어 웨이트가 1이라(`recoveryHold` + `Release` ≈1.15초) **로코모션조차 안 보인다**. 제자리면 이동 거리가 `convergeMinDistance`(0.15m) 아래라 수렴 로코모션을 **아예 안 건다**.
+- **⚠ 예전에는 실패만 다음 패턴의 창을 재서 회피와 패링을 갈랐다**(`retreatWindowMargin`). 그 전제가 *"플레이어가 헛스윙한다"*였고 지금은 참이 아니라 그 분기와 노브가 통째로 사라졌다 — 연타(§2-1)와 상호 공격(§11-10)이 각자 건너뛰던 조기 반환도 여기 흡수됐다. **`Attacker.Player`에서 `Evade`는 이제 상호 공격의 피격에만 뜬다**(§7-4의 이펙트 큐 조건도 그 뜻으로 읽는다). 상세: `docs/FailSwing/` · `docs/FailConverge/`
 - **⚠ 적은 도착 시각까지 끌지 않고 `moveSpeed`(3 m/s)로 빨리 가서 선다**(`EnemyView.EarliestArrival`). 안 그러면 **도착하는 순간이 곧 베이는 순간**이라 서 있는 구간이 아예 없다 — `ScheduleMove`가 선형 보간이라 1m를 1.3초에 펴면 초속 0.77m로 기어가고, 화면에는 *"제자리에 선 것 같은데 Run이 계속 도는"* 그림이 된다(`moving`이 true인 동안 로코모션이 유지되므로). **앞당기는 건 언제나 안전하다** — "클립 시작 전에 도착"이라는 제약과 방향이 같다.
   - 다만 이건 **결투 접근(`ApproachDuel`)에만** 건다. 후퇴·등장은 "이만큼 걸리는 동작"이라 저작된 지속시간을 그대로 쓴다(후퇴를 속도로 자르면 회피의 날카로움이 죽는다).
 - **플레이어 로코모션은 창으로 갈린다**(거리가 아니다): `창 > 대시클립 길이 → Sprint`(루프, 이동속도에 맞춰 배속) / `이하 → Quickshift`(단발, 창 안에 완주하도록 배속, **상한 없음**). 거리로 가르면 평균 창(1.48초) > Quickshift 클립(1초)이라 **클립이 먼저 끝나고 나머지는 미끄러진다.**

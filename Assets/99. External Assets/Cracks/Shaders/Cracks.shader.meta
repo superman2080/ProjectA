@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 403d0b87377d9f245b64af8fc0ec2c42
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Shaders/Cracks.shader
+  uploadId: 329945

@@ -1,6 +1,4 @@
-using System.Collections;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>
 /// <b>탐색 씬에서 전투로 넘어가는 유일한 지점.</b> 무대에 들어선 사건을 받아
@@ -70,7 +68,7 @@ public class EncounterDirector : MonoBehaviour
         {
             case EncounterState.Fresh:
                 // 처음은 들어서면 시작된다. 확인 창을 두면 그것이 곧 "스테이지 선언"이 된다.
-                StartCoroutine(EnterRoutine(encounter));
+                Enter(encounter);
                 break;
 
             case EncounterState.Retry:
@@ -93,7 +91,7 @@ public class EncounterDirector : MonoBehaviour
 
         Encounter target = promptTarget;
         ClearPrompt();
-        StartCoroutine(EnterRoutine(target));
+        Enter(target);
     }
 
     private void ClearPrompt()
@@ -104,12 +102,12 @@ public class EncounterDirector : MonoBehaviour
         DialogUI.Instance?.HidePrompt();
     }
 
-    private IEnumerator EnterRoutine(Encounter encounter)
+    private void Enter(Encounter encounter)
     {
         if (encounter.Chart == null)
         {
             Debug.LogError($"[EncounterDirector] '{encounter.name}'에 SongChart가 없어 진입할 수 없습니다.", encounter);
-            yield break;
+            return;
         }
 
         leaving = true;
@@ -119,10 +117,7 @@ public class EncounterDirector : MonoBehaviour
 
         WriteReturnInfo(encounter);
 
-        ScreenFader fader = ScreenFader.Instance;
-        if (fader != null) yield return fader.FadeOut();
-
-        SceneManager.LoadScene(battleSceneName);
+        SceneTransition.Instance?.Load(battleSceneName);
     }
 
     /// <summary>

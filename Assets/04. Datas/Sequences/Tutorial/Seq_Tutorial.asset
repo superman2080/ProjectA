@@ -21,8 +21,6 @@ MonoBehaviour:
   - CamCall
   - CamArrival
   - EnemyDirector
-  - Rift
-  - FinaleDebris
   steps:
   - rid: 9060497110594486391
   - rid: 9060497124397154889
@@ -55,12 +53,8 @@ MonoBehaviour:
   - rid: 9060497110594486407
   - rid: 9060497110594486408
   - rid: 9060497138730926102
-  - rid: 9060497138730926101
-  - rid: 9060497138730926100
-  - rid: 9060497138730926099
-  - rid: 9060497138730926098
-  - rid: 9060497110594486409
   - rid: 9060497110594486410
+  - rid: 9060497138730926115
   references:
     version: 2
     RefIds:
@@ -348,28 +342,6 @@ MonoBehaviour:
         caption: 
         padding: 24
         showKnob: 1
-    - rid: 9060497110594486409
-      type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        lines:
-        - printTime: 2
-          name: "\uD5C8\uBB3C"
-          script: "<color=red>...\uBBF8\uC624...</color>"
-          skipProgress: 1
-        - printTime: 1
-          name: "\uBBF8\uC624"
-          script: "\u2026\u2026\uBC29\uAE08, \uC81C \uC774\uB984\uC744 \uBD80\uB978
-            \uAC83 \uAC19\uC740\uB370\uC694."
-          skipProgress: 0.75
-        - printTime: 0.5
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "...\uC2E0\uACBD\uC4F0\uC9C0 \uC54A\uC544\uB3C4 \uB3FC."
-          skipProgress: 0.75
-        - printTime: 0.5
-          name: "\uCE74\uC2DC\uB9C8"
-          script: "\uAC00\uB054 \uC800\uB7F0 \uBCC0\uC885\uC774 \uB098\uC62C \uB54C\uAC00
-            \uC788\uC5B4."
-          skipProgress: 0.75
     - rid: 9060497110594486410
       type: {class: UnlockStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
@@ -472,34 +444,6 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
-    - rid: 9060497138730926098
-      type: {class: ScreenFadeStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        mode: 1
-        waitForFinale: 0
-        tutorialDirectorSlot: 
-        finaleTimeout: 3
-    - rid: 9060497138730926099
-      type: {class: MoveToStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        actorSlot: 
-        destination: {x: 0, y: 0, z: 0}
-        speed: 50
-        arriveRadius: 0.15
-        faceMoveDirection: 0
-        turnDuration: 0.12
-        overrideFacing: 1
-        facingYaw: 0
-    - rid: 9060497138730926100
-      type: {class: SetActiveStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: FinaleDebris
-        active: 1
-    - rid: 9060497138730926101
-      type: {class: SetActiveStep, ns: SequenceSpace, asm: Assembly-CSharp}
-      data:
-        targetSlot: Rift
-        active: 0
     - rid: 9060497138730926102
       type: {class: ScreenFadeStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
@@ -582,3 +526,7 @@ MonoBehaviour:
         patternGap: 0.6
         mashWindow: 4
         retryDelay: 1
+    - rid: 9060497138730926115
+      type: {class: LoadSceneStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        sceneName: Explore_Stage1

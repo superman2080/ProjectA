@@ -144,15 +144,11 @@ namespace EnemySpace
                  "⚠ 상수여야 한다 — 창의 비율로 만들면 창이 길수록 느려지는 문제가 되돌아온다.")]
         [SerializeField] private float playerArriveSlack = 0.15f;
 
-        [Tooltip("실패해서 회피할 때 뒤로 물러나는 거리(m). 물러난 그 자리에 선다 — 플레이어가 다시 찾아간다.\n" +
-                 "⚠ 다음 패턴의 창이 감당할 때만 물러난다. 못 감당하면 제자리 패링이 된다.")]
+        [Tooltip("Attacker.Enemy 패턴의 결말에서 뒤로 물러나는 거리(m). 물러난 그 자리에 선다.\n" +
+                 "⚠ Attacker.Player 실패는 언제나 제자리 패링이라 이 값을 쓰지 않는다.")]
         [SerializeField] private float failRetreatDistance = 1.5f;
         [Tooltip("후퇴에 걸리는 시간(초). 이 시간이 지나야 다시 접근을 시작한다.")]
         [SerializeField] private float retreatDuration = 0.25f;
-
-        [Tooltip("회피/패링을 가르는 여유(초). 후퇴 + 되돌아오기에 이만큼 더 남아야 물러난다.\n" +
-                 "키우면 패링이 잦아지고, 0에 가까우면 회피가 잦아지는 대신 재접근이 빠듯해진다.")]
-        [SerializeField] private float retreatWindowMargin = 0.35f;
 
         [Header("Chain")]
         [Range(0f, 1f)]
@@ -1741,45 +1737,19 @@ namespace EnemySpace
             // 실패는 벤 뒤의 여파다. 둘 다 회피가 아니므로 창을 보지 않는다.
             if (AttackerOf(r.template) == Attacker.Enemy) return retreat;
 
-            // 상호 공격의 실패는 적이 이기는 결말이다 — 물러나면 자기 칼이 안 닿는다.
-            // 성공(넉백 0)과 같은 값이지만 근거가 반대라 분기를 따로 둔다.
-            if (!playerSucceeded && r.template != null && r.template.CountersOnFail) return 0f;
-
-            // 사슬 중간 타격에는 넉백이 없다. 물러나면 플레이어가 매 타격마다 다시 붙어야 하는데,
-            // 그 재접근은 TakeTargetForWindow를 안 거쳐 거리가 창에 안 맞춰진다(docs/FailConverge/) —
-            // 사슬은 그 구간을 매 타격 반복하게 된다. 제자리에 세우면 그 문제 자체가 없다.
-            if (playerSucceeded) return 0f;
-
-            // 연타 실패는 물러나지 않는다 — 언제나 제자리 패링으로 받는다.
+            // 여기부터는 전부 Attacker.Player다 — 적이 안 휘두른 패턴이고, 결말이 어느 쪽이든 제자리에 선다.
             //
-            // 창을 보는 아래 판단을 건너뛰는 것이 이 줄의 전부다. 안 그러면 같은 사건이
-            // 다음 패턴의 간격에 따라 어떤 때는 후퇴, 어떤 때는 패링으로 보인다.
-            // 거리 0이 곧 패링이라는 규칙은 EnemyView.Resolve 안에 이미 있고(parried 식),
-            // reactionClip 선택식도 그 값을 보고 Pattern.EnemyParry를 고른다 — 그림에 새 코드가 0줄이다.
+            // 실패가 0인 이유가 핵심이다. 플레이어의 베기는 미스가 나도 취소되지 않고 임팩트까지 나가므로
+            // (CharacterActionPlayer.HandleJudgeTargetFirstMiss), 적이 물러나면 닿고 있는 칼을 두고
+            // 혼자 뒷구르기하는 그림이 된다. 거리 0이 곧 패링이라는 규칙은 EnemyView.Resolve의 parried 식에
+            // 이미 있고 reactionClip 선택식도 그 값을 보고 Pattern.EnemyParry를 고른다 — 그림에 새 코드가 0줄이다.
             //
-            // 덤으로 docs/FailConverge의 함정을 피한다: 후퇴하면 재접근이 TakeTargetForWindow를
-            // 안 거쳐 거리가 창에 안 맞춰져 플레이어가 기어서 돌아간다. 제자리면 이동이
-            // convergeMinDistance 아래라 수렴 로코모션을 아예 안 건다.
-            if (r.template != null && r.template.IsMash) return 0f;
-
-            // r은 위에서 이미 제거됐으므로 선두가 곧 다음 패턴이다(FIFO).
-            if (reservations.Count == 0) return 0f;
-
-            var next = reservations[0];
-            float arriveTime = next.attack != null && next.attack.IsUsable
-                ? next.attack.ResolveScheduleStart(next.impactTime, Time.time)
-                : next.impactTime;
-
-            // 플레이어가 되돌아와야 하는 거리는 후퇴 거리의 playerShare 몫이다(BuildDuelPlan과 같은 비율).
+            // 성공(사슬 중간)이 0인 이유는 다르다. 물러나면 재접근이 TakeTargetForWindow를 안 거쳐
+            // 거리가 창에 안 맞춰지고, 사슬은 그 구간을 매 타격 반복하게 된다(docs/FailConverge/).
             //
-            // ponytail: arriveTime은 낙관적인 데드라인이다. 진짜 마감은 '플레이어 자기 스윙 시작'이라
-            // 그보다 이르다(Attacker.Player 패턴은 적 클립이 없어 arriveTime이 임팩트 그 자체가 된다).
-            // 스윙 시작은 CharacterActionPlayer만 알고 OnJudgeTargetBegan은 이 시점 뒤에 오므로 여기서는 못 본다.
-            // 그 간격을 retreatWindowMargin이 흡수한다 — 회피가 빠듯해 보이면 그 값을 키운다.
-            float travel = retreat * playerShare / Mathf.Max(cruiseSpeed, 0.01f);
-            float needed = retreatDuration + travel + retreatWindowMargin;
-
-            return (arriveTime - Time.time) >= needed ? retreat : 0f;
+            // 예전에는 실패만 다음 패턴의 창을 재서 회피와 패링을 갈랐다. 그 전제가 "플레이어가 헛스윙한다"였고
+            // 지금은 참이 아니다 — 덤으로 연타와 상호 공격이 각자 건너뛰던 분기가 여기 흡수된다.
+            return 0f;
         }
 
         /// <summary>

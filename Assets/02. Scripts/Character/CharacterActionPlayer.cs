@@ -990,7 +990,7 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     private void TryStartPendingSuccess()
     {
-        if (!hasPending || missedThisTarget || Time.time < pendingScheduleStart) return;
+        if (!hasPending || Time.time < pendingScheduleStart) return;
 
         // 정지로 소비될 F를 먼저 뺀다 — 그 시간 동안 클립은 안 흐르기 때문이다.
         // ⚠ 창이 예산을 못 감당하면(남은 시간 ≤ 0) 예산을 포기하고 F = 0으로 재계산한다.
@@ -1269,23 +1269,33 @@ public class CharacterActionPlayer : MonoBehaviour
     // ─────────────────────────── 첫 미스 → 힛 ───────────────────────────
 
     /// <summary>
-    /// 판정 대상의 첫 미스 순간: 예약/진행 중이던 대응 애니를 <b>즉시</b> 취소한다.
+    /// 판정 대상의 첫 미스 순간. <b>맞는 패턴에서만</b> 예약/진행 중이던 대응 애니를 취소한다.
+    ///
+    /// <para><b>⚠ <c>Attacker.Player</c> 실패는 취소하지 않는다 — 칼은 그대로 나간다.</b>
+    /// 예약은 임팩트에서 와인드업만큼 역산한 시각에 시작하므로(실측 p50 0.26초) <b>대개 마지막 노드보다 이르다</b> —
+    /// 여기서 예약을 버리면 미스가 이를수록 클립이 통째로 사라지고 늦으면 나오는 <b>비대칭</b>이 난다.
+    /// 화면에 남아야 하는 사실은 "안 휘둘렀다"가 아니라 <b>"휘둘렀는데 막혔다"</b>이고,
+    /// 막는 쪽은 <c>EnemyDirector</c>가 그 실패를 언제나 패링으로 해석해 맡는다.</para>
+    ///
+    /// <para><b>실패해도 정렬이 안 깨진다</b> — 미스는 <c>Deadline</c>을 움직이지 않으므로
+    /// <c>impact = Deadline + ImpactOffset</c>이 그대로다(§6).</para>
     ///
     /// <para><b>피격은 즉시가 아니라 <c>impactTime</c>에 예약한다.</b> 첫 미스 순간엔 적 칼이 아직 도착 전이라
-    /// 그때 맞으면 칼보다 먼저 맞는 그림이 된다.</para>
-    ///
-    /// <para>플레이어가 공격자였다면(<c>Attacker.Player</c>) <b>피격 자체가 없다</b> — 적은 애초에 휘두르지 않았고
-    /// 뒤로 물러나 회피할 뿐이다. 헛스윙으로 끝난다.</para>
-    ///
-    /// <para><b>예외는 상호 공격뿐이다</b>(<see cref="PatternSpace.Pattern.CountersOnFail"/>) — 그 패턴에서는
-    /// 적이 견제 대신 진짜 공격을 같이 휘두르고 있으므로, 실패하면 그 칼이 <c>impactTime</c>에 닿는다.
-    /// 예약 경로는 <c>Attacker.Enemy</c>와 완전히 같다.</para>
+    /// 그때 맞으면 칼보다 먼저 맞는 그림이 된다. 맞는 경우는 둘뿐이다 — 적이 공격자였거나(패링 실패),
+    /// 상호 공격이었거나(<see cref="PatternSpace.Pattern.CountersOnFail"/>, 적도 같이 휘둘렀다).</para>
     /// </summary>
     private void HandleJudgeTargetFirstMiss()
     {
         if (missedThisTarget) return;
         missedThisTarget = true;
-        hasPending = false; // 예약 취소 → 원래 나올 베기 안 나옴
+
+        // 적이 안 휘두른 패턴 — 맞을 일이 없고, 그래서 취소할 이유도 없다. 예약을 그대로 두면
+        // 베기가 제시각에 시작하고 이미 시작했다면 이어진다.
+        // ⚠ RaiseSwingEnded를 부르면 안 된다 — swingActive가 내려가 히트스톱 가드가 풀리고
+        //   칼날 트레일이 스윙 도중에 꺼진다.
+        if (currentAttacker != EnemySpace.Attacker.Enemy && !currentCountersOnFail) return;
+
+        hasPending = false; // 예약 취소 → 원래 나올 대응(패링·상호 공격의 베기)이 안 나옴
 
         // 리드인 재생 중이었다면 다음 원소로 넘기지 않는다 — 지금 원소는 끝까지 재생되고 거기서 복귀한다
         // (단일 클립에서 진행 중이던 베기가 취소되지 않는 것과 같은 결). 복귀 스케줄은 아직 '추정값'이라
@@ -1295,14 +1305,6 @@ public class CharacterActionPlayer : MonoBehaviour
             inLeadIn = false;
             actionEndTime = elementEndTime;
             recoveryEndTime = actionEndTime + recoveryHoldDuration;
-        }
-
-        // 맞는 경우가 둘이다 — 적이 공격자였거나(패링 실패), 상호 공격이었거나(적도 같이 휘둘렀다).
-        // 어느 쪽이든 적의 칼이 이미 오고 있으므로 도착 시각(impactTime)에 피격을 예약한다.
-        if (currentAttacker != EnemySpace.Attacker.Enemy && !currentCountersOnFail)
-        {
-            RaiseSwingEnded(); // 적 무방비 — 맞지 않는다. 진행 중이던 스윙만 끊는다.
-            return;
         }
 
         hasPendingHit = true;

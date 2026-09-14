@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 0533769dde1b8c34aa9488b9c54b8358
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 150266
+  packageName: Procedural Cracks
+  packageVersion: 1.2.1
+  assetPath: Assets/Cracks/Scripts/CameraController.cs
+  uploadId: 329945
