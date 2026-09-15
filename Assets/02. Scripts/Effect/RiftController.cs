@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 균열 하나의 연출. <b>Cracks 셰이더의 두 값만 민다</b> — 노이즈 좌표(무늬가 흐른다)와
@@ -15,6 +15,11 @@ using UnityEngine;
 /// <c>sharedMaterial</c>을 만지면 <b>에디터에서 그 에셋이 실제로 수정돼 저장된다</b>
 /// (CLAUDE.md 12의 "프로파일을 코드가 수정하지 않는다"와 같은 함정).</para>
 ///
+/// <para><b>한 오브젝트에 하나만 붙인다.</b> 앞면·뒷면처럼 렌더러가 여럿이면
+/// <c>additionalRenderers</c>에 간다 — 그들은 <b>머티리얼 인스턴스 하나를 공유</b>하므로
+/// 무늬와 발광이 어긋날 여지가 없다. 렌더러마다 이 컴포넌트를 붙이면
+/// 인스턴스가 둘이 되어 값이 갈릴 수 있다.</para>
+///
 /// <para><b>⚠ 맥박의 시계는 <c>Time.time</c>이고, 오디오 시각이 아니다.</b>
 /// <see cref="Mathf.PingPong"/>으로 만드는 맥박에는 기준점(다운비트)이 없어 화면에서 관측 가능한
 /// 사실이 <b>주기</b>뿐이다 — 오디오 시각을 써서 얻을 것이 없고, 루프 배경음에서는
@@ -27,6 +32,10 @@ public class RiftController : MonoBehaviour
 
     [Tooltip("Cracks 머티리얼이 붙은 렌더러. 비우면 같은 오브젝트의 것을 쓴다.")]
     [SerializeField] private MeshRenderer targetRenderer;
+
+    [Tooltip("같은 균열을 함께 보여 주는 다른 렌더러(뒷면 등). 여기 꽂힌 렌더러는 " +
+             "targetRenderer와 머티리얼 인스턴스를 공유하므로 자기 RiftController가 필요 없다.")]
+    [SerializeField] private MeshRenderer[] additionalRenderers;
 
     [Header("Noise")]
     [Tooltip("노이즈 좌표(_NoiseOffset)의 초당 증가량. 무늬가 흐르는 속도다.")]
@@ -72,6 +81,18 @@ public class RiftController : MonoBehaviour
 
         // 공유 에셋이 아니라 인스턴스를 쓴다(위 주석 참조).
         material = targetRenderer.material;
+
+        // 같은 인스턴스를 다른 렌더러에도 물려 준다. 인스턴스가 하나뿐이라
+        // 무늬와 발광이 갈릴 수가 없다 - 뒷면에 RiftController를 하나 더 붙이면
+        // 컨트롤러마다 인스턴스가 따로 생겨 값이 어긋날 여지가 생긴다.
+        if (additionalRenderers == null)
+            return;
+
+        foreach (MeshRenderer extra in additionalRenderers)
+        {
+            if (extra != null)
+                extra.material = material;
+        }
     }
 
     private void Update()

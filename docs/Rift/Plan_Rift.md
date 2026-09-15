@@ -67,3 +67,35 @@
 
 ## ⚠ 저장하지 않았다
 `Tutorial.unity`는 **미저장 상태**다(사용자의 `Rift` 배치 작업이 들어 있었고, 거기에 이번 변경이 얹혔다). 저장은 사용자가 확인 후 한다.
+
+## Step 6 — 뒷면 렌더러를 한 컨트롤러가 함께 몬다
+
+`Rift/Backside`(앞면과 대칭인 뒷면)에 `RiftController`를 하나 더 붙여 두었더니
+컨트롤러마다 머티리얼 인스턴스가 따로 생겨 **진실의 원천이 둘**이 됐다.
+값이 같아 지금은 맞아 보이지만, 한쪽 인스펙터 값만 바꾸면 앞뒤가 조용히 갈린다.
+
+- [x] `RiftController.additionalRenderers`(`MeshRenderer[]`) 추가.
+      `Awake`에서 `targetRenderer.material`로 만든 **인스턴스를 그 렌더러들에 대입**한다
+      (게터가 아니라 세터라 사본이 더 생기지 않는다).
+- [x] `Backside`의 `RiftController` 제거 — 컴포넌트가 `Transform`/`MeshFilter`/`MeshRenderer` 셋만 남았다.
+- [x] `/Rift`의 `additionalRenderers[0]` = `Backside`의 `MeshRenderer` 배선.
+- [x] 컴파일 에러 0건.
+- [x] **플레이모드 검증**: 두 렌더러의 `sharedMaterial`이 **같은 인스턴스**
+      (`ReferenceEquals = true`, id 동일, 이름 `Cracks Material (Instance)`)이고
+      `_Emission`이 양쪽 `0.1600`으로 동일. `Backside`의 `RiftController` 개수 0.
+- [x] **에셋 비오염 확인**: `Cracks Material.mat`의 `_NoiseOffset`이 `(0,0,0,0)` 그대로고,
+      git diff가 `_CoreColor` 한 줄(이 작업 이전의 편집)뿐이다.
+- [x] 씬 저장.
+
+### ⚠ 검사할 때 `renderer.material`을 쓰면 안 된다
+그 게터는 **아직 인스턴스화되지 않은 렌더러에 사본을 만들어 대입한다**.
+검증 중에 그걸로 읽었다가 `same=False`가 나와 오진할 뻔했다 — 읽을 때는 `sharedMaterial`이다
+(대입된 인스턴스를 사본 없이 그대로 돌려준다).
+
+### 대칭 배치에 관한 측정 기록 (Backside의 트랜스폼은 건드리지 않았다)
+메쉬가 빌트인 **Plane**(121정점, 로컬 XZ 평면, 법선 +Y)이라 `euler (0,0,180) + scale (-1,1,1)`은
+**정점 위치가 앞면과 완전히 동일**(delta 0)하고 UV도 월드 기준으로 같으며 법선만 `(0,-1,0)`으로 뒤집힌다.
+즉 뒤에서 보면 같은 균열을 반대편에서 본 그림이 된다. 180도 회전 계열은 전부 UV를 뒤집으므로
+(X180 → V 반전, Z180 단독 → 면이 안 뒤집힘) **평면 메쉬에서 "같은 자리·같은 UV·반대 면"은
+det < 0 없이 표현할 수 없다.** 음수 스케일이 TBN 손잡이를 깨거나 시차를 역전시키지 않는다는 것도
+정점·TBN 덤프와 앞뒤 캡처로 확인했다(앞쪽 뷰 A/B가 픽셀 단위로 동일 = 컬링 정상).

@@ -56,6 +56,14 @@ namespace SequenceSpace
             /// <para><b>⚠ 위 RunTo 주석의 규칙이 여기에도 걸린다 — 새 값은 enum 끝에 붙인다.</b></para>
             /// </summary>
             ArmFinale,
+
+            /// <summary>
+            /// 무대를 <b>데우기만</b> 한다(허물은 안 세운다). <see cref="PrepareStage"/>가 늦은 시각에
+            /// 놓일 때 그 프리웜 히치만 앞으로 떼어 내는 용도다.
+            ///
+            /// <para><b>⚠ 위 RunTo 주석의 규칙이 여기에도 걸린다 — 새 값은 enum 끝에 붙인다.</b></para>
+            /// </summary>
+            PrewarmStage,
         }
 
         [SerializeField] private Action action = Action.RunOn;
@@ -112,6 +120,10 @@ namespace SequenceSpace
 
                 case Action.ArmFinale:
                     director.ArmFinale();
+                    break;
+
+                case Action.PrewarmStage:
+                    director.PrewarmStage();
                     break;
             }
         }

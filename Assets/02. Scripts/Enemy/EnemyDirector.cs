@@ -89,6 +89,30 @@ namespace EnemySpace
                  "자리가 이미 화면 밖이면 0 — 그 자리에 그대로 선다.")]
         [SerializeField] private float spawnMaxOffset = 6f;
 
+        [Header("Spawn Warp")]
+        [Tooltip("적이 태어나는 균열들. 자리에서 가장 가까운 것 하나가 그 적의 등장 지점이 된다.\n" +
+                 "⚠ 비우면 예전 경로(화면 밖 스폰) 그대로다 - 배선이 없으면 기능만 조용히 꺼진다.\n" +
+                 "⚠ RiftController는 순수 연출이라 이 목록을 모른다. 적을 내는 주체는 여기다.")]
+        [SerializeField] private Transform[] riftPoints;
+
+        [Tooltip("균열에서 나오는 동안만 입는 머티리얼(EnemySpawnWarpMaterial).\n" +
+                 "⚠ 비면 늘어남이 화면에 안 보인다 - 평소 입는 툰 머티리얼에는 _Warp가 없다.")]
+        [SerializeField] private Material spawnWarpMaterial;
+
+        [Tooltip("균열에서 자기 자리까지 오는 데 걸리는 시간(초). 길이 노브는 이것 하나다 -\n" +
+                 "늘어남 진행이 이 구간에 정규화되므로 도착 프레임에 원형이 되는 것이 식으로 보장된다.\n" +
+                 "⚠ 이 경로에서는 clusterMoveSpeed를 쓰지 않는다(거리가 아니라 시각을 맞춘다).")]
+        [Min(0.05f)]
+        [SerializeField] private float spawnWarpDuration = 1f;
+
+        [Tooltip("자리에 도착한 뒤 균열에 붙어 있던 줄이 몸으로 빨려 드는 시간(초).\n" +
+                 "0에 가까우면 줄이 끊기는 것으로 보인다 - 그 구간이 '원복'의 그림 전부다.")]
+        [Min(0.01f)]
+        [SerializeField] private float spawnRetractDuration = 0.35f;
+
+        [Tooltip("곡 시작(카운트다운)에 세우는 첫 무리도 균열에서 내보낼지. 끄면 그때만 예전 경로다.")]
+        [SerializeField] private bool warpOnPrepareStage = true;
+
         [Header("Wander")]
         [Tooltip("교전 중이 아닌 적이 플레이어 주위를 배회한다. 끄면 자기 자리에 정지(예전 동작).\n" +
                  "⚠ active 무리 전용이다 — staged가 배회하면 집결 자체가 무너진다.")]
@@ -726,6 +750,18 @@ namespace EnemySpace
         /// </summary>
         public void SetSpawnBudget(int value) => spawnBudget = value;
 
+        /// <summary>
+        /// 적 프리팹·절단 세트·셰이더만 미리 데운다. <b>적을 세우지는 않는다.</b>
+        ///
+        /// <para>등장이 늦어져야 하는 연출(튜토리얼: 미오가 도착하는 순간에 허물이 나온다)에서
+        /// <see cref="PrepareStage"/>를 늦추면 <b>프리웜까지 같이 늦어져</b> 그 히치가 판정 직전에 온다(§5).
+        /// 데우는 일만 앞으로 떼어 내는 것이 이 메서드의 전부이고, 뒤에 오는 <see cref="PrepareStage"/>는
+        /// 이미 데워진 것을 두 번 데우지 않는다.</para>
+        /// </summary>
+        public void PrewarmStage() => Prewarm();
+
+        private bool prewarmed;
+
         // 음수면 무제한. SpawnAt이 하나 태울 때마다 하나씩 깎는다.
         private int spawnBudget = -1;
 
@@ -751,7 +787,7 @@ namespace EnemySpace
                 // 여기가 그 상수를 쓰기에 정확히 맞는 자리다 — 플레이어가 무대 중심에 서는 전투 씬에서는 값이 같다.
                 Vector3 activeCenter = EnemyRing.PickClusterCenter(
                     Center, Vector3.forward, minTargetDistance * 2f, Center, stageRadius, minPlayerDistance);
-                SpawnCluster(activeCluster, activeCenter);
+                SpawnCluster(activeCluster, activeCenter, warpOnPrepareStage);
 
                 // ⚠ 바로 위와 같은 이유로 여기도 <b>무대 중심</b> 기준이다. 예전에는 이 호출만 PlayerPosition을 써서,
                 // 골목에 선 미오 기준으로 집결지가 무대 밖에 잡혔다 - 그 뒤 사망마다 보충되는 허물이
@@ -798,9 +834,22 @@ namespace EnemySpace
             EnsurePool();
             if (rosterPool == null) return;
 
+            // ⚠ PrefabPool.Prewarm은 멱등이 아니다 - 두 번 부르면 인스턴스를 또 만들고 상한을 넘은 만큼
+            // 파기한다(= 피하려던 히치를 그대로 낸다). 무대는 한 번만 데운다.
+            if (prewarmed) return;
+            prewarmed = true;
+
             var seen = new HashSet<SliceSet>();
 
             pool.Prewarm(bleedPrefab, bleedPoolSize, bleedPoolSize);
+
+            // ⚠ 셰이더 변형 컴파일이 곡 도중에 일어나면 그 히치가 그대로 판정 손실이다(§5).
+            // 적 프리팹 프리웜은 그리지 않으므로 이 셰이더를 데우지 못한다 — 여기서 따로 한 번 데운다.
+            if (spawnWarpMaterial != null && spawnWarpMaterial.shader != null)
+            {
+                UnityEngine.Experimental.Rendering.ShaderWarmup.WarmupShader(
+                    spawnWarpMaterial.shader, new UnityEngine.Experimental.Rendering.ShaderWarmupSetup());
+            }
 
             foreach (var definition in rosterPool)
             {
@@ -896,7 +945,7 @@ namespace EnemySpace
         ///
         /// <para><paramref name="stagger"/>로 한 명씩 시차를 둔다. 넷이 동시에 나타나면 팝인이 티 난다.</para>
         /// </summary>
-        private void SpawnCluster(List<EnemyView> cluster, Vector3 center)
+        private void SpawnCluster(List<EnemyView> cluster, Vector3 center, bool allowWarp)
         {
             var cam = viewCamera != null ? viewCamera : Camera.main;
             System.Func<Vector3, bool> isVisible = cam != null ? BuildVisibilityTest(cam) : null;
@@ -906,7 +955,7 @@ namespace EnemySpace
             for (int i = cluster.Count; i < count; i++)
             {
                 Vector3 slot = EnemyRing.PlaceInCluster(center, i, count, clusterRadius, minSpacing);
-                var view = SpawnAt(slot, isVisible, viewPosition, i * Mathf.Max(spawnStagger, 0f));
+                var view = SpawnAt(slot, isVisible, viewPosition, i * Mathf.Max(spawnStagger, 0f), allowWarp);
                 if (view == null) return; // 풀이 말랐다 — 다음 기회에 다시 시도한다
 
                 cluster.Add(view);
@@ -919,7 +968,7 @@ namespace EnemySpace
         /// <para><b>등장 연출은 여기 하나로 격리돼 있다.</b> 후속 파티클 등장은 이 메서드만 갈아끼우면 되고,
         /// 그때는 오프셋도 절두체 판정도 통째로 필요 없어진다(자리에 바로 나타나면 되므로).</para>
         /// </summary>
-        private EnemyView SpawnAt(Vector3 slot, System.Func<Vector3, bool> isVisible, Vector3 viewPosition, float delay)
+        private EnemyView SpawnAt(Vector3 slot, System.Func<Vector3, bool> isVisible, Vector3 viewPosition, float delay, bool allowWarp)
         {
             // 예산이 떨어지면 더 태우지 않는다(음수 = 무제한). 호출부는 이미 null을 다룰 줄 안다.
             if (spawnBudget == 0) return null;
@@ -927,9 +976,28 @@ namespace EnemySpace
             var definition = PickDefinition();
             if (definition == null) return null;
 
-            Vector3 from = EnemyRing.PickSpawnNearCluster(
-                slot, Center, stageRadius, PlayerPosition, minPlayerDistance,
-                viewPosition, ViewForward, isVisible, spawnMaxOffset);
+            // ⚠ 균열 경로에서는 절두체 판정을 쓰지 않는다. 화면 밖 스폰은 팝인을 숨기는 장치였고,
+            // 이 연출은 반대로 <b>보이는 것이 목적</b>이라 그 근거가 반전된다(docs/EnemySpawnWarp).
+            Transform rift = allowWarp && spawnWarpMaterial != null ? NearestRift(slot) : null;
+
+            Vector3 from;
+            float duration;
+
+            if (rift != null)
+            {
+                from = rift.position;
+                duration = spawnWarpDuration;
+            }
+            else
+            {
+                from = EnemyRing.PickSpawnNearCluster(
+                    slot, Center, stageRadius, PlayerPosition, minPlayerDistance,
+                    viewPosition, ViewForward, isVisible, spawnMaxOffset);
+
+                // 오프셋이 0이면(자리가 이미 화면 밖) 이동 없이 그 자리에 선다 — 정상 경로다.
+                float travel = Vector3.Distance(from, slot);
+                duration = travel <= 0.01f ? 0.01f : travel / Mathf.Max(clusterMoveSpeed, 0.1f);
+            }
 
             var go = pool.Rent(definition.Prefab, definition.MaxPoolSize);
             if (go == null) return null;
@@ -937,18 +1005,46 @@ namespace EnemySpace
             var view = go.GetComponent<EnemyView>();
             if (view == null) view = go.AddComponent<EnemyView>();
 
-            // 오프셋이 0이면(자리가 이미 화면 밖) 이동 없이 그 자리에 선다 — 정상 경로다.
-            float travel = Vector3.Distance(from, slot);
-            float duration = travel <= 0.01f ? 0.01f : travel / Mathf.Max(clusterMoveSpeed, 0.1f);
-
+            float enterDuration = duration + Mathf.Max(delay, 0f);
             float angle = EnemyRing.DirectionToAngle(slot - Center);
-            view.Setup(definition, angle, slot, from, duration + Mathf.Max(delay, 0f), PlayerPosition);
+            view.Setup(definition, angle, slot, from, enterDuration, PlayerPosition);
+
+            // 늘어남은 <b>도착 시각</b>에 정규화된다 — Setup이 잡은 이동 구간과 같은 끝을 본다.
+            if (rift != null) view.BeginSpawnWarp(rift.position, slot, Time.time + enterDuration, spawnRetractDuration, spawnWarpMaterial);
 
             view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
             ring.Add(view);
             if (spawnBudget > 0) spawnBudget--;
             return view;
+        }
+
+        /// <summary>
+        /// 그 자리에서 <b>가장 가까운</b> 균열. 배선이 없거나 전부 꺼져 있으면 null이고,
+        /// 그러면 호출부가 예전 경로로 돌아간다.
+        ///
+        /// <para>꺼진 균열을 빼는 것이 규칙과 맞물린다 — <c>Encounter</c>가 상태에 따라
+        /// <c>SetActive</c>로 일렁임을 끄므로(CLAUDE.md 9), 조용한 균열에서는 적도 안 나온다.</para>
+        /// </summary>
+        private Transform NearestRift(Vector3 slot)
+        {
+            if (riftPoints == null) return null;
+
+            Transform best = null;
+            float bestSqr = float.MaxValue;
+
+            foreach (var rift in riftPoints)
+            {
+                if (rift == null || !rift.gameObject.activeInHierarchy) continue;
+
+                float sqr = (rift.position - slot).sqrMagnitude;
+                if (sqr >= bestSqr) continue;
+
+                bestSqr = sqr;
+                best = rift;
+            }
+
+            return best;
         }
 
         /// <summary>
@@ -1002,7 +1098,7 @@ namespace EnemySpace
             Vector3 viewPosition = cam != null ? cam.transform.position : Center;
 
             Vector3 slot = EnemyRing.PlaceInCluster(stagedCenter, stagedCluster.Count, count, clusterRadius, minSpacing);
-            var view = SpawnAt(slot, isVisible, viewPosition, 0f);
+            var view = SpawnAt(slot, isVisible, viewPosition, 0f, true);
             if (view != null) stagedCluster.Add(view);
         }
 
@@ -1229,6 +1325,11 @@ namespace EnemySpace
                 // 기습자는 stageDistance(2.5m)에 서 있어 짧은 창에서 오히려 잘 뽑히므로 우연이 아니다.
                 // ⚠ BusyReasonBy로 넓게 막으면 안 된다 — 이동 중인 적까지 빠져 표적 선택이 좁아진다(§11-6).
                 if (e.HasPendingAction) continue;
+
+                // ⚠ 아직 균열에서 나오는 중인 적은 뽑지 않는다 — 늘어난 몸에 칼이 닿는 그림이 된다.
+                // 여기만 따로 막는 이유: 이 필터는 일부러 좁은 술어를 써서 '이동 중'을 안 막는다.
+                // 배회·기습·이격은 BusyReasonBy가 같은 사실로 이미 거른다.
+                if (e.SpawnWarping) continue;
 
                 candidateScratch.Add(e);
                 positionScratch.Add(e.transform.position);

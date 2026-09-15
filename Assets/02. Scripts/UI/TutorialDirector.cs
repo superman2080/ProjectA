@@ -139,6 +139,16 @@ public class TutorialDirector : MonoBehaviour
     /// 허물을 세운다. <b>⚠ 프리웜(<c>Instantiate</c>)이 여기서 일어나므로 전투가 아니라 대사 구간에서 부른다</b> —
     /// 곡 도중의 히치는 그대로 판정 손실이다(CLAUDE.md §5).
     /// </summary>
+    /// <summary>
+    /// 무대를 <b>데우기만</b> 한다(허물은 안 세운다). 대사 구간에 불러 두면
+    /// 도착 순간의 <see cref="PrepareStage"/>가 인스턴스화 없이 끝난다 —
+    /// 그 히치가 드릴 직전에 오면 그대로 판정 손실이다(§5).
+    /// </summary>
+    public void PrewarmStage()
+    {
+        if (enemyDirector != null) enemyDirector.PrewarmStage();
+    }
+
     public void PrepareStage(int clusterSize)
     {
         if (enemyDirector == null) return;

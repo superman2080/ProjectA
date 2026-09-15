@@ -25,9 +25,10 @@ MonoBehaviour:
   - rid: 9060497110594486391
   - rid: 9060497124397154889
   - rid: 9060497110594486393
-  - rid: 9060497110594486394
+  - rid: 9060497325052133856
   - rid: 9060497110594486395
   - rid: 9060497110594486435
+  - rid: 9060497110594486394
   - rid: 9060497110594486396
   - rid: 9060497110594486397
   - rid: 9060497110594486398
@@ -111,7 +112,7 @@ MonoBehaviour:
       type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         action: 0
-        value: 5
+        value: 3
         tutorialDirectorSlot: TutorialDirector
     - rid: 9060497110594486395
       type: {class: DialogStep, ns: SequenceSpace, asm: Assembly-CSharp}
@@ -530,3 +531,9 @@ MonoBehaviour:
       type: {class: LoadSceneStep, ns: SequenceSpace, asm: Assembly-CSharp}
       data:
         sceneName: Explore_Stage1
+    - rid: 9060497325052133856
+      type: {class: TutorialCueStep, ns: SequenceSpace, asm: Assembly-CSharp}
+      data:
+        action: 7
+        value: 3
+        tutorialDirectorSlot: TutorialDirector

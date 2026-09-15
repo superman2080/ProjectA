@@ -123,6 +123,14 @@ namespace EnemySpace
 
         private readonly DissolveSwap dissolveSwap = new DissolveSwap();
 
+        // 등장 늘어남. 소멸의 쌍둥이라 스왑 인스턴스를 같이 쓴다 —
+        // 죽는 것과 태어나는 것은 동시에 일어날 수 없고, DissolveSwap.Begin에 Active 가드가 이미 있다.
+        private static readonly int WarpId = Shader.PropertyToID("_Warp");
+        private static readonly int WarpAxisId = Shader.PropertyToID("_WarpAxisOS");
+        private static readonly int WarpCenterId = Shader.PropertyToID("_WarpCenterOS");
+        private static readonly int WarpSpanId = Shader.PropertyToID("_WarpSpan");
+        private static readonly int WarpStretchId = Shader.PropertyToID("_WarpStretch");
+
         [Header("Highlight")]
         [Tooltip("강조(아웃라인) 중에 옮겨 놓을 레이어 이름. URP의 RenderObjects 피처가 이 레이어만 골라\n" +
                  "아웃라인 머티리얼로 한 번 더 그린다(Assets/Settings/PC_Renderer.asset).\n" +
@@ -214,6 +222,27 @@ namespace EnemySpace
         private float dissolveDuration;
         private bool dissolving;
 
+        // 등장 늘어남. 두 구간이다 — 균열에 붙어 끌려 나오는 <b>이동</b>과, 그 줄이 몸으로 빨려 드는 <b>수축</b>.
+        private float warpTravelEnd;
+        private float warpRetractDuration;
+        private float warpAnchorStretch;   // 이동이 끝난 순간의 줄 길이(수축의 출발값)
+        private Vector3 warpRiftPosition;
+        private Vector3 warpFallbackDirection;
+        private bool warping;
+
+        // 렌더러별 '축 방향 실제 몸 길이'와 그 중점. 스폰마다 한 번만 잰다(아래 MeasureWarpExtents 주석).
+        private float[] warpSpans;
+        private Vector3[] warpCenters;
+
+        // 길이를 잴 때 쓰는 작업용 그릇. 정적으로 하나만 두고 재사용한다 —
+        // 스폰마다 Mesh와 배열을 새로 만들면 그게 곧 곡 도중 GC 히치다(§5).
+        private static Mesh warpBakeScratch;
+        private static readonly List<Vector3> WarpVertexScratch = new List<Vector3>();
+
+        // 포즈가 도는 동안 길이가 조금씩 변한다. 모자라면 <b>줄이 끊겨 보이고</b> 남으면 균열 안으로
+        // 살짝 들어갈 뿐이라, 넘치는 쪽으로 둔다.
+        private const float WarpReachMargin = 1.05f;
+
         // 상체 마스크 레이어. 레이어를 못 찾으면 -1이고 그 상태로 기능만 꺼진다.
         private int upperBodyLayerIndex = -1;
         private int upperBodyStateHash;
@@ -249,6 +278,8 @@ namespace EnemySpace
             dissolveId = Shader.PropertyToID(dissolveProperty);
             renderers = GetComponentsInChildren<Renderer>(true);
             propertyBlock = new MaterialPropertyBlock();
+            warpSpans = new float[renderers.Length];
+            warpCenters = new Vector3[renderers.Length];
 
             // ⚠ 원래 레이어는 여기서 딱 한 번 잡는다. 강조를 켤 때 읽으면 이미 켜진 상태에서 또 켰을 때
             // 강조 레이어 자신이 '원래 값'으로 기록돼 영영 원복이 안 된다.
@@ -453,6 +484,7 @@ namespace EnemySpace
         public string BusyReasonBy(float t)
         {
             if (Current == Phase.Dying || dissolving) return "사망 중";
+            if (warping) return "등장 연출 중";
             if (hasPendingAttack) return "공격 예약";
             if (hasPendingReaction) return "리액션 예약";
             if (reactionUntil > t) return "리액션 중";
@@ -1028,6 +1060,86 @@ namespace EnemySpace
             moving = false;
         }
 
+        /// <summary>
+        /// 균열에서 나오는 등장 연출을 시작한다. <b><see cref="Dissolve"/>의 시간축을 뒤집은 쌍둥이</b>다 —
+        /// 저쪽은 온전한 몸에서 사라지고, 이쪽은 늘어난 몸에서 <b>제 모양으로 돌아온다</b>.
+        ///
+        /// <para><b>줄은 균열에 붙어 있다.</b> 늘어남 길이가 상수가 아니라 <b>균열까지의 실제 거리</b>라,
+        /// 적이 자리로 갈수록 줄이 그만큼 길어진다 — 끊기지 않고 균열과 몸이 이어진 채로 나온다.</para>
+        ///
+        /// <para><b>도착한 뒤에야 줄을 놓는다</b>(<paramref name="retractDuration"/>). 그 구간에서 길이가 0으로
+        /// 줄고 스캔 띠가 꼬리에서 머리로 쓸려 오며, <b>줄이 몸으로 빨려 들어가 원형이 된다</b>.
+        /// 도착과 동시에 놓으면 줄이 끊기는 것으로 보인다.</para>
+        ///
+        /// <para><b>⚠ 머티리얼이 없으면 아무 일도 일어나지 않는다</b> — 평소 입는 툰 머티리얼에는
+        /// <c>_Warp</c>가 없어서 값만 흐르다 만다(<see cref="Dissolve"/>와 같은 함정).</para>
+        /// </summary>
+        public void BeginSpawnWarp(Vector3 riftPosition, Vector3 slot, float travelEndTime, float retractDuration, Material warpMaterial)
+        {
+            if (warpMaterial == null || dissolving) return;
+
+            dissolveSwap.Begin(renderers, warpMaterial, propertyBlock);
+            warpRiftPosition = riftPosition;
+            warpTravelEnd = travelEndTime;
+            warpRetractDuration = Mathf.Max(retractDuration, 0.01f);
+            warpAnchorStretch = 0f;
+
+            // ⚠ 첫 프레임에는 적이 균열 <b>위에</b> 있어 방향이 0이다. 자리에서 균열을 보는 방향이
+            // 그때의 정답이고(뒤로 끌린다), 그 뒤로는 실제 위치가 그 값을 대체한다.
+            Vector3 fallback = riftPosition - slot;
+            warpFallbackDirection = fallback.sqrMagnitude > 0.0001f ? fallback.normalized : transform.forward;
+
+            MeasureWarpExtents();
+
+            warping = true;
+            TickSpawnWarp();
+        }
+
+        /// <summary>
+        /// 지금 등장 연출 중인가. <b>상대 배정에서 빼는 데 쓴다</b> —
+        /// 배회·기습·이격은 <see cref="BusyReasonBy"/>가 이미 같은 사실로 거른다.
+        /// </summary>
+        public bool SpawnWarping => warping;
+
+        /// <summary>
+        /// 줄의 길이와 스캔 띠를 민다. <b>축은 매 프레임 다시 잡는다</b> — 적이 자리로 이동하면서
+        /// 균열과의 방향이 바뀌고, 줄은 언제나 <b>균열에 붙어</b> 있어야 한다.
+        /// </summary>
+        private void TickSpawnWarp()
+        {
+            float now = Time.time;
+            Vector3 toRift = warpRiftPosition - transform.position;
+            float distance = toRift.magnitude;
+            Vector3 axis = distance > 0.0001f ? toRift / distance : warpFallbackDirection;
+
+            float stretch;
+            float band;
+
+            if (now < warpTravelEnd)
+            {
+                // 이동 구간: 꼬리가 균열에 앉아 있다. 멀어지는 만큼 줄이 길어진다.
+                stretch = distance;
+                warpAnchorStretch = distance;
+                band = 1f;
+            }
+            else
+            {
+                float p = Mathf.Clamp01((now - warpTravelEnd) / warpRetractDuration);
+                stretch = Mathf.Lerp(warpAnchorStretch, 0f, p);
+                band = 1f - p;
+
+                if (p >= 1f)
+                {
+                    SetWarp(0f, Vector3.zero, axis);
+                    warping = false;
+                    dissolveSwap.Restore(); // ⚠ 안 되돌리면 늘어남 머티리얼을 입은 채로 계속 싸운다
+                    return;
+                }
+            }
+
+            SetWarp(band, axis * stretch, axis);
+        }
+
         /// <summary>소멸이 끝났는지. 디렉터가 회수 시점을 잡는 데 쓴다.</summary>
         public bool DissolveFinished => dissolving && Time.time >= dissolveStart + dissolveDuration;
 
@@ -1049,6 +1161,9 @@ namespace EnemySpace
                 SetDissolveAmount(p);
                 return;
             }
+
+            // ⚠ 소멸과 달리 return하지 않는다 — 늘어난 채 자리까지 이동해야 한다.
+            if (warping) TickSpawnWarp();
 
             TickMove();
             TickWander();    // 진짜 이동이 없을 때만 실제로 움직인다(CanWander가 moving을 거른다)
@@ -1327,6 +1442,116 @@ namespace EnemySpace
         }
 
         /// <summary>
+        /// 렌더러마다 <b>축 방향 실제 몸 길이</b>와 그 중점을 잰다. <b>스폰마다 한 번</b>이다.
+        ///
+        /// <para><b>⚠ 바운즈(AABB)로 재면 줄이 균열에 못 닿는다.</b> 박스 폭은 사람 메쉬가 실제로 차지하는
+        /// 길이보다 길어서(실측: 꼬리 정점의 스캔 좌표가 1이 아니라 <b>0.69</b>였다),
+        /// 꼬리가 거리의 69%에서 멈춘다 — 16.6m 중 2.3m가 비어 <b>줄이 끊겨 보인다</b>.
+        /// 정점 투영의 최소·최대를 쓰면 스캔 좌표가 정확히 0..1에 펴져 <b>꼬리가 균열에 앉는다</b>.</para>
+        ///
+        /// <para>축은 이동 내내 크게 돌지 않으므로(멀어지는 방향이 거의 일정) 시작 축으로 한 번만 잰다 —
+        /// 매 프레임 정점을 훑고 메쉬를 굽을 이유가 없다.</para>
+        /// </summary>
+        private void MeasureWarpExtents()
+        {
+            if (renderers == null) return;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                warpSpans[i] = 1f;
+                warpCenters[i] = Vector3.zero;
+                if (r == null) continue;
+
+                if (!TryReadVertices(r, WarpVertexScratch)) continue;
+
+                Vector3 axis = r.transform.InverseTransformDirection(warpFallbackDirection);
+                if (axis.sqrMagnitude < 1e-8f) continue;
+                axis.Normalize();
+
+                float min = float.MaxValue;
+                float max = float.MinValue;
+
+                foreach (var v in WarpVertexScratch)
+                {
+                    float proj = Vector3.Dot(v, axis);
+                    if (proj < min) min = proj;
+                    if (proj > max) max = proj;
+                }
+
+                warpSpans[i] = Mathf.Max((max - min) * WarpReachMargin, 1e-4f);
+                warpCenters[i] = axis * ((min + max) * 0.5f);
+            }
+        }
+
+        /// <summary>
+        /// 정점을 <paramref name="into"/>에 읽는다. <b>스킨드는 지금 포즈로 굽는다</b> —
+        /// 쉬는 포즈(A포즈)는 실제 재생 포즈보다 넓어서, 그걸로 재면 스캔 좌표가 1에 못 닿고
+        /// <b>꼬리가 균열 앞에서 끊긴다</b>(실측: 0.69 -> 0.84 -> 1.0으로 좁혀 온 지점이다).
+        ///
+        /// <para><c>useScale: false</c>여야 한다 — 셰이더가 쓰는 공간이 스케일 이전의 오브젝트 공간이고,
+        /// 스케일은 <c>InverseTransformVector</c>가 이미 반영한다. 켜면 두 번 곱해진다.</para>
+        /// </summary>
+        private static bool TryReadVertices(Renderer renderer, List<Vector3> into)
+        {
+            if (renderer is SkinnedMeshRenderer skinned)
+            {
+                if (skinned.sharedMesh == null) return false;
+                if (warpBakeScratch == null) warpBakeScratch = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+
+                skinned.BakeMesh(warpBakeScratch, false);
+                warpBakeScratch.GetVertices(into);
+                return into.Count > 0;
+            }
+
+            if (!renderer.TryGetComponent(out MeshFilter filter) || filter.sharedMesh == null) return false;
+
+            filter.sharedMesh.GetVertices(into);
+            return into.Count > 0;
+        }
+
+        /// <summary>
+        /// 줄(월드 오프셋)과 스캔 띠를 민다(<see cref="SetDissolveAmount"/>와 같은 규율 — 인스턴스별 진행).
+        ///
+        /// <para><b>⚠ 공간 변환은 반드시 렌더러마다 한다.</b> 정점은 <b>그 렌더러의</b> 오브젝트 공간에 있는데
+        /// 모델 자식은 FBX 보정으로 돌아가 있는 경우가 흔하다(현재 적: X축 270도). 루트 기준으로 축을 넘기면
+        /// 축이 몸의 <b>두께 방향</b>에 얹혀 스캔 좌표가 사실상 상수가 되고,
+        /// 늘어나는 대신 <b>몸이 통째로 조금 밀린다</b>(= 화면에서는 아무 일도 안 일어난다).</para>
+        ///
+        /// <para><b>길이도 같은 변환을 탄다</b>(<c>InverseTransformVector</c> — 방향이 아니라 벡터다).
+        /// 그래서 모델 스케일이 1이 아니어도 줄 끝이 정확히 균열에 앉는다.</para>
+        /// </summary>
+        private void SetWarp(float band, Vector3 offsetWS, Vector3 axisWS)
+        {
+            if (renderers == null) return;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                if (r == null) continue;
+
+                Vector3 offsetOS = r.transform.InverseTransformVector(offsetWS);
+                float length = offsetOS.magnitude;
+
+                // 길이가 0인 프레임(스폰 순간·수축 완료)에도 축은 있어야 한다 — 스캔 좌표가 그 축으로 정의된다.
+                Vector3 axisOS = length > 1e-5f
+                    ? offsetOS / length
+                    : r.transform.InverseTransformDirection(axisWS);
+
+                if (axisOS.sqrMagnitude < 1e-8f) continue;
+                axisOS.Normalize();
+
+                r.GetPropertyBlock(propertyBlock);
+                propertyBlock.SetFloat(WarpId, band);
+                propertyBlock.SetVector(WarpAxisId, axisOS);
+                propertyBlock.SetVector(WarpCenterId, warpCenters[i]);
+                propertyBlock.SetFloat(WarpSpanId, warpSpans[i]);
+                propertyBlock.SetFloat(WarpStretchId, length);
+                r.SetPropertyBlock(propertyBlock);
+            }
+        }
+
+        /// <summary>
         /// 아웃라인 강조를 켜고 끈다. <b>이 적이 지금 특별하다</b>는 표시 — 현재는 기습자에게만 쓴다.
         ///
         /// <para><b>머티리얼을 안 만진다.</b> 서브트리 레이어만 바꾸면 URP의 <c>RenderObjects</c> 피처가
@@ -1370,6 +1595,7 @@ namespace EnemySpace
             wantsLocomotion = false;
             reactionUntil = 0f;   // 안 지우면 다음 대여에서 로코모션이 잠긴 채로 나온다
             dissolving = false;
+            warping = false;   // 안 끄면 다음 대여가 늘어난 채 나온다
             hasPendingAttack = false;
             hasPendingReaction = false;
             attackStarted = false;
