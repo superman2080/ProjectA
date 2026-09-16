@@ -47,6 +47,20 @@ namespace PatternSpace
         public static float EndTime(AnimationCurve curve) => Has(curve) ? curve[curve.length - 1].time : 0f;
 
         /// <summary>
+        /// 이 커브가 <b>음수 간격으로 끝나는가</b> — 즉 패턴이 끝났을 때 플레이어가 적 반대편에 서 있는가.
+        ///
+        /// <para><b>왜 끝 키의 부호만 보는가</b>: 커브 중간이 음수인 것은 <b>지나가는 중</b>(전이)이고,
+        /// 끝이 음수인 것은 <b>그 자리에 선다</b>(최종)는 뜻이다. <see cref="ResolveAxis"/>가 직전 축을 지키는 것은
+        /// 전이 상태에서 축이 파생되는 것을 막기 위해서인데, 최종 상태에서는 반대로 축이 뒤집혀야 한다 —
+        /// 안 그러면 다음 교전의 자리가 <b>적 건너편</b>에 잡혀 플레이어가 적을 관통해 되돌아온다.
+        /// 그 둘을 가르는 정보가 바로 이 부호다(<c>docs/DuelDistanceCurve/</c>).</para>
+        ///
+        /// <para><b>저작 필드가 0개인 이유</b>이기도 하다 — 저작자가 커브를 음수로 끝낸 것이 곧 의도다.</para>
+        /// </summary>
+        public static bool EndsBehind(AnimationCurve curve) =>
+            Has(curve) && curve[curve.length - 1].value < 0f;
+
+        /// <summary>
         /// 이번 교전의 축(플레이어 → 적, 평면 단위벡터). <b>축은 순간 위치가 아니라 교전의 성질이다.</b>
         ///
         /// <para><b>왜 직전 축을 이기게 두는가</b>: 커브의 목적이 관통(음수 간격)이라

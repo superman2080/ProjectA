@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using PatternSpace;
 using UnityEngine;
 
@@ -107,6 +107,46 @@ public class DuelGapTests
         Assert.AreEqual(0f, DuelGap.EndTime(null), Tolerance);
         Assert.AreEqual(0f, DuelGap.EndTime(new AnimationCurve()), Tolerance);
         Assert.AreEqual(0.35f, DuelGap.EndTime(AnimationCurve.Linear(-0.5f, 1.2f, 0.35f, -1.5f)), Tolerance);
+    }
+
+    /// <summary>
+    /// 끝 키의 부호만 본다. 중간이 음수인 것은 "지나가는 중"이고 끝이 음수인 것은 "그 자리에 선다"라,
+    /// 둘을 섞으면 관통하지 않고 끝나는 패턴까지 축이 뒤집혀 다음 교전이 거울로 돈다.
+    /// </summary>
+    [Test]
+    public void EndsBehindChecksLastKeyValue()
+    {
+        Assert.IsFalse(DuelGap.EndsBehind(null));
+        Assert.IsFalse(DuelGap.EndsBehind(new AnimationCurve()));
+
+        // 음수로 끝난다 = 패턴이 끝나면 플레이어가 적 반대편에 서 있다
+        Assert.IsTrue(DuelGap.EndsBehind(AnimationCurve.Linear(-0.5f, 1.2f, 0.35f, -1.5f)));
+
+        // 양수로 끝난다 = 예전 동작 그대로여야 한다
+        Assert.IsFalse(DuelGap.EndsBehind(AnimationCurve.Linear(-0.5f, 2f, 0.35f, 1.2f)));
+
+        // 중간만 음수이고 양수로 끝난다 = 지나갔다 되돌아오는 획이라 축을 뒤집으면 안 된다
+        var passThroughAndBack = new AnimationCurve(
+            new Keyframe(-0.5f, 2f), new Keyframe(0f, -0.8f), new Keyframe(0.35f, 1.5f));
+        Assert.IsFalse(DuelGap.EndsBehind(passThroughAndBack));
+    }
+
+    /// <summary>
+    /// <b>뒤집은 축은 관통 전에 물어도 후에 물어도 이긴다.</b> 결투 계획은 임팩트보다 먼저 잡히므로
+    /// (완료 = 마지막 노드, 임팩트는 goodWindow 뒤) 그 순간 플레이어는 아직 적 앞에 있을 수 있다.
+    /// 이 성질이 없으면 축을 '비우는' 방식과 다를 바가 없어져 증상이 그대로 남는다.
+    /// </summary>
+    [Test]
+    public void FlippedAxisWinsBeforeAndAfterPassThrough()
+    {
+        Vector3 original = Vector3.forward;
+        Vector3 flipped = -original;
+
+        // 아직 관통 전 - 지금 잰 방향은 원래 축 쪽이다
+        Assert.AreEqual(flipped, DuelGap.ResolveAxis(original, flipped));
+
+        // 이미 관통 후 - 지금 잰 방향이 뒤집힌 축과 같다
+        Assert.AreEqual(flipped, DuelGap.ResolveAxis(flipped, flipped));
     }
 
     [Test]

@@ -327,6 +327,15 @@ namespace PatternSpace
         public float DuelCurveEndTime => DuelGap.EndTime(duelDistanceCurve);
 
         /// <summary>
+        /// 이 패턴이 <b>플레이어를 적 반대편에 세운 채 끝나는가</b>(커브 마지막 키 값이 음수).
+        ///
+        /// <para>그런 패턴이 끝나면 <c>EnemyDirector</c>가 결투 축을 뒤집는다 — 뚫고 지나간 자리가
+        /// 다음 교전의 앞자리가 된다. 안 뒤집으면 다음 계획이 적 건너편에 잡혀
+        /// <b>플레이어가 적을 관통해 원래 자리로 되돌아온다</b>(<c>docs/DuelDistanceCurve/</c>).</para>
+        /// </summary>
+        public bool DuelCurveEndsBehind => DuelGap.EndsBehind(duelDistanceCurve);
+
+        /// <summary>
         /// 이 패턴의 <paramref name="relTime"/>(임팩트 기준 상대초)에서 둘이 유지할 간격(m).
         /// <b>런타임과 툴 프리뷰가 같은 함수를 부른다</b> — 두 그림이 어긋날 코드가 존재하지 않는다.
         ///

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PatternSpace;
 using SliceSpace;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace EnemySpace
 {
@@ -105,10 +106,22 @@ namespace EnemySpace
         [Min(0.05f)]
         [SerializeField] private float spawnWarpDuration = 1f;
 
-        [Tooltip("자리에 도착한 뒤 균열에 붙어 있던 줄이 몸으로 빨려 드는 시간(초).\n" +
-                 "0에 가까우면 줄이 끊기는 것으로 보인다 - 그 구간이 '원복'의 그림 전부다.")]
+        [Tooltip("자리에 도착한 뒤 균열 쪽 줄이 끊겨 구로 뭉치는 시간(초).\n" +
+                 "이 구간에서는 아직 구다 - 적의 형태로 돌아오는 것은 그 다음이다.\n" +
+                 "⚠ 길게 두면 끊긴 게 아니라 천천히 짧아지는 것으로 보인다.")]
         [Min(0.01f)]
-        [SerializeField] private float spawnRetractDuration = 0.35f;
+        [SerializeField] private float spawnSnapDuration = 0.18f;
+
+        [Tooltip("줄이 다 회수된 뒤 구가 적의 형태로 돌아오는 시간(초).\n" +
+                 "스캔 띠가 꼬리에서 머리로 쓸려 오는 그 구간이다.")]
+        [Min(0.01f)]
+        [FormerlySerializedAs("spawnRetractDuration")]
+        [SerializeField] private float spawnRestoreDuration = 0.35f;
+
+        [Tooltip("균열에서 나올 때 뭉치는 구의 반지름(m).\n" +
+                 "⚠ 비율이 아니라 미터다 - 균열이 어느 방향에 있든 같은 크기여야 한다.")]
+        [Min(0.01f)]
+        [SerializeField] private float spawnSphereRadius = 0.35f;
 
         [Tooltip("곡 시작(카운트다운)에 세우는 첫 무리도 균열에서 내보낼지. 끄면 그때만 예전 경로다.")]
         [SerializeField] private bool warpOnPrepareStage = true;
@@ -1010,7 +1023,9 @@ namespace EnemySpace
             view.Setup(definition, angle, slot, from, enterDuration, PlayerPosition);
 
             // 늘어남은 <b>도착 시각</b>에 정규화된다 — Setup이 잡은 이동 구간과 같은 끝을 본다.
-            if (rift != null) view.BeginSpawnWarp(rift.position, slot, Time.time + enterDuration, spawnRetractDuration, spawnWarpMaterial);
+            if (rift != null)
+                view.BeginSpawnWarp(rift.position, slot, Time.time + enterDuration,
+                    spawnSnapDuration, spawnRestoreDuration, spawnSphereRadius, spawnWarpMaterial);
 
             view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
@@ -1785,6 +1800,19 @@ namespace EnemySpace
                         chainHits = 0;
                         chainSuccesses = 0;
                     }
+
+                    // 관통으로 끝나는 패턴(커브 마지막 키가 음수)은 플레이어를 적 반대편에 세워 둔다.
+                    // 축을 그대로 두면 BuildDuelPlan이 다음 자리를 '원래 앞'에 잡아
+                    // 플레이어가 적을 관통해 되돌아온다 - playerShare가 1이라 어느 쪽에 설지는 축만이 정한다.
+                    //
+                    // ⚠ 비우지 않고 뒤집는다. 계획은 임팩트보다 이르게 잡히므로(완료 = 마지막 노드,
+                    //    임팩트는 goodWindow 뒤) 비우면 '아직 관통 전'인 위치에서 축이 재파생돼 증상이 그대로 남는다.
+                    //    뒤집으면 ResolveAxis가 관통 전/후 어느 쪽에서 물어도 같은 답을 준다.
+                    //
+                    // ⚠ 성패를 안 본다. 사슬(killOnSuccess = false)의 성공도 상대가 살아남아 증상이 같다.
+                    //    처치 분기에는 안 넣는다 - 상대가 바뀌면 BuildDuelPlan이 이미 previousAxis를 비운다.
+                    if (opponent == duelAxisOwner && r.template != null && r.template.DuelCurveEndsBehind)
+                        duelAxis = -duelAxis;
                 }
             }
 
