@@ -19,6 +19,28 @@ public class PatternLineRenderer : MaskableGraphic
     [SerializeField] private float outlineWidth = 3f;
     [SerializeField] private Color outlineColor = new Color(1f, 1f, 1f, 0.6f);
 
+    [Header("Blade (capsuleMode 전용)")]
+    [Tooltip("칼날이 지나간 자국처럼 그린다 - 두께가 widthCurve를 따라가고 양 끝이 점으로 수렴한다.\n" +
+             "끄면 예전 캡슐(양 끝 둥근 원)이다.")]
+    [SerializeField] private bool bladeMode = false;
+    [Tooltip("경로 진행(0 = 첫 노드, 1 = 마지막 노드)에 따른 두께 배율. lineWidth에 곱해진다.\n" +
+             "양 끝이 0이면 칼날처럼 뾰족해진다. 진행은 노드 번호가 아니라 실제 경로 길이 기준이다.")]
+    [SerializeField] private AnimationCurve widthCurve = new AnimationCurve(
+        new Keyframe(0f, 0f), new Keyframe(0.5f, 1f), new Keyframe(1f, 0f));
+    [Tooltip("코너 바깥이 뾰족하게 튀어나가는 것을 막는 상한(두께 배수). 1이면 각진 코너.")]
+    [Min(1f)]
+    [SerializeField] private float miterLimit = 3f;
+
+    [Tooltip("첫 노드 앞 / 마지막 노드 뒤로 더 뻗는 길이(px). 칼끝이 노드 밖에서 수렴한다.\n" +
+             "0이면 노드에서 딱 끝난다.")]
+    [Min(0f)]
+    [SerializeField] private float bladeExtend = 160f;
+
+    [Tooltip("두께 커브를 재는 간격(px). 노드에서만 재면 노드 2개짜리 패턴은 양 끝값(0)만 잡혀\n" +
+             "가운데가 굵어지지 않는다 - 그 사이를 이 간격으로 나눠 잰다. 작을수록 매끄럽고 정점이 는다.")]
+    [Min(4f)]
+    [SerializeField] private float bladeSampleSpacing = 40f;
+
     [Header("Gradient (capsuleMode 전용)")]
     [Tooltip("켜면 normalColor/outlineColor 대신 아래 그라데이션을 경로 진행 방향(첫 노드 0 → 마지막 노드 1)으로 적용한다.")]
     [SerializeField] private bool useGradient = false;
@@ -26,6 +48,10 @@ public class PatternLineRenderer : MaskableGraphic
     [SerializeField] private Gradient outlineGradient = new Gradient();
 
     private readonly List<Vector2> points = new List<Vector2>();
+
+    // 칼날 리본이 실제로 지나갈 점들(연장 + 분할). 매 프레임 새로 만들면 그게 곧 GC라 재사용한다.
+    private readonly List<Vector2> bladePoints = new List<Vector2>();
+    private readonly List<Color32> bladeColors = new List<Color32>();
     private bool useMissColor;
     private Vector2? liveEndPoint;
     private float currentAlpha = 1f;
@@ -142,6 +168,18 @@ public class PatternLineRenderer : MaskableGraphic
 
         float radius = lineWidth * 0.5f;
 
+        // ⚠ 칼날은 두께가 자리마다 달라 '선분이 반원을 정확히 덮는다'는 전제가 깨진다 -
+        // 그래서 호를 빼고 리본 하나로 잇는다. 아웃라인은 <b>두께를 더해</b> 만든다(배율이 아니다) -
+        // 배율이면 끝으로 갈수록 외곽선이 같이 얇아져 뾰족한 끝에서 사라진다.
+        if (bladeMode)
+        {
+            if (outlineWidth > 0f)
+                BuildBlade(vh, radius, outlineWidth, BuildPointColors(outlineGradient, outlineColor));
+
+            BuildBlade(vh, radius, 0f, BuildPointColors(fillGradient, useMissColor ? missColor : normalColor));
+            return;
+        }
+
         if (outlineWidth > 0f)
             BuildCapsule(vh, radius + outlineWidth, BuildPointColors(outlineGradient, outlineColor));
 
@@ -180,6 +218,122 @@ public class PatternLineRenderer : MaskableGraphic
         Color32 result = color;
         result.a = (byte)Mathf.RoundToInt(result.a * currentAlpha);
         return result;
+    }
+
+
+    /// <summary>
+    /// 두께가 변하는 리본 하나로 경로를 잇는다(칼날 자국). <b>겹침이 없다</b> —
+    /// 코너에서 양쪽 선분의 법선을 합친 마이터 방향으로 한 쌍의 정점만 내므로
+    /// <see cref="BuildCapsule"/>의 호 채우기가 통째로 필요 없다.
+    ///
+    /// <para><b>⚠ 두께를 노드에서만 재면 안 된다.</b> 노드가 2개인 패턴은 커브의 양 끝값(= 0)만 잡혀
+    /// 리본이 통째로 납작해진다 — <see cref="bladeSampleSpacing"/> 간격으로 나눠 재야
+    /// 가운데가 굵어진다. 노드 자체는 언제나 샘플에 들어가므로 <b>코너는 깎이지 않는다</b>.</para>
+    ///
+    /// <para><b>진행 t는 노드 번호가 아니라 실제 경로 길이 기준</b>이다. 번호로 재면
+    /// 3x3 격자에서 한 칸 이동과 두 칸 이동이 같은 t를 먹어 두께가 들쭉날쭉해진다.</para>
+    ///
+    /// <para><paramref name="extraWidth"/>는 <b>더하는</b> 값이다 — 아웃라인이 끝에서도
+    /// 제 두께를 유지해 뾰족한 끝을 감싼다.</para>
+    /// </summary>
+    private void BuildBlade(VertexHelper vh, float radius, float extraWidth, Color32[] colors)
+    {
+        BuildBladeSamples(colors);
+        int n = bladePoints.Count;
+        if (n < 2) return;
+
+        float total = 0f;
+        for (int i = 1; i < n; i++) total += Vector2.Distance(bladePoints[i - 1], bladePoints[i]);
+        if (total <= Mathf.Epsilon) return;
+
+        int start = vh.currentVertCount;
+        float travelled = 0f;
+
+        for (int i = 0; i < n; i++)
+        {
+            if (i > 0) travelled += Vector2.Distance(bladePoints[i - 1], bladePoints[i]);
+
+            float half = radius * Mathf.Max(widthCurve.Evaluate(travelled / total), 0f) + extraWidth;
+
+            Vector2 dirIn = i > 0 ? (bladePoints[i] - bladePoints[i - 1]).normalized : Vector2.zero;
+            Vector2 dirOut = i < n - 1 ? (bladePoints[i + 1] - bladePoints[i]).normalized : Vector2.zero;
+
+            Vector2 offset = MiterOffset(dirIn, dirOut, half, miterLimit);
+            vh.AddVert(bladePoints[i] - offset, bladeColors[i], Vector2.zero);
+            vh.AddVert(bladePoints[i] + offset, bladeColors[i], Vector2.zero);
+        }
+
+        for (int i = 0; i < n - 1; i++)
+        {
+            int a = start + i * 2;
+            vh.AddTriangle(a, a + 1, a + 3);
+            vh.AddTriangle(a, a + 3, a + 2);
+        }
+    }
+
+    /// <summary>
+    /// 리본이 실제로 지나갈 점들을 만든다 — <b>노드 밖으로의 연장</b>(<see cref="bladeExtend"/>)과
+    /// <b>노드 사이 분할</b>(<see cref="bladeSampleSpacing"/>)이 여기서 한 번에 끝난다.
+    /// 색은 노드 색을 그 구간에서 선형 보간한다(그라데이션·미스 색·페이드가 그대로 따라온다).
+    /// </summary>
+    private void BuildBladeSamples(Color32[] colors)
+    {
+        bladePoints.Clear();
+        bladeColors.Clear();
+        if (points.Count < 2) return;
+
+        // 연장은 첫/마지막 선분 방향으로 뻗는다. 칼끝이 노드 밖에서 수렴한다.
+        if (bladeExtend > 0f)
+        {
+            Vector2 head = (points[0] - points[1]).normalized * bladeExtend;
+            bladePoints.Add(points[0] + head);
+            bladeColors.Add(colors[0]);
+        }
+
+        for (int i = 0; i < points.Count - 1; i++)
+        {
+            Vector2 a = points[i];
+            Vector2 b = points[i + 1];
+            float length = Vector2.Distance(a, b);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(length / bladeSampleSpacing));
+
+            for (int k = 0; k < steps; k++)
+            {
+                float f = k / (float)steps;
+                bladePoints.Add(Vector2.Lerp(a, b, f));
+                bladeColors.Add(Color32.Lerp(colors[i], colors[i + 1], f));
+            }
+        }
+
+        bladePoints.Add(points[points.Count - 1]);
+        bladeColors.Add(colors[points.Count - 1]);
+
+        if (bladeExtend > 0f)
+        {
+            int last = points.Count - 1;
+            Vector2 tail = (points[last] - points[last - 1]).normalized * bladeExtend;
+            bladePoints.Add(points[last] + tail);
+            bladeColors.Add(colors[last]);
+        }
+    }
+
+    /// <summary>
+    /// 코너에서 리본이 접히지 않도록 양쪽 법선을 합친 방향으로 <paramref name="half"/>만큼 나간다.
+    /// 예각일수록 길어지므로 <paramref name="limit"/>배로 자른다(안 자르면 뾰족한 침이 튀어나간다).
+    /// </summary>
+    private static Vector2 MiterOffset(Vector2 dirIn, Vector2 dirOut, float half, float limit)
+    {
+        Vector2 dir = (dirIn + dirOut);
+        if (dir.sqrMagnitude <= Mathf.Epsilon) dir = dirIn.sqrMagnitude > Mathf.Epsilon ? dirIn : dirOut;
+        dir.Normalize();
+
+        Vector2 normal = new Vector2(-dir.y, dir.x);
+        Vector2 reference = dirIn.sqrMagnitude > Mathf.Epsilon ? dirIn : dirOut;
+        Vector2 refNormal = new Vector2(-reference.y, reference.x);
+
+        float cos = Vector2.Dot(normal, refNormal);
+        float scale = Mathf.Abs(cos) > 0.0001f ? Mathf.Min(1f / Mathf.Abs(cos), limit) : limit;
+        return normal * (half * scale);
     }
 
     /// <summary>

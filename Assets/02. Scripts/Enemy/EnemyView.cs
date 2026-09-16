@@ -130,6 +130,8 @@ namespace EnemySpace
         private static readonly int WarpCenterId = Shader.PropertyToID("_WarpCenterOS");
         private static readonly int WarpSpanId = Shader.PropertyToID("_WarpSpan");
         private static readonly int WarpStretchId = Shader.PropertyToID("_WarpStretch");
+        private static readonly int SphereCenterId = Shader.PropertyToID("_SphereCenterOS");
+        private static readonly int SphereRadiusId = Shader.PropertyToID("_SphereRadiusOS");
 
         [Header("Highlight")]
         [Tooltip("강조(아웃라인) 중에 옮겨 놓을 레이어 이름. URP의 RenderObjects 피처가 이 레이어만 골라\n" +
@@ -222,10 +224,14 @@ namespace EnemySpace
         private float dissolveDuration;
         private bool dissolving;
 
-        // 등장 늘어남. 두 구간이다 — 균열에 붙어 끌려 나오는 <b>이동</b>과, 그 줄이 몸으로 빨려 드는 <b>수축</b>.
+        // 등장 늘어남. <b>구간이 셋</b>이다 — 균열에 붙어 끌려 나오는 <b>이동</b>,
+        // 그 줄이 끊겨 구로 뭉치는 <b>끊김</b>, 구가 제 모양으로 돌아오는 <b>원복</b>.
+        // ⚠ 끊김과 원복을 한 구간에서 같이 흘리면 줄이 회수되는 동안 이미 사람 형태로 돌아오고 있어
+        // <b>구로 뭉치는 순간이 화면에 존재하지 않는다</b>(docs/EnemySpawnWarp/Research_SpawnWarpSphere).
         private float warpTravelEnd;
-        private float warpRetractDuration;
-        private float warpAnchorStretch;   // 이동이 끝난 순간의 줄 길이(수축의 출발값)
+        private float warpSnapDuration;
+        private float warpRestoreDuration;
+        private float warpAnchorStretch;   // 이동이 끝난 순간의 줄 길이(끊김의 출발값)
         private Vector3 warpRiftPosition;
         private Vector3 warpFallbackDirection;
         private bool warping;
@@ -233,6 +239,11 @@ namespace EnemySpace
         // 렌더러별 '축 방향 실제 몸 길이'와 그 중점. 스폰마다 한 번만 잰다(아래 MeasureWarpExtents 주석).
         private float[] warpSpans;
         private Vector3[] warpCenters;
+
+        // 구가 앉을 자리. <b>월드 기준 하나</b>이고 렌더러마다 옮겨 넣는다 —
+        // 렌더러별로 재면 몸과 무기가 각각 구가 되어 <b>구가 둘</b>이 된다.
+        private Vector3 warpSphereCenterWS;
+        private float warpSphereRadius = 0.35f;
 
         // 길이를 잴 때 쓰는 작업용 그릇. 정적으로 하나만 두고 재사용한다 —
         // 스폰마다 Mesh와 배열을 새로 만들면 그게 곧 곡 도중 GC 히치다(§5).
@@ -1067,21 +1078,25 @@ namespace EnemySpace
         /// <para><b>줄은 균열에 붙어 있다.</b> 늘어남 길이가 상수가 아니라 <b>균열까지의 실제 거리</b>라,
         /// 적이 자리로 갈수록 줄이 그만큼 길어진다 — 끊기지 않고 균열과 몸이 이어진 채로 나온다.</para>
         ///
-        /// <para><b>도착한 뒤에야 줄을 놓는다</b>(<paramref name="retractDuration"/>). 그 구간에서 길이가 0으로
-        /// 줄고 스캔 띠가 꼬리에서 머리로 쓸려 오며, <b>줄이 몸으로 빨려 들어가 원형이 된다</b>.
-        /// 도착과 동시에 놓으면 줄이 끊기는 것으로 보인다.</para>
+        /// <para><b>도착한 뒤가 둘로 갈린다.</b> <paramref name="snapDuration"/> 동안 줄이 끊겨 구로 뭉치고
+        /// (이때까지는 <b>아직 구</b>다), 그 다음 <paramref name="restoreDuration"/> 동안 스캔 띠가
+        /// 꼬리에서 머리로 쓸려 오며 <b>구가 제 모양으로 돌아온다</b>.
+        /// ⚠ 둘을 한 구간에서 같이 흘리면 줄이 회수되는 동안 이미 사람 형태라 <b>구로 뭉치는 순간이 없다</b>.</para>
         ///
         /// <para><b>⚠ 머티리얼이 없으면 아무 일도 일어나지 않는다</b> — 평소 입는 툰 머티리얼에는
         /// <c>_Warp</c>가 없어서 값만 흐르다 만다(<see cref="Dissolve"/>와 같은 함정).</para>
         /// </summary>
-        public void BeginSpawnWarp(Vector3 riftPosition, Vector3 slot, float travelEndTime, float retractDuration, Material warpMaterial)
+        public void BeginSpawnWarp(Vector3 riftPosition, Vector3 slot, float travelEndTime,
+            float snapDuration, float restoreDuration, float sphereRadius, Material warpMaterial)
         {
             if (warpMaterial == null || dissolving) return;
 
             dissolveSwap.Begin(renderers, warpMaterial, propertyBlock);
             warpRiftPosition = riftPosition;
             warpTravelEnd = travelEndTime;
-            warpRetractDuration = Mathf.Max(retractDuration, 0.01f);
+            warpSnapDuration = Mathf.Max(snapDuration, 0.01f);
+            warpRestoreDuration = Mathf.Max(restoreDuration, 0.01f);
+            warpSphereRadius = Mathf.Max(sphereRadius, 0.01f);
             warpAnchorStretch = 0f;
 
             // ⚠ 첫 프레임에는 적이 균열 <b>위에</b> 있어 방향이 0이다. 자리에서 균열을 보는 방향이
@@ -1104,6 +1119,9 @@ namespace EnemySpace
         /// <summary>
         /// 줄의 길이와 스캔 띠를 민다. <b>축은 매 프레임 다시 잡는다</b> — 적이 자리로 이동하면서
         /// 균열과의 방향이 바뀌고, 줄은 언제나 <b>균열에 붙어</b> 있어야 한다.
+        ///
+        /// <para><b>구간이 셋이고 각 구간이 미는 값이 다르다</b> — 이동은 길이만, 끊김은 길이만(구 유지),
+        /// 원복은 <c>_Warp</c>만. 한 구간에서 둘을 같이 밀면 그 사건이 화면에서 뭉개진다.</para>
         /// </summary>
         private void TickSpawnWarp()
         {
@@ -1122,10 +1140,22 @@ namespace EnemySpace
                 warpAnchorStretch = distance;
                 band = 1f;
             }
+            else if (now < warpTravelEnd + warpSnapDuration)
+            {
+                // 끊김 구간: 줄이 균열에서 놓여 자리로 빨려 든다. <b>몸은 아직 구다</b>(band = 1).
+                //
+                // ⚠ 선형으로 줄이면 "끊겼다"가 아니라 "천천히 짧아진다"로 읽힌다. 세제곱 ease-out이라
+                // 첫 프레임에 대부분이 딸려 들어오고 꼬리만 남아 따라온다.
+                float p = Mathf.Clamp01((now - warpTravelEnd) / warpSnapDuration);
+                float eased = 1f - (1f - p) * (1f - p) * (1f - p);
+                stretch = Mathf.Lerp(warpAnchorStretch, 0f, eased);
+                band = 1f;
+            }
             else
             {
-                float p = Mathf.Clamp01((now - warpTravelEnd) / warpRetractDuration);
-                stretch = Mathf.Lerp(warpAnchorStretch, 0f, p);
+                // 원복 구간: 줄은 이미 없다. 띠가 꼬리에서 머리로 쓸려 오며 구가 제 모양이 된다.
+                float p = Mathf.Clamp01((now - warpTravelEnd - warpSnapDuration) / warpRestoreDuration);
+                stretch = 0f;
                 band = 1f - p;
 
                 if (p >= 1f)
@@ -1456,6 +1486,9 @@ namespace EnemySpace
         {
             if (renderers == null) return;
 
+            warpSphereCenterWS = transform.position;
+            int bestVertexCount = 0;
+
             for (int i = 0; i < renderers.Length; i++)
             {
                 var r = renderers[i];
@@ -1471,16 +1504,27 @@ namespace EnemySpace
 
                 float min = float.MaxValue;
                 float max = float.MinValue;
+                Vector3 sum = Vector3.zero;
 
                 foreach (var v in WarpVertexScratch)
                 {
                     float proj = Vector3.Dot(v, axis);
                     if (proj < min) min = proj;
                     if (proj > max) max = proj;
+                    sum += v;
                 }
 
                 warpSpans[i] = Mathf.Max((max - min) * WarpReachMargin, 1e-4f);
                 warpCenters[i] = axis * ((min + max) * 0.5f);
+
+                // 구 중심은 <b>정점이 가장 많은 렌더러</b>(= 몸)의 무게중심 하나다. 무기 같은 작은
+                // 렌더러가 기준이 되면 구가 몸 밖에 앉는다. ⚠ warpCenters와 다르다 — 저쪽은 축 위의
+                // 점이라 가로 성분이 없어 구 중심으로 쓰면 발밑에서 부푼다.
+                if (WarpVertexScratch.Count > bestVertexCount)
+                {
+                    bestVertexCount = WarpVertexScratch.Count;
+                    warpSphereCenterWS = r.transform.TransformPoint(sum / WarpVertexScratch.Count);
+                }
             }
         }
 
@@ -1545,6 +1589,12 @@ namespace EnemySpace
                 propertyBlock.SetFloat(WarpId, band);
                 propertyBlock.SetVector(WarpAxisId, axisOS);
                 propertyBlock.SetVector(WarpCenterId, warpCenters[i]);
+
+                // ⚠ 중심은 점(Point), 반지름은 벡터(Vector)로 옮긴다 — 점은 위치라 이동까지 타야 하고
+                // 반지름은 길이라 스케일만 타야 한다. 하나로 뭉뚱그리면 스케일이 1이 아닌 모델에서 어긋난다.
+                propertyBlock.SetVector(SphereCenterId, r.transform.InverseTransformPoint(warpSphereCenterWS));
+                propertyBlock.SetFloat(SphereRadiusId,
+                    r.transform.InverseTransformVector(axisWS * warpSphereRadius).magnitude);
                 propertyBlock.SetFloat(WarpSpanId, warpSpans[i]);
                 propertyBlock.SetFloat(WarpStretchId, length);
                 r.SetPropertyBlock(propertyBlock);

@@ -18,6 +18,8 @@ Shader "Custom/EnemySpawnWarp"
         _WarpCenterOS("Warp Center (Object Space)", Vector) = (0, 0, 0, 0)
         _WarpStretch("Warp Stretch (Object Space Length)", Float) = 2
         _WarpSpan   ("Warp Span", Float)        = 1.8
+        _SphereCenterOS("Sphere Center (Object Space)", Vector) = (0, 0, 0, 0)
+        _SphereRadiusOS("Sphere Radius (Object Space)", Float) = 0.35
         _EdgeWidth  ("Edge Width", Range(0.001, 1)) = 0.25
         [HDR] _EdgeColor ("Edge Color", Color)  = (2, 2.4, 4, 1)
         _Ambient    ("Ambient", Range(0, 1))    = 0.45
@@ -53,6 +55,8 @@ Shader "Custom/EnemySpawnWarp"
                 float4 _EdgeColor;
                 float4 _WarpAxisOS;
                 float4 _WarpCenterOS;
+                float4 _SphereCenterOS;
+                float  _SphereRadiusOS;
                 float  _Warp;
                 float  _WarpStretch;
                 float  _WarpSpan;
@@ -72,7 +76,7 @@ Shader "Custom/EnemySpawnWarp"
                 float4 positionCS : SV_POSITION;
                 float2 uv         : TEXCOORD0;
                 float3 normalWS   : TEXCOORD1;
-                float  scan       : TEXCOORD2; // 스캔 좌표(0 = 앞머리, 1 = 균열 쪽 꼬리)
+                float  scan       : TEXCOORD2; // 형태가 정해지는 자리까지의 거리(0 = 지금 정해지는 중)
             };
 
             // 이 정점이 스캔 순서에서 얼마나 '뒤'인가. 균열 쪽(축과 같은 방향)일수록 1에 가깝다.
@@ -85,10 +89,40 @@ Shader "Custom/EnemySpawnWarp"
                 return saturate(0.5 + dot(local, _WarpAxisOS.xyz) / max(_WarpSpan, 1e-4));
             }
 
+            // 형태가 정해지는 자리. <b>_Warp = 1이면 1 + _EdgeWidth</b>라 몸 전체가 구이고,
+            // <b>_Warp = 0이면 0</b>이라 정확히 아무것도 안 남는다 — 양 끝이 식으로 포화된다.
+            // 범위를 [0, 1]로 두면 늘어나는 내내 꼬리 _EdgeWidth 구간이 사람 형태로 남는다.
+            float ResolveFront()
+            {
+                return _Warp * (1.0 + max(_EdgeWidth, 1e-4));
+            }
+
+            // 앞이 아직 지나가지 않은 정점은 제 자리가 아니라 <b>구 위</b>에 있다.
+            // 앞은 꼬리(균열)에서 머리로 쓸려 오므로, 구 덩어리로 나와 꼬리를 노끈처럼 끌고 오다가
+            // 앞이 훑고 지나가며 제 모양이 된다 — 분기가 아니라 식이다.
+            //
+            // ⚠ 기준은 원본 positionOS다. 구로 옮긴 좌표로 스캔을 재면 좌표 범위가 구 지름으로
+            // 무너져 줄이 균열에 안 닿는다.
+            float SphereAmount(float scan, float front)
+            {
+                return saturate((front - scan) / max(_EdgeWidth, 1e-4));
+            }
+
             Varyings vert(Attributes input)
             {
                 float3 posOS = input.positionOS.xyz;
                 float  scan  = ScanCoord(posOS);
+
+                // 구는 몸 중심에 앉는다(_WarpCenterOS는 축 위의 점이라 발밑이 된다 — 여기 쓰면 안 된다).
+                // ⚠ 중심·반지름은 EnemyView가 <b>월드 기준 하나</b>를 잡아 렌더러마다 옮겨 넣는다 —
+                // 렌더러마다 따로 재면 몸과 무기가 각각 구가 되어 <b>구가 둘</b>이 된다.
+                float  front    = ResolveFront();
+                float3 toCenter = posOS - _SphereCenterOS.xyz;
+                float  dist     = max(length(toCenter), 1e-4);
+                float3 sphereOS = _SphereCenterOS.xyz + toCenter * (_SphereRadiusOS / dist);
+
+                float sphere = SphereAmount(scan, front);
+                posOS = lerp(posOS, sphereOS, sphere);
 
                 // 뒤쪽일수록 균열 쪽으로 더 끌려간다 -> 꼬리가 길게 늘어난다.
                 //
@@ -102,8 +136,8 @@ Shader "Custom/EnemySpawnWarp"
                 Varyings o;
                 o.positionCS = TransformObjectToHClip(posOS);
                 o.uv         = TRANSFORM_TEX(input.uv, _BaseMap);
-                o.normalWS   = TransformObjectToWorldNormal(input.normalOS);
-                o.scan       = scan;
+                o.normalWS   = TransformObjectToWorldNormal(normalize(lerp(input.normalOS, toCenter / dist, sphere)));
+                o.scan       = scan - front; // 띠는 형태가 정해지는 자리에 앉는다(프래그먼트는 거리만 본다)
                 return o;
             }
 
@@ -116,8 +150,9 @@ Shader "Custom/EnemySpawnWarp"
                 half ndotl = saturate(dot(normalize(input.normalWS), mainLight.direction)) * 0.5h + 0.5h;
                 col.rgb *= lerp(_Ambient, 1.0h, ndotl) * mainLight.color;
 
-                // 스캔 띠. 진행과 함께 몸을 훑고 지나간다(_Warp = 1 -> 꼬리 끝, 0 -> 앞머리).
-                half band = 1.0h - saturate(abs(input.scan - _Warp) / max(_EdgeWidth, 1e-4h));
+                // 스캔 띠. <b>형태가 정해지는 자리</b>에 앉아 꼬리에서 머리로 쓸려 온다 —
+                // 빛나는 곳이 곧 구에서 제 모양으로 돌아오는 경계다(버텍스가 이미 거리를 넘겨준다).
+                half band = 1.0h - saturate(abs(input.scan) / max(_EdgeWidth, 1e-4h));
                 col.rgb = lerp(col.rgb, _EdgeColor.rgb, band * step(0.0001h, _Warp));
                 return col;
             }

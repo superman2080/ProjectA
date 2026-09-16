@@ -91,7 +91,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FocusRingView
   background: {fileID: 2314754235942579517}
   indexLabel: {fileID: 6260716643756387997}
-  endSize: {x: 90, y: 90}
+  endSize: {x: 64, y: 64}
 --- !u!1 &1667218004911078381
 GameObject:
   m_ObjectHideFlags: 0
