@@ -31,6 +31,26 @@ MonoBehaviour:
   _shader: {fileID: 4800000, guid: 0df733e3d2c29b342ace5044cc131c85, type: 3}
   _motionTexDefault: {fileID: 2800000, guid: b87b6e5c91e9d8642895f24df9f8e85a, type: 3}
   _paperTexDefault: {fileID: 2800000, guid: d9f9959633441d1409a85bd2889ccb03, type: 3}
+--- !u!114 &-4086243506621231710
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
+  m_Name: FilmScratch
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
+  m_Active: 1
+  injectionPoint: 600
+  fetchColorBuffer: 0
+  requirements: 0
+  passMaterial: {fileID: 2100000, guid: 5cc7272e54381974fb645e097b5316df, type: 2}
+  passIndex: 0
+  bindDepthStencilAttachment: 0
+  m_Version: 1
 --- !u!114 &-3054197004743720012
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -89,6 +109,26 @@ MonoBehaviour:
   _fps: 60
   _scale: 0.5
   _hdr: 0
+--- !u!114 &-968209493394567987
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
+  m_Name: ToonPosterize
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
+  m_Active: 1
+  injectionPoint: 600
+  fetchColorBuffer: 1
+  requirements: 0
+  passMaterial: {fileID: 2100000, guid: 420c4b9f2c7b4fc42ac70aa897d5238f, type: 2}
+  passIndex: 0
+  bindDepthStencilAttachment: 0
+  m_Version: 1
 --- !u!114 &-200732028447463826
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -163,7 +203,9 @@ MonoBehaviour:
   - {fileID: 5056448797074111942}
   - {fileID: 1931847733029277974}
   - {fileID: -200732028447463826}
-  m_RendererFeatureMap: ad6b866f10d7b46cb443308a01509dd588f608ffd7436d2bb3a358ec98c26093c6bd8d06641d2c4616915a1f474dcf1a6e66589d48db36fd
+  - {fileID: -968209493394567987}
+  - {fileID: -4086243506621231710}
+  m_RendererFeatureMap: ad6b866f10d7b46cb443308a01509dd588f608ffd7436d2bb3a358ec98c26093c6bd8d06641d2c4616915a1f474dcf1a6e66589d48db36fdcd4c0e76983a90f2a24d183a2ebf4ac7
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}

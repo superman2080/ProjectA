@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using ChartGen;
 using EnemySpace;
@@ -57,6 +58,18 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     [Tooltip("배우를 검게 칠하는 RenderObjects 피처의 이름.")]
     [SerializeField] private string actorFeatureName = "FinaleActors";
 
+    [Tooltip("필름 세로선(AnimeFilmScratch)을 찍는 FullScreenPass 피처의 이름.\n" +
+             "이 피처만 부호가 반대다 - 실루엣이 올라가면 긁힘이 내려간다.\n" +
+             "비우면 긁힘은 그대로 남는다.")]
+    [SerializeField] private string scratchFeatureName = "FilmScratch";
+
+    [Header("Film Look")]
+    [Tooltip("채도를 내리는 필름 룩 Volume(FilmLookVolume). 노출 동안 weight를 0으로 내렸다 되돌린다.\n" +
+             "안 내리면 채도 저하가 실루엣의 빨강까지 바래게 한다.\n" +
+             "비우면 이 층만 조용히 죽는다.\n" +
+             "주의: Global Volume을 여기 꽂으면 Bloom·Tonemapping까지 같이 꺼진다.")]
+    [SerializeField] private Volume filmLookVolume;
+
     [Tooltip("배우가 올라갈 레이어. RenderObjects 피처 둘의 LayerMask가 이 값을 기준으로 갈린다.")]
     [SerializeField] private string silhouetteLayerName = "Silhouette";
 
@@ -101,6 +114,7 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     private int silhouetteLayer = -1;
     private float restoreTimeScale = 1f;
     private float restoreAudioPitch = 1f;
+    private float restoreFilmWeight = 1f;
     private AudioSource songSource;
 
     // 바꾸기 전 레이어를 오브젝트별로 기록한다. ⚠ 전부 0으로 되돌리면 AmbushOutline(9번)에
@@ -237,6 +251,14 @@ public class FinaleSilhouetteDirector : MonoBehaviour
         restoreTimeScale = Time.timeScale;
         if (slowTimeScale < 1f) Time.timeScale = slowTimeScale;
 
+        // 채도 저하를 걷는다. 0을 대입하고 1로 되돌리는 게 아니라 원래 값을 캐시했다 되돌린다
+        // (restoreTimeScale·restoreAudioPitch와 같은 관용구) - 나중에 이 Volume을 다른 데서 밀 수 있다.
+        if (filmLookVolume != null)
+        {
+            restoreFilmWeight = filmLookVolume.weight;
+            filmLookVolume.weight = 0f;
+        }
+
         if (audioPitchScale < 1f)
         {
             songSource = chartPlayer != null ? chartPlayer.SongSource : null;
@@ -273,6 +295,8 @@ public class FinaleSilhouetteDirector : MonoBehaviour
         RestoreLayers();
 
         Time.timeScale = restoreTimeScale;
+        if (filmLookVolume != null) filmLookVolume.weight = restoreFilmWeight;
+
         if (songSource != null)
         {
             songSource.pitch = restoreAudioPitch;
@@ -346,9 +370,10 @@ public class FinaleSilhouetteDirector : MonoBehaviour
             foreach (var feature in data.rendererFeatures)
             {
                 if (feature == null) continue;
-                if (feature.name != backgroundFeatureName && feature.name != actorFeatureName) continue;
 
-                feature.SetActive(on);
+                // 긁힘만 부호가 반대다 - 실루엣이 올라가면 내려간다.
+                if (feature.name == scratchFeatureName) feature.SetActive(!on);
+                else if (feature.name == backgroundFeatureName || feature.name == actorFeatureName) feature.SetActive(on);
             }
         }
     }

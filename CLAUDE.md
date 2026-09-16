@@ -574,6 +574,11 @@ Assets/
 - **간격은 패턴이 든 시간 함수다** — `Pattern.duelDistanceCurve`(키 시간 = **임팩트 기준 상대초**, 값 = **절대 간격 m**). 계산은 `Pattern/Core/DuelGap`(asmdef·테스트됨) 하나이고 런타임·짝 에디터·슬라이서가 **같은 함수**를 부른다. **커브가 비면 예전 상수 경로**(`앵커 + duelDistanceOffset`) — 기존 패턴 회귀 0.
 - **적은 고정, 플레이어만 움직인다.** 그래서 간격은 파생값이 아니라 `enemy − player(t)`라는 **정의**다. 음수면 플레이어가 적을 **지나쳐 뒤로** 나가고 **회전은 안 건드린다**(등 돌린 채 지나침 = 참격 후 잔심).
 - **⚠ 시각의 출처는 `CharacterActionPlayer.DuelCurveTime` 하나다** — `Time.time − impactTime`을 쓰면 셋이 어긋난다: ① 히트스톱은 `AttackSpeed = 0`으로만 걸려 **시계는 계속 흐른다**(캐릭터는 얼었는데 몸만 미끄러짐 = "렉") ② `AttackSpeed` 압축이 걸리면 칼 리치와 간격의 대응이 깨진다 ③ 다중 히트스톱 예산은 재생을 F만큼 일찍 시작한다. **재생 헤드에서 파생하면 셋 다 공짜로 성립한다**(`clipConsumed`·`playSpeed`·`playingBaseSpeed`). 액션이 없으면 `NaN` → 구동 정지 = 홀드.
+- **⚠ 커브가 음수로 끝나는 패턴은 그 교전이 끝날 때 결투 축이 뒤집힌다**(`Pattern.DuelCurveEndsBehind` → `EnemyDirector.ResolveReservation`). **뚫고 지나간 자리가 다음 패턴의 앞자리가 된다** — 안 뒤집으면 `BuildDuelPlan`이 다음 자리를 원래 앞에 잡아 **플레이어가 적을 관통해 되돌아온다**(`playerShare`가 1이라 플레이어 위치가 식에서 소거되고 **어느 쪽에 설지는 축만이 정한다**).
+  - **⚠ 성패를 안 본다** — 조건은 "상대가 살아남았다 + 커브 끝이 음수"다. 사슬(§11-5, `killOnSuccess = false`)의 **성공**도 상대가 살아남아 증상이 같다. 성공+처치에서 안 보였던 것은 상대가 바뀌어 `BuildDuelPlan`이 이미 `previousAxis`를 비우기 때문이다.
+  - **⚠ 비우는 게 아니라 뒤집는다.** 계획은 임팩트보다 이르게 잡히므로(완료 = 마지막 노드, 임팩트는 `goodWindow` 뒤) 비우면 **아직 관통 전인 위치**에서 축이 재파생돼 증상이 그대로 남는다. 뒤집으면 `DuelGap.ResolveAxis`가 관통 전/후 어느 쪽에서 물어도 같은 답을 준다(테스트가 지키는 지점).
+  - **⚠ `ResolveAxis`의 기존 가드는 그대로 둔다** — 그것은 *전이 상태*(커브가 그리는 도중)에서 축이 파생되는 것을 막는 장치이고, 이쪽은 *저작된 최종 상태*를 반영하는 별개 사건이다. **둘을 가르는 정보가 끝 키의 부호다.**
+  - **저작 필드가 0개다**(§2-1·§11-10과 같은 관용구 — 분기가 아니라 데이터로 갈린다). 돌아서는 회전도 새 코드가 0줄이다: 플레이어는 `PlayerCombatMover.ApplyPlan`의 기존 회전이, 적은 `EnemyView.TickGaze`가 한다.
 - **구동 구간 = 플레이어 클립 재생 구간**(도착 이후). 도착 목표 간격이 `curve(arriveTime − impactTime)`이라 이음매가 연속이고, 구간 밖은 `AnimationCurve`의 기본 Clamp가 **끝 키 값으로 홀드**한다(홀드 코드 0줄). 채보의 창 길이와는 무관하다.
 - **위치의 주인 순서**: `rolling`(구르기) > **커브 구동** > 수렴 이동. 구르기는 진입 시 커브 구동을 놓는다(구른 뒤 자리는 구르기가 정한다).
 - **⚠ `Attacker.Enemy`에서는 저작자 책임이다** — 적 칼은 예약 시점의 자리를 겨냥하므로 임팩트 시점 간격이 저작값과 다르면 빗나간다. 막지 않는 이유는 툴 프리뷰가 그 어긋남을 그대로 보여 주기 때문.
@@ -669,6 +674,27 @@ Assets/
 - **⚠ `GameSession.LastResult`는 아직 읽는 쪽이 없다** — 결과 화면이 미구현이며 그 화면이 붙을 진입점이다(`PlayerHealth.OnDepleted`와 같은 상태, §7-6). 오토플레이(§8)가 같은 파이프라인을 타므로 **디버그로 만점이 나온다** — 기록 저장이 붙을 때 막아야 한다.
 - 상세: `docs/ScoreCombo/`
 
+### 12-1. 필름 룩 — 채도 저하 + 외곽 세로선 (AnimeFilmLook)
+- **1960~70년대 일본 애니메이션 필름의 느낌 둘이고, 계층이 완전히 다르다.** 채도는 URP가 이미 가진 기능이고 세로선만 수단이 없다 — 한 셰이더에 묶으면 **이미 있는 색 보정을 다시 구현**하게 되고 화면 복사 패스(`fetchColorBuffer`)를 켜야 한다.
+- **채도는 전용 `FilmLookVolume`**(씬, priority 5)의 `Assets/Settings/FilmLookProfile.asset` → `ColorAdjustments`가 소유한다(Saturation −25 · Contrast +5 · Post Exposure −0.05). **코드가 0줄이다.**
+  - **⚠ `Global Volume`(=`SampleSceneProfile`)에 넣으면 안 된다** — 거기엔 `Bloom`·`Tonemapping`·`MotionBlur`가 같이 살아서 §14가 weight로 끄는 순간 그것들까지 꺼진다. `ComboPostFxVolume`이 `Global Volume`을 안 건드리는 것과 같은 근거(§12).
+  - **⚠ `DefaultVolumeProfile`에도 넣지 않는다** — 그쪽은 파이프라인 전역이라 곡 선택 씬·탐색 씬(§9)까지 따라온다.
+- **세로선은 `Hidden/AnimeFilmScratch` 셰이더 + URP 내장 `FullScreenPassRendererFeature`(이름 `FilmScratch`)가 전부다. C#이 0줄이다** — "가끔씩"은 시간의 함수이고 셰이더가 `_Time.y`를 이미 안다(슬롯 × 열 해시). 매 프레임 값을 밀어 줄 MonoBehaviour가 필요한 것은 **게임 상태에 반응할 때**뿐이다.
+  - **⚠ 화면을 읽지 않는다** — 선만 그려 하드웨어 블렌드로 얹으므로 `Fetch Color Buffer`를 끌 수 있고 **전체 화면 복사 패스가 통째로 사라진다**. 주입 시점은 `AfterRenderingPostProcessing`(필름은 색이 정해진 뒤에 긁힌다).
+  - **⚠ 피처 이름이 두 렌더러에서 같아야 한다**(`PC_Renderer`·`Mobile_Renderer`) — §14가 **이름으로** 찾아 끈다.
+  - 튜닝은 머티리얼 한 곳(`AnimeFilmScratchMaterial`)에 모인다(`_Columns`·**`_ScratchesPerSecond`**·`_FlickerRate`·`_EdgeStart`·`_Intensity`). **⚠ 빈도 노브는 확률이 아니라 초당 줄 수다**(기본 0.6 = 평균 1.7초에 한 줄) — 확률로 두면 쓸 만한 값이 열 수와 슬롯 수에 묻혀 0.0002대가 되어 슬라이더로 손댈 수가 없다. **⚠ 해시의 마지막 연산이 곱이면 안 된다**: 균일한 두 값의 곱은 0 근처에 몰려(`P(xy < t) = t(1 - ln t)`) 작은 문턱에서 **7배쯤 자주 걸린다** — 노브가 말하는 값과 실제 빈도가 어긋난다(실측으로 잡은 지점이다). 외곽 마스크가 화면 중앙을 0으로 두므로 **패턴인풋 주변에는 구조적으로 안 뜬다**.
+- **⚠ 판정 단서는 원래 안전하다** — 루트 Canvas가 `ScreenSpaceOverlay`(§7-5)라 포커스 링·HUD는 포스트 프로세싱과 풀스크린 패스보다 뒤에 그려진다. §12의 색수차 규율("판정을 방해하는 순간 연출이 아니라 손해다")이 여기서는 구조적으로 자동 충족된다.
+- **⚠ 히트스톱(§7-3)에 세로선이 안 언다** — `_Time`은 `timeScale` 밖이고, 필름 긁힘은 **화면(영사기)의 사건이지 게임 세계의 사건이 아니라** 안 어는 것이 맞다.
+- **⚠ 마무리 실루엣(§14) 동안 둘 다 꺼진다.** 안 끄면 채도 저하가 실루엣의 빨강까지 바래게 하고, 그러면 **채도 값과 실루엣 머티리얼 색이 짝이 되어** 한쪽을 손볼 때마다 다른 쪽을 다시 맞춰야 한다.
+- **툰 단색화는 셋째 층이다** — `Hidden/AnimeToonPosterize` + `FullScreenPassRendererFeature`(이름 `ToonPosterize`). **조명을 다시 계산하지 않고 이미 계산된 화면의 밝기를 N단계로 자른다**(기본 8). 그래서 **머티리얼을 한 개도 안 고치고** 포인트 라이트 12개·베이크 GI·에셋팩 셰이더가 전부 그대로 살아 있다.
+  - **⚠ 피처 리스트 순서가 곧 설계다**: `ToonPosterize` → `FilmScratch`. 둘 다 `AfterRenderingPostProcessing`이라 **순서를 정하는 것이 리스트뿐**이고, 뒤집히면 **필름 긁힘까지 계단화돼** 선이 밴드에 먹힌다.
+  - **⚠ `Fetch Color Buffer`가 세로선과 반대로 켜져 있다** — 이 패스는 화면을 **읽어서 고쳐 쓴다**. 전체 화면 복사 1회가 이 기능의 유일한 실질 비용이다.
+  - **⚠ 자르기 전에 지각 공간으로 옮긴다**(`LinearToSRGB` → 양자화 → `SRGBToLinear`). 이 시점의 화면 값은 **선형**이라(sRGB 변환은 마지막 블릿이 한다) 균등 간격으로 그냥 자르면 눈에 보이는 중간 밝기가 실제로는 0.01~0.05여서 **화면이 통째로 검어진다**. 실측으로 확인했다.
+  - `_PosterizeRGB`(채널별 자르기)는 기능만 남기고 **꺼 둔다** — 어두운 구간에서 색조가 무너진다(바닥이 빨강·노랑으로 튄다).
+  - **⚠ §14는 이 층을 안 끈다** — 실루엣 구간 화면은 이미 빨강·검정 단색이라 계단화가 아무 일도 하지 않는다. 끄면 오히려 그 경계에서 룩이 튄다.
+- **⚠ 머티리얼마다 툰 셰이더를 다는 길은 비싸다** — 이관 대상이 ~140개(URP/Lit 81 · `HS_Blend_CG` 41 · `HS_Blend_TwoSides` 21)이고, 이미 있는 `Custom/CelShader`는 **쓰는 머티리얼이 0개**인 데다 `GetMainLight()` 하나만 봐서(추가 라이트·라이트맵·앰비언트를 안 읽는다) 드롭인이 아니다. 물체마다 다른 음영 단계가 필요해지는 순간에만 여는 문이고, 두 층은 겹쳐도 충돌하지 않는다.
+- 상세: `docs/AnimeFilmLook/`
+
 ---
 
 ## 이벤트 확장 포인트 (`PatternHandler`)
@@ -747,6 +773,7 @@ Assets/
   - ⚠ **`SetActive`는 렌더러 <b>에셋</b>의 상태를 바꾼다.** 플레이 종료 시 반드시 false로 되돌린다(안 그러면 에디터 세션에 빨간 화면이 남는다).
 - **HUD는 감춘다** — 루트 Canvas가 `ScreenSpaceOverlay`라(§7-5) 그냥 두면 점수판이 실루엣 위에 그대로 남는다. `ScoreHudView.SetHidden(bool)`이 `CanvasGroup` 알파만 민다. ⚠ **오브젝트를 끄지 않는다** — `OnDisable`이 구독을 풀어 감춘 사이의 점수 변화를 놓친다. 감출지 말지는 여전히 부르는 쪽이 정한다(표시 계층은 게임플레이를 모른다).
 - **오디오는 안 느려진다**(timeScale 밖). `audioPitchScale` 노브가 있으나 기본 1 — ⚠ 내리면 `ChartPlayer`가 `audioSource.isPlaying`을 보므로 **곡 종료가 그만큼 늦어진다**.
+- **필름 룩(§12-1)을 노출 동안 끈다** — `filmLookVolume.weight`를 0으로 내리고(원래 값을 캐시했다 되돌린다, `restoreTimeScale`과 같은 관용구) 세로선 피처는 `SetFeatures`가 **부호 반대로** `SetActive(!on)` 한다. **복구는 기존 `Restore()` 세 경로가 그대로 든다** — 새 상태도 새 복구 경로도 안 생긴다. ⚠ 그래서 실루엣의 빨강을 채도 저하만큼 보정할 필요가 없다.
 - **`OnFinaleBegan`/`OnFinaleEnded`** — 결과 화면(§12의 `GameSession.LastResult`)·서사 연출이 붙을 진입점. 지금은 구독자가 없다.
 - 상세: `docs/FinaleSilhouette/`
 
