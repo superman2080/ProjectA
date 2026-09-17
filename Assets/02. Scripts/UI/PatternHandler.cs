@@ -35,6 +35,14 @@ public class PatternHandler : MonoBehaviour
     [Header("Guide Line")]
     [SerializeField] private PatternLineRenderer guideLineRenderer;
     [SerializeField] private float guideFadeDuration = 0.2f;
+    [Tooltip("가이드 색조 — 플레이어가 베는 패턴(Attacker.Player).")]
+    [SerializeField] private Color guideAttackColor = new Color(1f, 0.495283f, 0.495283f);
+    [Tooltip("가이드 색조 — 적의 공격을 패링하는 패턴(Attacker.Enemy).")]
+    [SerializeField] private Color guideDefendColor = new Color(0.45f, 0.7f, 1f);
+    [Tooltip("가이드 색조 — 연타 노트. (연타는 이을 순서가 없어 가이드 자체를 그리지 않으므로 지금은 쓰이지 않는다.)")]
+    [SerializeField] private Color guideMashColor = new Color(1f, 0.85f, 0.3f);
+    [Tooltip("가이드 색조 — 사슬 중간 타격(killOnSuccess가 꺼진 엔트리).")]
+    [SerializeField] private Color guideChainColor = new Color(0.7f, 0.45f, 1f);
 
     [Header("Focus Ring")]
     [SerializeField] private RectTransform focusRingParent;
@@ -352,7 +360,7 @@ public class PatternHandler : MonoBehaviour
     /// <paramref name="spawnTimes"/>가 주어지면(채보 재생 경로) 이미 구운 스폰 시각을 그대로 사용하고,
     /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)를 그대로 수축 시간으로 쓴다.
     /// </summary>
-    public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null)
+    public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null, bool chained = false)
     {
         // 연타는 노드의 나열이 아니라 '창'이다 — 시각이 시작·끝 둘뿐이고 목표 타수는 패턴이 든다.
         int expectedTimes = pattern.IsMash ? 2 : pattern.AllData.Count;
@@ -366,7 +374,7 @@ public class PatternHandler : MonoBehaviour
 
         // StartTime은 '투입 시각'으로 고정한다 — inputTimes/spawnTimes가 이 시점 기준 상대시간이므로,
         // 나중에 판정 대상으로 승계될 때 다시 잡으면 판정 시각이 통째로 밀린다.
-        var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow);
+        var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow) { Chained = chained };
 
         if (pattern.IsMash) ScheduleMashRing(active);
         else ScheduleNodeRings(active, spawnTimes, exposureDurations);
@@ -600,7 +608,7 @@ public class PatternHandler : MonoBehaviour
 
         if (target != null)
         {
-            ShowGuideLine(target.Template);
+            ShowGuideLine(target);
             lineRenderer?.SetCorrectState(true);
         }
         else
@@ -610,9 +618,11 @@ public class PatternHandler : MonoBehaviour
     }
 
     /// <summary>패턴이 지나갈 Point들을 순서대로 잇는 가이드 경로를 표시한다.</summary>
-    private void ShowGuideLine(Pattern pattern)
+    private void ShowGuideLine(ActivePattern active)
     {
         if (guideLineRenderer == null) return;
+
+        Pattern pattern = active.Template;
 
         // 연타에는 이을 순서가 없다 — 노드가 하나뿐이고 그것도 게이지 자리일 뿐이다.
         if (pattern.IsMash)
@@ -625,7 +635,19 @@ public class PatternHandler : MonoBehaviour
         foreach (var data in pattern.AllData)
             localPoints.Add(WorldToLocal(guideLineRenderer.rectTransform, patternPoints[data.index].transform.position));
 
+        guideLineRenderer.SetTint(GuideTint(active));
         guideLineRenderer.SetPoints(localPoints);
+    }
+
+    /// <summary>
+    /// 역할별 가이드 색. 우선순위는 연타 &gt; 사슬 &gt; 공격/수비다 — 연타와 사슬은
+    /// 그 순간 무엇을 해야 하는지가 공격/수비보다 크게 갈리기 때문.
+    /// </summary>
+    private Color GuideTint(ActivePattern active)
+    {
+        if (active.Template.IsMash) return guideMashColor;
+        if (active.Chained) return guideChainColor;
+        return active.Template.Attacker == EnemySpace.Attacker.Enemy ? guideDefendColor : guideAttackColor;
     }
 
     private void HideGuideLine()

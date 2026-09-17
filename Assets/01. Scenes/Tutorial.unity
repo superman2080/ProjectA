@@ -17208,6 +17208,10 @@ MonoBehaviour:
   inactiveHitAreaRatio: 0.5
   guideLineRenderer: {fileID: 1310662440}
   guideFadeDuration: 0.2
+  guideAttackColor: {r: 1, g: 0.495283, b: 0.495283, a: 1}
+  guideDefendColor: {r: 0.45, g: 0.7, b: 1, a: 1}
+  guideMashColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  guideChainColor: {r: 0.7, g: 0.45, b: 1, a: 1}
   focusRingParent: {fileID: 1707306252}
   focusRingColorPalette:
   - {r: 0.95, g: 0.3, b: 0.3, a: 1}

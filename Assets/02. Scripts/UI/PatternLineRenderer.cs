@@ -52,6 +52,8 @@ public class PatternLineRenderer : MaskableGraphic
     // 칼날 리본이 실제로 지나갈 점들(연장 + 분할). 매 프레임 새로 만들면 그게 곧 GC라 재사용한다.
     private readonly List<Vector2> bladePoints = new List<Vector2>();
     private readonly List<Color32> bladeColors = new List<Color32>();
+    /// <summary>역할별 색(공격·수비·연타·사슬). 그라데이션·미스 색·페이드 위에 곱해진다 — 모양은 그대로 두고 색조만 바뀐다.</summary>
+    private Color tint = Color.white;
     private bool useMissColor;
     private Vector2? liveEndPoint;
     private float currentAlpha = 1f;
@@ -91,6 +93,13 @@ public class PatternLineRenderer : MaskableGraphic
     {
         if (liveEndPoint == null) return;
         liveEndPoint = null;
+        SetVerticesDirty();
+    }
+
+    /// <summary>가이드 색조를 바꾼다(<see cref="capsuleMode"/> 경로 전용).</summary>
+    public void SetTint(Color value)
+    {
+        tint = value;
         SetVerticesDirty();
     }
 
@@ -215,7 +224,7 @@ public class PatternLineRenderer : MaskableGraphic
 
     private Color32 WithFadeAlpha(Color color)
     {
-        Color32 result = color;
+        Color32 result = color * tint;
         result.a = (byte)Mathf.RoundToInt(result.a * currentAlpha);
         return result;
     }

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PatternSpace
 {
@@ -12,6 +12,12 @@ namespace PatternSpace
 
         /// <summary>패턴이 큐에 투입된 시각(= SetPattern 호출 시각). inputTimes의 기준점이며, 판정 대상으로 승계될 때 다시 잡지 않는다.</summary>
         public float StartTime { get; }
+
+        /// <summary>
+        /// 이 엔트리가 사슬 중간인가(<c>EnemyCue.killOnSuccess == false</c>). <b>가이드 색에만 쓰인다</b> —
+        /// 판정은 이 값을 보지 않고, 전투 지시는 여전히 <c>EnemyDirector</c>가 cue로 받는다.
+        /// </summary>
+        public bool Chained { get; set; }
 
         /// <summary>노드별 입력 시각(StartTime 기준 상대시간, 초).</summary>
         private readonly float[] inputTimes;

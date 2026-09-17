@@ -145,7 +145,8 @@ namespace ChartGen
             // cue를 SetPattern '직전에' 옆으로 밀어 넣는다 — 판정 계층(PatternHandler)은 적을 몰라야 하므로
             // 페이로드에 싣지 않는다. 디렉터는 OnPatternQueued에서 같은 FIFO 순서로 꺼낸다.
             enemyDirector?.EnqueueCue(next.enemyCue);
-            patternHandler.SetPattern(next.template, relativeInputTimes, relativeSpawnTimes);
+            patternHandler.SetPattern(next.template, relativeInputTimes, relativeSpawnTimes,
+                null, next.enemyCue != null && !next.enemyCue.killOnSuccess);
 
             pendingEntries.RemoveAt(0);
         }
