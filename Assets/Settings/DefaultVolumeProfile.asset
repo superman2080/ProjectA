@@ -146,6 +146,132 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
+--- !u!114 &-7081626176193942052
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d8d6c0101010c74683c14e3d7d0337e, type: 3}
+  m_Name: WatercolorVol
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.WatercolorVol
+  active: 1
+  m_Strength:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Contour:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Saturation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_ColorNotes:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Density:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Granulation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Focus:
+    m_OverrideState: 1
+    m_Value:
+      _curve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      _pixels:
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+      - {r: 1, g: 1, b: 1, a: 1}
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 3
+  m_Motion:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Smooth:
+    m_OverrideState: 1
+    m_Value: 1
+  m_ContourDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_StrengthDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_ColorNotesDeviation:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Splatters:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_Paper:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+    dimension: 1
+  m_ContourThickness:
+    m_OverrideState: 1
+    m_Value: 0.5
+  m_Blending:
+    m_OverrideState: 1
+    m_Value: 0.1
+  m_FramesLerp:
+    m_OverrideState: 1
+    m_Value: 3
 --- !u!114 &-6335409530604852063
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -468,6 +594,8 @@ MonoBehaviour:
   - {fileID: -6288072647309666549}
   - {fileID: 7518938298396184218}
   - {fileID: -1410297666881709256}
+  - {fileID: -7081626176193942052}
+  - {fileID: 983880253047304546}
 --- !u!114 &853819529557874667
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -535,6 +663,58 @@ MonoBehaviour:
   chromaticAbberationIntensity:
     m_OverrideState: 1
     m_Value: 0.5
+--- !u!114 &983880253047304546
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9beef4823ea82d24783b48d3cafb4d53, type: 3}
+  m_Name: FlowVol
+  m_EditorClassIdentifier: WatercolorFx.Runtime::VolFx.FlowVol
+  active: 1
+  m_Fade:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Strain:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Samples:
+    m_OverrideState: 1
+    m_Value: 1
+  m_Angle:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Flow:
+    m_OverrideState: 1
+    m_Value: {x: 0, y: 0, z: 0}
+  m_Tint:
+    m_OverrideState: 1
+    m_Value: {r: 1, g: 1, b: 1, a: 0}
+  m_Print:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Adaptive:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Focus:
+    m_OverrideState: 1
+    m_Value: 0
+  m_Fps:
+    m_OverrideState: 1
+    m_Value: 60
+  m_MotionTex:
+    m_OverrideState: 1
+    m_Value: {fileID: 0}
+  m_MotionPower:
+    m_OverrideState: 1
+    m_Value: 0
+  m_MotionMove:
+    m_OverrideState: 1
+    m_Value: 0
 --- !u!114 &1052315754049611418
 MonoBehaviour:
   m_ObjectHideFlags: 3
