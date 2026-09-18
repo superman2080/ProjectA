@@ -95,7 +95,8 @@ public class ScoreHudView : MonoBehaviour
 
         if (comboLabel == null) return;
 
-        comboLabel.text = combo.ToString();
+        // ⚠ 콤보를 글자로 만드는 곳은 코드베이스에서 여기 하나뿐이다(docs/KanjiCombo).
+        comboLabel.text = ScoreSpace.KanjiNumeral.Of(combo);
         if (combo > 0) punchUntil = Time.time + Mathf.Max(comboPunchDuration, 0.01f);
     }
 
