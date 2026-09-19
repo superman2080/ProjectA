@@ -163,7 +163,20 @@
       "Bash(command -v python3)",
       "Bash(PYTHONIOENCODING=utf-8 python kanji.py)",
       "Bash(awk '/^@@ -13841/{f=1} f{print} /^@@ -14788/{f=0}')",
-      "Bash(awk '/^@@ -13841/{f=1;next} /^@@ /{f=0} f{print}')"
+      "Bash(awk '/^@@ -13841/{f=1;next} /^@@ /{f=0} f{print}')",
+      "mcp__mcp-registry__search_mcp_registry",
+      "WebFetch(domain:platform.tripo3d.ai)",
+      "WebFetch(domain:docs.tripo3d.ai)",
+      "PowerShell($env:TRIPO_API_KEY = \"tcli_3c09ce0b05de40fea0e062fc660fb7f6\"; $h = @{ Authorization = \"Bearer $env:TRIPO_API_KEY\" }; foreach \\($u in @\\(\"https://api.tripo3d.ai/v2/openapi/user/balance\",\"https://openapi.tripo3d.ai/v3/user/balance\",\"https://openapi.tripo3d.ai/v3/users/me\"\\)\\) { Write-Output \"=== $u\"; try { $r = Invoke-WebRequest -Uri $u -Headers $h -Method GET -UseBasicParsing -TimeoutSec 20; Write-Output \"HTTP $\\($r.StatusCode\\)\"; Write-Output $r.Content } catch { Write-Output \"ERR $\\($_.Exception.Message\\)\"; if \\($_.Exception.Response\\) { $sr = New-Object IO.StreamReader\\($_.Exception.Response.GetResponseStream\\(\\)\\); Write-Output $sr.ReadToEnd\\(\\) } } })",
+      "PowerShell($k = \"tcli_3c09ce0b05de40fea0e062fc660fb7f6\"; curl.exe -s -i -X GET \"https://api.tripo3d.ai/v2/openapi/user/balance\" -H \"Authorization: Bearer $k\" | Select-Object -First 20)",
+      "PowerShell($k = [Environment]::GetEnvironmentVariable\\(\"TRIPO_API_KEY\",\"User\"\\); if \\(-not $k\\) { $k = [Environment]::GetEnvironmentVariable\\(\"TRIPO_API_KEY\",\"Machine\"\\) }; if \\(-not $k\\) { Write-Output \"NOT FOUND\"; exit }; Write-Output \"prefix=$\\($k.Substring\\(0,[Math]::Min\\(8,$k.Length\\)\\)\\) len=$\\($k.Length\\)\"; Write-Output \"--- v2 balance\"; curl.exe -s -w \"`nHTTP %{http_code}`n\" \"https://api.tripo3d.ai/v2/openapi/user/balance\" -H \"Authorization: Bearer $k\")",
+      "WebFetch(domain:developers.tripo3d.ai)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "mcp__unity-mcp__Unity_ManageScene",
+      "mcp__unity-mcp__Unity_ManageGameObject",
+      "Bash(grep -n -A 28 \"m_Name: ScoreHud$\" \"Assets/01. Scenes/Tutorial.unity\")",
+      "Bash(grep -n -A 28 \"m_Name: ScoreHud$\" \"Assets/01. Scenes/BattleScene.unity\")"
     ]
   }
 }
