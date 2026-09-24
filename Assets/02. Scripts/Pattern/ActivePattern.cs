@@ -19,6 +19,12 @@ namespace PatternSpace
         /// </summary>
         public bool Chained { get; set; }
 
+        /// <summary>
+        /// 이 패턴이 <b>재시도본</b>인가 — 같은 엔트리가 이미 한 번 완료 이벤트를 겪었다.
+        /// 채점·마무리 실루엣이 이 표식만 보고 물러난다(<see cref="PatternCompletionInfo.IsRetry"/>).
+        /// </summary>
+        public bool IsRetry { get; set; }
+
         /// <summary>노드별 입력 시각(StartTime 기준 상대시간, 초).</summary>
         private readonly float[] inputTimes;
 

@@ -139,6 +139,9 @@ public class EffectManager : MonoBehaviour
 
     private void HandlePatternComplete(PatternCompletionInfo info)
     {
+        // 취소된 패턴에는 완성/실패 이펙트도 임팩트음도 없다 — 화면에서 일어나지 않은 사건이다.
+        if (info.Cancelled) return;
+
         Vector3 worldPosition = patternCompleteAnchor != null
             ? patternCompleteAnchor.position
             : (overlayLayer != null ? overlayLayer.position : transform.position);

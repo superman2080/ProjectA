@@ -138,7 +138,6 @@ public class EncounterDirector : MonoBehaviour
         session.EncounterId = encounter.EncounterId;
         session.CompleteFlag = encounter.CompleteFlag;
         session.StageIndex = encounter.StageIndex;
-        session.ClusterSizeOverride = encounter.ClusterSizeOverride;
 
         session.ReturnScene = gameObject.scene.name;
         session.ReturnPosition = player != null ? player.position : Vector3.zero;

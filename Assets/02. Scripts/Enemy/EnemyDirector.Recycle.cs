@@ -61,13 +61,11 @@ namespace EnemySpace
                 if (!view.DissolveFinished) continue;
 
                 ring.RemoveAt(i);
-                ForgetFromClusters(view);
                 ReleaseEnemy(view);
             }
 
             if (currentOpponent != null && currentOpponent.DissolveFinished)
             {
-                ForgetFromClusters(currentOpponent);
                 ReleaseEnemy(currentOpponent);
                 currentOpponent = null;
             }

@@ -109,6 +109,16 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     private bool armed;          // 마지막 패턴 성공을 확인했고 임팩트를 기다리는 중
     private float fireTime;
     private bool active;         // 실루엣이 화면에 올라가 있는 중
+
+    /// <summary>
+    /// 지금 이 연출이 일을 하고 있는가 — <b>무장 중이거나 실루엣이 올라가 있다</b>.
+    ///
+    /// <para><b>⚠ <see cref="armed"/>도 봐야 한다.</b> <see cref="active"/>만 보면 완료~임팩트 사이(0.1초)에
+    /// 스테이지 종료가 끼어들어 <b>실루엣이 시작조차 못 한다</b>.</para>
+    ///
+    /// <para><c>ChartPlayer</c>(종료를 미룬다)와 일시정지(<c>Time.timeScale</c> 주인이 겹친다)가 물어본다.</para>
+    /// </summary>
+    public bool IsBusy => armed || active;
     private float holdRemaining; // 실시간 잔여
 
     private int silhouetteLayer = -1;
@@ -170,7 +180,16 @@ public class FinaleSilhouetteDirector : MonoBehaviour
     /// </summary>
     private void HandlePatternComplete(PatternCompletionInfo info)
     {
-        completedPatterns++;
+        // 취소는 화면에서 일어나지 않은 사건이다 — 세지도, 무장하지도 않는다.
+        if (info.Cancelled) return;
+
+        // ⚠ 재시도본은 세지 않는다. 세면 재시도 몇 번으로 총량에 먼저 도달해 곡 중반에 실루엣이 터지고,
+        // 그러면 timeScale 예외의 근거("판정이 남아 있지 않다")가 깨진다.
+        //
+        // ⚠ 그런데 아래 게이트에서는 물러나지 않는다. 마지막 엔트리를 한 번 실패하면 그 실패에서
+        // 카운터가 이미 총량에 도달하므로(성패와 무관하게 센다), 재시도본을 게이트에서도 빼면
+        // 성공한 재시도가 무장 자격을 잃어 마무리 연출이 영영 안 나온다.
+        if (!info.IsRetry) completedPatterns++;
 
         if (!silhouetteEnabled || silhouetteLayer < 0) return;
         if (!armedByRequest && (totalPatterns <= 0 || completedPatterns < totalPatterns)) return;

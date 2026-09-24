@@ -88,6 +88,12 @@ namespace EnemySpace
         [SerializeField] private AnimationClip upperBodyPlaceholder;
         [Tooltip("배회에 들어갈 때마다 하나를 뽑는다(직전 것은 피한다). 비면 placeholder가 그대로 쓰인다.")]
         [SerializeField] private AnimationClip[] upperBodyIdleClips;
+
+        [Tooltip("표적이 된 순간 취하는 경계 자세(Samurai_BlockIdle). 같은 상체 레이어에 얹는다.\n" +
+                 "⚠ 이 클립은 배회 후보에서 자동으로 빠진다 - 비표적이 같은 자세를 쓰면\n" +
+                 "  '가드 자세 = 지금 표적'이라는 뜻이 둘로 갈린다(docs/CombatLegibility).\n" +
+                 "비우면 무연출(예전 동작 그대로).")]
+        [SerializeField] private AnimationClip guardIdleClip;
         [Tooltip("상체 레이어 웨이트를 올리고 내리는 시간(초). 0이면 파지가 순간이동한다.")]
         [SerializeField] private float upperBodyBlendDuration = 0.18f;
 
@@ -574,20 +580,22 @@ namespace EnemySpace
         /// 마스크가 덮으면 <b>칼을 휘두르지 않는 그림</b>이 된다. 조건은 <see cref="ApplyLocomotion"/>이
         /// 쓰는 것과 <b>같은 식</b>이다 — 새 술어를 만들지 않는다.</para>
         /// </summary>
-        private void SetUpperBody(bool want)
+        private void SetUpperBody(bool want, AnimationClip forced = null)
         {
             if (upperBodyLayerIndex < 0 || animator == null) return;
 
             if (Current == Phase.Windup || Current == Phase.Dying || Time.time < reactionUntil)
                 want = false;
 
-            if (want == upperBodyOn) return;
+            // ⚠ 강제 클립(가드)은 이미 켜져 있어도 갈아끼운다 — 배회 Idle이 올라가 있는 채로
+            // 표적이 되면 조기 반환에 걸려 자세가 안 바뀐다.
+            if (want == upperBodyOn && forced == null) return;
             upperBodyOn = want;
 
             if (!want) return;
 
-            // 진입 — 이번 배회에 쓸 클립을 하나 뽑아 슬롯에 끼운다.
-            var clip = NextUpperIdleClip();
+            // 진입 — 쓸 클립을 하나 뽑아 슬롯에 끼운다.
+            var clip = forced != null ? forced : NextUpperIdleClip();
             if (clip != null && overrideController != null && upperBodyPlaceholder != null)
                 overrideController[upperBodyPlaceholder] = clip;
 
@@ -623,14 +631,37 @@ namespace EnemySpace
         private AnimationClip NextUpperIdleClip()
         {
             if (upperBodyIdleClips == null || upperBodyIdleClips.Length == 0) return null;
-            if (upperBodyIdleClips.Length == 1) { lastUpperClipIndex = 0; return upperBodyIdleClips[0]; }
 
-            int index = Random.Range(0, upperBodyIdleClips.Length);
-            if (index == lastUpperClipIndex)
-                index = (index + 1) % upperBodyIdleClips.Length;
+            // ⚠ 가드 클립은 후보에서 뺀다 — 배회하는 적이 같은 자세를 쓰면 "가드 = 지금 표적"이
+            // 화면에서 뜻을 잃는다. 에셋을 고치지 않고 코드에서 거른다(배선이 하나뿐이라 안 어긋난다).
+            int usable = 0;
+            foreach (var c in upperBodyIdleClips)
+                if (c != null && c != guardIdleClip) usable++;
 
-            lastUpperClipIndex = index;
-            return upperBodyIdleClips[index];
+            if (usable == 0) return null;
+            if (usable == 1)
+            {
+                for (int i = 0; i < upperBodyIdleClips.Length; i++)
+                {
+                    var c = upperBodyIdleClips[i];
+                    if (c == null || c == guardIdleClip) continue;
+                    lastUpperClipIndex = i;
+                    return c;
+                }
+            }
+
+            // 후보가 둘 이상이면 직전 것을 피해 뽑는다.
+            for (int attempt = 0; attempt < upperBodyIdleClips.Length * 2; attempt++)
+            {
+                int index = Random.Range(0, upperBodyIdleClips.Length);
+                var clip = upperBodyIdleClips[index];
+                if (clip == null || clip == guardIdleClip || index == lastUpperClipIndex) continue;
+
+                lastUpperClipIndex = index;
+                return clip;
+            }
+
+            return null;
         }
 
         private void ApplyBlend(Vector2 value)
@@ -686,6 +717,28 @@ namespace EnemySpace
             return direction.sqrMagnitude < 1e-6f ? Quaternion.identity : Quaternion.LookRotation(direction);
         }
 
+        /// <summary>
+        /// <b>표적이 됐다</b>는 사실을 화면에 남긴다 — 즉시 플레이어를 정면으로 잡고 경계 자세를 취한다.
+        ///
+        /// <para><b>왜 필요한가</b>: 표적이 얻는 시각적 사실이 "배회를 멈춘다" 하나인데 나머지 적은 계속 돈다 —
+        /// <b>정지가 배경이 아니라 움직임이 배경</b>이라 멈춤은 신호가 되지 못한다(docs/CombatLegibility).</para>
+        ///
+        /// <para><b>클립·견제가 있는 경로에서는 부르지 않는다</b>(그쪽이 이미 표적을 말한다).
+        /// 이 메서드는 <see cref="AssignAttack"/>·<see cref="AssignFeint"/>의 <b>무연출 폴백</b> 전용이다.</para>
+        ///
+        /// <para>해제는 따로 없다 — <see cref="Resolve"/>의 <c>reactionUntil</c>과 <see cref="MarkDying"/>의
+        /// <c>Phase.Dying</c>을 <see cref="TickUpperBody"/>가 이미 보고 웨이트를 내린다.
+        /// 풀 반납은 <see cref="ResetState"/>가 되돌린다.</para>
+        /// </summary>
+        private void BeginGuard(Vector3 faceTarget)
+        {
+            // 서서히 돌면 "표적이 된 순간"이 흐려진다 — 즉시 정면을 잡는다.
+            LookAtInstant(faceTarget);
+
+            if (guardIdleClip == null) return;   // 배선이 비면 조용히 예전 동작
+            SetUpperBody(true, guardIdleClip);
+        }
+
         // ── 공격 배정 ────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -699,9 +752,10 @@ namespace EnemySpace
 
             if (attack == null || !attack.IsUsable)
             {
-                // 무연출 — 자리만 잡는다.
+                // 무연출 — 자리만 잡고 경계 자세로 선다.
                 hasPendingAttack = false;
                 ApproachDuel(duelPosition, faceTarget, impactTime);
+                BeginGuard(faceTarget);
                 return;
             }
 
@@ -739,9 +793,10 @@ namespace EnemySpace
 
             if (feint == null || !feint.IsUsable)
             {
-                // 무연출 — 자리만 잡고 기본 Idle로 선다.
+                // 무연출 — 자리만 잡고 경계 자세로 선다(예전에는 기본 Idle이라 표적이 안 읽혔다).
                 hasPendingAttack = false;
                 ApproachDuel(duelPosition, faceTarget, impactTime);
+                BeginGuard(faceTarget);
                 return;
             }
 
@@ -995,6 +1050,26 @@ namespace EnemySpace
         }
 
         private SkinnedMeshRenderer sourceSkinned;
+
+        /// <summary>
+        /// 예약된 공격/견제/리액션을 <b>아무 연출도 내지 않고</b> 버린다. 패턴이 취소될 때(재시도 되감기)
+        /// 그 패턴을 겨누고 있던 적을 놓아주는 경로다.
+        ///
+        /// <para><b>⚠ <see cref="Resolve"/>를 쓸 수 없다.</b> 그쪽은 실패에서 <b>반드시</b> 패링/회피로
+        /// 크로스페이드하므로, 오지도 않은 칼에 적이 막는 모션을 한다.</para>
+        ///
+        /// <para><b>⚠ 그래도 <see cref="Phase.Windup"/>은 빠져나와야 한다.</b>
+        /// <see cref="ApplyLocomotion"/>이 그 상태에서 스스로 물러나므로, 그냥 예약만 지우면
+        /// <c>Windup</c>을 빠져나오는 경로가 (<see cref="Resolve"/>·<see cref="MarkDying"/>뿐이라)
+        /// 사라져 <b>적이 영구히 갇힌다</b>(§11-10이 겪은 부류).</para>
+        /// </summary>
+        public void AbortPendingAction()
+        {
+            hasPendingAttack = false;
+            hasPendingReaction = false;
+
+            if (Current == Phase.Windup) Current = Phase.Recover;
+        }
 
         /// <summary>처치 확정 표시. 실제 연출(시체 교체)은 디렉터가 임팩트 시각에 실행한다.</summary>
         public void MarkDying()

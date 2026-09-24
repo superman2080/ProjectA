@@ -41,9 +41,6 @@ public class Encounter : MonoBehaviour
     [Tooltip("배경 씬(StageBackground_Stage{N}) 선택에 쓴다.")]
     [SerializeField] private int stageIndex = 1;
 
-    [Tooltip("이 무대의 적 수. 0이면 EnemyDirector의 씬 값을 그대로 쓴다. 튜토리얼과 4-b가 쓴다.")]
-    [SerializeField] private int clusterSizeOverride;
-
     [Header("Progress")]
     [Tooltip("이 플래그가 서야 열린다. 비우면 처음부터 열려 있다(튜토리얼·자유 연주).")]
     [SerializeField] private string unlockFlag;
@@ -62,7 +59,6 @@ public class Encounter : MonoBehaviour
     public SongChart Chart => chart;
     public string EncounterId => encounterId;
     public int StageIndex => stageIndex;
-    public int ClusterSizeOverride => clusterSizeOverride;
     public string CompleteFlag => completeFlag;
     public string RetryText => retryText;
 

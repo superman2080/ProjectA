@@ -149,25 +149,21 @@ public class TutorialDirector : MonoBehaviour
         if (enemyDirector != null) enemyDirector.PrewarmStage();
     }
 
-    public void PrepareStage(int clusterSize)
+    public void PrepareStage(int rosterCount)
     {
         if (enemyDirector == null) return;
 
-        // ⚠ EnemyDirector.PrepareStage는 멱등이 아니다 - 무리 리스트만 비우고 이전 적을 풀에 안 돌려주며
-        // ring은 계속 늘어난다. 그래서 두 번 부르면 <b>무대의 적이 그대로 두 배가 되고</b>
-        // 앞의 무리는 아무 목록에도 없는 채로 서 있는다. 한 번만 세운다.
+        // ⚠ EnemyDirector.PrepareStage는 이전 적을 풀에 돌려주지 않는다 - 두 번 부르면 ring이 그대로 늘어난다.
+        // 한 번만 세운다.
         if (staged) return;
         staged = true;
 
-        // 무리는 <b>EnemyDirector의 무대 중심</b>을 기준으로 선다(EnemyDirector.PrepareStage).
-        // 그래서 미오가 아직 골목에 있는 이 시점에 불러도 허물은 도착 지점에 모인다 —
-        // 예전에는 기준이 플레이어라 플레이어를 한 프레임 순간이동시켜 우회했지만,
-        // runDestination이 비면 그 우회가 통째로 걸리지 않아 코앞에 무리가 섰다.
+        // 자리는 <b>EnemyDirector의 무대 중심</b>을 기준으로 잡힌다(EnemyDirector.PrepareStage).
+        // 그래서 미오가 아직 골목에 있는 이 시점에 불러도 허물은 도착 지점에 선다.
 
-        // ⚠ 순서가 계약이다 - 프리웜과 무리 배치가 이 값에서 파생되므로 뒤에 바꾸면 인원과 배치가 어긋난다.
-        enemyDirector.SetClusterSize(clusterSize);
+        // ⚠ 예산은 PrepareStage 전에 건다 - 스폰이 그 값을 깎으며 돈다.
         enemyDirector.SetSpawnBudget(spawnBudget > 0 ? spawnBudget : -1);
-        enemyDirector.PrepareStage();
+        enemyDirector.PrepareStage(rosterCount);
 
         // ⚠ 세워 두되 재운다. EnemyDirector.TickWander가 <b>플레이어 위치를 중심으로</b> 궤도 슬롯을
         // 매 프레임 나눠 주므로(standoffDistance), 그냥 두면 허물이 25m 밖의 미오에게 걸어온다.

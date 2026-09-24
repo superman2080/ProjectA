@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ChartGen;
 using PatternSpace;
 using ScoreSpace;
@@ -85,6 +85,9 @@ public class ScoreDirector : MonoBehaviour
     /// <summary>지금 판정 대상 패턴에서 <c>OnJudged</c>가 몇 번 났는가. 패턴이 끝날 때 뺄셈의 좌변이 된다.</summary>
     private int judgedInPattern;
 
+    /// <summary>최종 결과를 이미 확정했는가. 곡 종료 신호가 두 번 와도 결과가 덮이지 않게 한다.</summary>
+    private bool finalized;
+
     void OnEnable()
     {
         if (handler != null)
@@ -160,6 +163,7 @@ public class ScoreDirector : MonoBehaviour
 
     private void ResetRun()
     {
+        finalized = false;
         Score = 0;
         Combo = 0;
         MaxCombo = 0;
@@ -177,6 +181,11 @@ public class ScoreDirector : MonoBehaviour
     /// <summary>곡이 끝났다. 이 시점의 누적이 곧 최종 결과다.</summary>
     private void HandleSongEnded()
     {
+        // 완곡 신호가 두 곳에서 올 수 있다(곡 종료 · 마무리 실루엣 종료). 먼저 온 것 하나만 확정한다
+        // — BattleSceneBootstrap.resolved와 같은 성격이다.
+        if (finalized) return;
+        finalized = true;
+
         var result = BuildResult();
 
         if (GameSession.Instance != null) GameSession.Instance.LastResult = result;
@@ -198,7 +207,37 @@ public class ScoreDirector : MonoBehaviour
     private void HandleJudged(JudgementResult result, int index)
     {
         judgedInPattern++;
+
+        // ⚠ 재시도본은 채점 누적에 들어가지 않는다 — 그 엔트리의 성적은 첫 시도로 확정됐다
+        // ("초과 타격은 애니메이션만 나오고 점수는 안 오른다"와 같은 관용구, §2-1).
+        // 표시 콤보는 계속 쌓는다: 재시도 구간 내내 0이 박혀 있으면 화면이 죽는다.
+        if (handler != null && handler.JudgeTargetIsRetry)
+        {
+            ApplyDisplayCombo(result);
+            return;
+        }
+
         ApplyNote(result);
+    }
+
+    /// <summary>
+    /// 표시 콤보만 민다(<b>채점 누적에는 손대지 않는다</b>). 재시도본 전용 경로다.
+    ///
+    /// <para><b>⚠ <see cref="MaxCombo"/>도 안 올린다.</b> 그것은 점수가 아니라 <c>IsPerfect()</c>의
+    /// <c>MaxCombo == totalNotes</c>가 쓰는 값이라, 부풀면 <b>SSS가 영영 안 나온다</b>.</para>
+    /// </summary>
+    private void ApplyDisplayCombo(JudgementResult result)
+    {
+        if (result == JudgementResult.Miss)
+        {
+            BreakCombo();
+            return;
+        }
+
+        Combo++;
+        OnComboChanged?.Invoke(Combo);
+        SetComboTier(ScoreMath.ComboTierOf(Combo, comboTierThresholds));
+        PushAmbient();
     }
 
     /// <summary>판정 하나를 누적에 반영한다. <b>놓친 노트도 여기로 들어온다</b>(Miss로).</summary>
@@ -272,6 +311,14 @@ public class ScoreDirector : MonoBehaviour
     /// </summary>
     private void HandlePatternComplete(PatternCompletionInfo info)
     {
+        // 취소는 플레이어가 입력할 기회가 없었던 패턴이다 — 놓친 노트로 세면 재시도할 때마다 벌점이 쌓인다.
+        // 재시도본도 채점하지 않는다(성적은 첫 시도로 확정됐다).
+        if (info.Cancelled || info.IsRetry)
+        {
+            judgedInPattern = 0;
+            return;
+        }
+
         if (info.AllCorrect) successPatterns++;
 
         // ⚠ 연타의 노트 수는 노드 수(= 게이지 자리 1칸)가 아니라 목표 타수다.

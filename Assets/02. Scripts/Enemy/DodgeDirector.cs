@@ -218,7 +218,7 @@ namespace EnemySpace
                 || stagedAmbusher == enemyDirector.CurrentOpponent
                 || !stagedAmbusher.gameObject.activeInHierarchy)
             {
-                StageAmbusher(includeStaged: true);
+                StageAmbusher();
             }
 
             if (stagedAmbusher == null) return;
@@ -238,28 +238,20 @@ namespace EnemySpace
 
         /// <summary>
         /// 기습 후보를 하나 고른다. <b>스테이징의 유일한 지점</b> — 사전 접근(<see cref="HandleDuelScheduled"/>)과
-        /// 늦은 선정(<see cref="HandleIdleWindow"/>) 양쪽이 같은 기준을 쓴다.
+        /// 늦은 선정(<see cref="HandleIdleWindow"/>) 양쪽이 같은 기준을 쓰되 마감만 다르다.
         ///
         /// <para><b>왜 두 번 시도하나</b>(실측): 예전에는 사전 접근이 유일한 지점이라 <b>패턴당 한 번</b>이었고,
-        /// 그 순간 조건을 만족하는 적이 없으면 창이 통째로 날아갔다 — 0.2초 뒤에 만족해도 소용없었다.
-        /// 실측에서 <b>자격을 갖춘 창 8번 중 5번이 "후보 없음"으로</b> 날아갔고, 그게 구조적이었다:
-        /// 리드가 긴 창은 <b>처치 직후</b>에 생기는데(그때 새 상대를 고른다), 처치 직후는 §11-6의
-        /// "사망 1 : 스폰 1"로 <b>새 적이 화면 밖에서 걸어 들어오는 중</b>이라 후보가 가장 적다.
-        /// <b>시간이 가장 많은 창이 하필 후보가 가장 적은 순간이다.</b></para>
-        /// </summary>
-        /// <summary>
-        /// 기습 후보를 하나 고른다. <b>두 진입점이 같은 기준을 쓰되 마감만 다르다.</b>
+        /// 그 순간 조건을 만족하는 적이 없으면 창이 통째로 날아갔다 — 0.2초 뒤에 만족해도 소용없었다.</para>
         ///
-        /// <para><b>⚠ 늦은 선정도 <c>staged</c>를 본다</b>(실측 근거). 초안은 "<c>staged</c>는 멀다"며 통째로 막았는데
-        /// <b>물어야 할 것은 거리가 아니라 도착 가능성</b>이었다 — 집결지는 창에 비례해 3~8m로 변하므로
-        /// 거리로 뭉뚱그리면 <b>가까울 때까지 같이 버린다.</b> 실측에서 "후보 없음"으로 날아간 창이
-        /// 전부 <c>active 1 · staged 3</c>이었다(바로 옆에 3명이 서 있는데 안 봤다).</para>
+        /// <para><b>후보는 무대에 선 적 전부다.</b> 예전에는 무리(<c>active</c>/<c>staged</c>)로 갈려 있어
+        /// 후보가 구조적으로 자주 0이었지만, 무리가 사라지면서 그 구분 자체가 없어졌다
+        /// (docs/CombatLegibility). 남은 질문은 <b>거리가 아니라 도착 가능성</b> 하나다.</para>
         /// </summary>
         /// <param name="arriveBy">
         /// 이 시각까지 닿을 수 있는 적만 후보로 본다. 음수면 검사하지 않는다(사전 접근 —
         /// 한 패턴 앞이라 이동 시간이 넉넉하고, 못 따라오면 <c>Fire()</c>의 <c>BusyReasonBy</c>가 거른다).
         /// </param>
-        private void StageAmbusher(bool includeStaged, float arriveBy = -1f)
+        private void StageAmbusher(float arriveBy = -1f)
         {
             System.Func<EnemyView, bool> canReach = null;
 
@@ -272,7 +264,7 @@ namespace EnemySpace
             }
 
             stagedAmbusher = enemyDirector.PickIdleAmbusher(
-                enemyDirector.BuildVisibilityTest(), HasAmbushClip, includeStaged, canReach);
+                enemyDirector.BuildVisibilityTest(), HasAmbushClip, canReach);
         }
 
         /// <summary><paramref name="center"/> 주위, <paramref name="from"/> 쪽 방향으로 <paramref name="distance"/>만큼 떨어진 자리. 무대 안으로 자른다.</summary>
@@ -339,7 +331,7 @@ namespace EnemySpace
                 {
                     // 마감은 <b>클립 시작</b>이지 임팩트가 아니다 — 와인드업 동안에는 이미 서 있어야 한다.
                     // 클립이 아직 안 골라졌으므로 실측 최대 와인드업(0.3초)을 보수적으로 뺀다.
-                    StageAmbusher(includeStaged: true, arriveBy: impact - lateStageWindup);
+                    StageAmbusher(arriveBy: impact - lateStageWindup);
                     lateStaged = stagedAmbusher != null;
                 }
 

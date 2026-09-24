@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PatternSpace;
 using UnityEngine;
 
@@ -38,6 +38,25 @@ namespace ChartGen
 
         /// <summary>첫 박이 시작하는 절대시각(초). 굽는 에디터에서 직접 입력한다.</summary>
         public float beatOffset = 0f;
+
+        /// <summary>
+        /// 마디당 박 수. <b>런타임도 쓴다</b> — 재시도 되감기를 마디로 올림하는 선택지
+        /// (<c>ChartPlayer.rewindToBar</c>)와 굽기 툴의 루프 규격 검사가 이 값을 요구한다.
+        ///
+        /// <para><b>⚠ <c>BeatGrid</c>는 이 값을 모른다</b>(<c>subdivisionsPerBeat</c>만 안다).
+        /// 마디 계산은 툴과 런타임이 하고, 그 struct는 Unity 비의존 순수 코어라 개념을 늘리지 않는다.</para>
+        /// </summary>
+        [Min(1)] public int beatsPerBar = 4;
+
+        /// <summary>
+        /// 이 채보를 <b>어느 편집기로 저작했는가</b>. <b>런타임은 읽지 않는다</b> —
+        /// <see cref="patternPool"/>과 같은 성격(굽기 툴 전용 저작 메타데이터)이다.
+        ///
+        /// <para><b>⚠ <c>StageMode</c>와 다른 물건이다.</b> 그쪽은 "어떻게 재생하는가"이고 이것은
+        /// "어느 화면으로 다시 열까"다. 기본값이 <see cref="ChartAuthoring.Linear"/>여야 기존 채보가
+        /// 지금 편집기로 열린다(회귀 0).</para>
+        /// </summary>
+        public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 
         /// <summary>
         /// 이 곡이 쓸 패턴 목록. <b>비우면 템플릿 폴더 전체</b>를 쓴다(기존 동작).

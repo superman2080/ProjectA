@@ -147,6 +147,20 @@ namespace PatternSpace
         public bool CountersOnFail =>
             attacker == EnemySpace.Attacker.Player && enemyAttack != null && enemyAttack.IsUsable;
 
+        /// <summary>
+        /// 이 패턴을 실패하면 <b>플레이어가 맞는가</b>. 진행(스테이지 종료 조건)이 이 값 하나로 갈린다 —
+        /// 맞았으면 대가를 치른 것이므로 그 엔트리는 소비되고, 안 맞았으면 같은 자리를 다시 시도한다.
+        ///
+        /// <para><b>⚠ <c>CharacterActionPlayer.OnPlayerHit</c>을 구독해 판단할 수 없다.</b> 그 이벤트는
+        /// 임팩트 시각(<c>Deadline + ImpactOffset</c>)에 나므로 <c>OnPatternComplete</c>(= <c>Deadline</c>)보다
+        /// 늦다 — 완료 시점에는 아직 대미지가 안 들어와 있어서 "맞을 예정인데 아직 안 맞았다"를
+        /// 재시도로 오판한다. 그래서 <b>패턴만 보고 아는 게터</b>여야 한다(§6이 "맞는 경우는 둘뿐"을 이미 못박았다).</para>
+        ///
+        /// <para><b>⚠ 기습 회피(§11-8) 실패로 맞은 것은 여기 안 들어간다</b> — 그건 패턴 밖의 사건이고
+        /// 이 패턴의 대가가 아니다. 이 게터가 <see cref="Pattern"/>만 보므로 그 구분이 공짜로 성립한다.</para>
+        /// </summary>
+        public bool HitsOnFail => attacker == EnemySpace.Attacker.Enemy || CountersOnFail;
+
         /// <summary>적 공격을 받아치는 플레이어 패링(<c>Attacker.Enemy</c>).</summary>
         public ClipAlignment PlayerParry => playerParry;
 

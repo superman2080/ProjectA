@@ -367,6 +367,10 @@ namespace SequenceSpace
         {
             if (phase != Phase.Drill) return;
 
+            // 드릴은 스스로 재시도하므로 취소 경로를 타지 않는다(ChartPlayer가 도는 씬에만 온다).
+            // 그래도 실패로 새면 드릴이 이유 없이 재시도하므로 한 줄로 막는다.
+            if (info.Cancelled) return;
+
             // 이미 실패한 그룹의 잔여 패턴이 뒤늦게 완료되는 것은 세지 않는다.
             if (failed) return;
 

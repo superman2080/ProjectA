@@ -8,7 +8,14 @@ using UnityEngine;
 namespace ChartGen
 {
     /// <summary>음원을 분석해 채보(SongChart)를 굽거나, 기존 SongChart를 불러와 그룹별로 편집/저장하는 에디터 툴.</summary>
-    public class PatternChartWindow : EditorWindow
+    /// <summary>
+    /// <b>두 모드를 한 창에 담는다</b>(<see cref="ChartAuthoring"/>). 중간 표현(<c>ChartEntryDraft</c>)과
+    /// 저장 경로(<c>Save</c>)를 공유하고, 두 모드는 <b>그것을 채우는 방법</b>만 다르다 —
+    /// 창을 둘로 나누면 저장 검증이 복제되고 그중 하나만 고쳐지는 날이 온다.
+    ///
+    /// <para>Loop 모드의 저작 화면은 <c>PatternChartWindow.Loop.cs</c>에 있다.</para>
+    /// </summary>
+    public partial class PatternChartWindow : EditorWindow
     {
         private class ChartEntryDraft
         {
@@ -20,6 +27,17 @@ namespace ChartGen
 
             /// <summary>전투 지시. 재분석해도 <b>엔트리 인덱스 기준으로 보존</b>된다 — 온셋만 갈아치우려다 저작이 날아가면 안 된다.</summary>
             public EnemySpace.EnemyCue enemyCue = new EnemySpace.EnemyCue();
+
+            /// <summary>
+            /// Loop 모드의 <b>진실의 원천</b> — 노드별 격자 스텝 인덱스. <c>onsetTimes</c>는 여기서 파생된다.
+            ///
+            /// <para><b>⚠ 이게 없으면 BPM을 고치는 순간 배치가 격자 밖으로 밀린다.</b> 초를 원천으로 두면
+            /// 템포를 바꿀 때 온셋이 그대로 남아 격자와 어긋난다.</para>
+            ///
+            /// <para><b>Linear 드래프트에서는 null이고, 그 null 여부가 곧 "이 드래프트가 어느 모드
+            /// 것인가"다</b> — 별도 플래그를 두지 않는다.</para>
+            /// </summary>
+            public int[] onsetSteps;
         }
 
         /// <summary>cue는 참조 타입이라 그대로 넘기면 에셋과 드래프트가 같은 인스턴스를 공유한다. 반드시 복사한다.</summary>
@@ -103,6 +121,8 @@ namespace ChartGen
             // 목록의 안쪽 스크롤(DrawEntryList)은 높이가 250 고정이라 중첩돼도 바깥 높이가 발산하지 않는다.
             windowScroll = EditorGUILayout.BeginScrollView(windowScroll);
 
+            DrawModeToolbar();
+            EditorGUILayout.Space();
             DrawSourceFields();
             EditorGUILayout.Space();
             DrawPatternPool();
@@ -112,10 +132,17 @@ namespace ChartGen
             DrawActionButtons();
             EditorGUILayout.Space();
 
+            if (IsLoopMode)
+            {
+                DrawLoopCanvas();
+                EditorGUILayout.Space();
+            }
+
             if (drafts.Count > 0)
             {
+                DrawChartSummary();
                 DrawMismatchBanner();
-                DrawWaveform();
+                if (!IsLoopMode) DrawWaveform();
                 EditorGUILayout.Space();
                 DrawEntryList();
                 EditorGUILayout.Space();
@@ -204,19 +231,43 @@ namespace ChartGen
 
         private void DrawGridFields()
         {
-            EditorGUILayout.LabelField("분석 파라미터", EditorStyles.boldLabel);
-            rmsThreshold = EditorGUILayout.FloatField("RMS 임계값", rmsThreshold);
-            windowSize = EditorGUILayout.IntField("윈도우 크기(샘플)", windowSize);
+            // 분석 파라미터는 Linear 전용이다 — Loop는 온셋을 분석하지 않고 저작자가 격자에 놓는다.
+            if (!IsLoopMode)
+            {
+                EditorGUILayout.LabelField("분석 파라미터", EditorStyles.boldLabel);
+                rmsThreshold = EditorGUILayout.FloatField("RMS 임계값", rmsThreshold);
+                windowSize = EditorGUILayout.IntField("윈도우 크기(샘플)", windowSize);
+            }
+
             defaultExposureDuration = EditorGUILayout.FloatField("기본 노출시간(초)", defaultExposureDuration);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("BPM / 비트 그리드", EditorStyles.boldLabel);
+
+            EditorGUI.BeginChangeCheck();
             bpm = EditorGUILayout.FloatField("BPM", bpm);
             beatOffset = EditorGUILayout.FloatField("Beat Offset(초)", beatOffset);
             level = EditorGUILayout.IntSlider("Level (1~30)", level, 1, 30);
+
+            if (IsLoopMode)
+            {
+                beatsPerBar = Mathf.Max(1, EditorGUILayout.IntField("마디당 박 수", beatsPerBar));
+                stepsPerBeat = Mathf.Max(1, EditorGUILayout.IntField("박당 스텝 수", stepsPerBeat));
+
+                // BPM/오프셋/해상도를 고치면 스텝에서 온셋을 다시 파생시킨다 — 격자가 진실의 원천이므로
+                // 배치는 그대로 남고 시각만 늘어나거나 줄어든다.
+                if (EditorGUI.EndChangeCheck()) RebuildLoopTimes();
+
+                EditorGUILayout.LabelField("스텝 간격", $"{BuildGrid().GridInterval * 1000f:F1} ms");
+                return;
+            }
+
+            // ⚠ level → subdivision 매핑은 Linear 전용이다("레벨이 높으면 잘게 썬다"). 격자 저작에서는
+            //   저작자가 해상도를 직접 고르고, level은 SongChart의 표시용 난이도로만 남는다.
             tier1Max = EditorGUILayout.IntField("Tier1 Max (4분음표 상한)", tier1Max);
             tier2Max = EditorGUILayout.IntField("Tier2 Max (8분음표 상한)", tier2Max);
             maxGroupGapSteps = EditorGUILayout.IntField("최대 그룹 갭(그리드 스텝)", maxGroupGapSteps);
+            EditorGUI.EndChangeCheck();
 
             int subdivision = BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
             EditorGUILayout.LabelField("현재 비트 분할 단위", $"1/{subdivision * 4}음표 (subdivisionsPerBeat = {subdivision})");
@@ -224,18 +275,31 @@ namespace ChartGen
 
         private BeatGrid BuildGrid()
         {
-            int subdivision = BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
-            return new BeatGrid(bpm, beatOffset, subdivision);
+            // Loop는 저작자가 해상도를 직접 고른다. Linear는 레벨에서 파생시킨다(기존 동작).
+            int subdivision = IsLoopMode ? stepsPerBeat : BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
+            return new BeatGrid(bpm, beatOffset, Mathf.Max(subdivision, 1));
         }
 
         private void DrawActionButtons()
         {
             EditorGUILayout.BeginHorizontal();
 
-            using (new EditorGUI.DisabledScope(clip == null))
+            if (IsLoopMode)
             {
-                if (GUILayout.Button("분석 (새로 만들기)"))
-                    Analyze();
+                // 격자 저작에는 분석이 없다. 캔버스를 세우고 거기에 직접 놓는다.
+                if (GUILayout.Button("격자 세우기 (새로 만들기)"))
+                    StartLoopAuthoring();
+            }
+            else
+            {
+                // ⚠ 격자로 저작한 채보를 분석으로 덮으면 저작이 통째로 날아간다 — 유일한 파괴 경로라 막는다.
+                bool loopChart = existingChart != null && existingChart.authoredWith == ChartAuthoring.Loop;
+
+                using (new EditorGUI.DisabledScope(clip == null || loopChart))
+                {
+                    if (GUILayout.Button("분석 (새로 만들기)"))
+                        Analyze();
+                }
             }
 
             using (new EditorGUI.DisabledScope(existingChart == null))
@@ -245,6 +309,13 @@ namespace ChartGen
             }
 
             EditorGUILayout.EndHorizontal();
+
+            if (!IsLoopMode && existingChart != null && existingChart.authoredWith == ChartAuthoring.Loop)
+            {
+                EditorGUILayout.HelpBox(
+                    existingChart.name + " 은 격자(Loop)로 저작된 채보입니다. 분석으로 덮으면 저작이 사라집니다 — " +
+                    "Loop 모드로 전환해 편집하세요.", MessageType.Warning);
+            }
         }
 
         private void Analyze()
@@ -320,6 +391,8 @@ namespace ChartGen
             level = existingChart.level;
             bpm = existingChart.bpm;
             beatOffset = existingChart.beatOffset;
+            beatsPerBar = Mathf.Max(existingChart.beatsPerBar, 1);
+            mode = existingChart.authoredWith;
 
             // 풀도 같이 되살린다 — 안 그러면 재분석이 폴더 전체로 돌아가 다른 채보가 나온다.
             patternPool.Clear();
@@ -339,6 +412,11 @@ namespace ChartGen
                 RecomputeSpawnTimes(draft);
                 drafts.Add(draft);
             }
+
+            // Loop 채보는 스텝이 진실의 원천이다. 저장 형식은 초뿐이므로 불러올 때 격자로 환산한다 —
+            // 이미 격자에 스냅돼 있으므로 왕복이 무손실이다. Linear로 구운 채보를 Loop 모드에서 다듬는
+            // 것도 이 경로로 성립한다(유효한 작업 흐름이다).
+            if (IsLoopMode) SnapDraftsToSteps();
         }
 
         /// <summary>엔트리 인덱스를 키로 든 UI 상태를 전부 버린다. 리스트가 바뀌면 그 키들이 다 어긋난다.</summary>
@@ -558,7 +636,7 @@ namespace ChartGen
 
             GUILayout.Label("처치 비율", EditorStyles.miniLabel, GUILayout.Width(56));
             chainKillRatio = Mathf.Clamp01(EditorGUILayout.FloatField(chainKillRatio, GUILayout.Width(36)));
-            GUILayout.Label($"→ {chainLength}타 중 {RequiredHits(chainLength)}타 필요", EditorStyles.miniLabel);
+            GUILayout.Label($"→ {chainLength}타 전부 성공해야 처치(실패하면 사슬 전체 재시도)", EditorStyles.miniLabel);
 
             EditorGUILayout.EndHorizontal();
 
@@ -777,10 +855,16 @@ namespace ChartGen
             if (!unassigned && draft.template.CountersOnFail)
                 label += "   상호 공격 · 실패 시 피격";
 
+            // 역할 뱃지 — Attacker가 이제 연출이 아니라 진행 규칙의 입력이다(§9). 실패했을 때
+            // 그 엔트리가 다시 나오는지(재시도) 그냥 넘어가는지(통과)를 행에서 바로 읽어야 한다.
+            if (!unassigned)
+                label += draft.template.HitsOnFail ? "   통과(실패 시 피격)" : "   재시도(실패 시 다시)";
+
             // 사슬 뱃지 — 엔트리가 수백 개라 토글 하나만 보고는 몇 번째 타인지 셀 수 없다.
+            // ⚠ chainKillRatio는 더 이상 쓰이지 않는다: 사슬 전체가 되감기므로 모든 타가 결국 성공한다(§9).
             var chain = ChainInfoAt(index);
             if (chain.length > 1)
-                label += $"   사슬 {chain.position}/{chain.length} · {RequiredHits(chain.length)}타 이상 필요";
+                label += $"   사슬 {chain.position}/{chain.length} · 전부 성공해야 처치";
 
             EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
 
@@ -812,9 +896,14 @@ namespace ChartGen
                 {
                     EditorGUILayout.HelpBox(
                         "이 사슬 안에 공격 주체가 섞여 있습니다. Attacker.Enemy 타에서만 적이 1.5m 밀려나고, " +
-                        "그 재접근은 창에 맞춰지지 않아 기어갑니다(docs/FailConverge).",
+                        "그 재접근은 창에 맞춰지지 않아 기어갑니다(docs/FailConverge). " +
+                        "그리고 Attacker.Enemy 타는 실패해도 통과하므로 이 사슬의 재시도 단위가 흐려집니다.",
                         MessageType.Warning);
                 }
+
+                EditorGUILayout.HelpBox(
+                    "이 사슬의 공격 타를 실패하면 사슬 전체가 처음부터 다시 나옵니다 — 사슬 길이가 곧 재시도 단위입니다.",
+                    MessageType.None);
             }
 
             EditorGUILayout.BeginHorizontal();
@@ -869,6 +958,9 @@ namespace ChartGen
                 ApplyChainAt(index, len);
 
             EditorGUILayout.EndHorizontal();
+
+            // 불규칙 리듬은 여기서 만든다 - 값이 스텝이라 격자를 벗어날 수 없다.
+            if (IsLoopMode) DrawLoopStepFields(draft);
 
             for (int i = 0; i < draft.exposureDurations.Length; i++)
             {
@@ -1288,6 +1380,9 @@ namespace ChartGen
                 return;
             }
 
+            // 지금까지 음악이 공짜로 보장해 줬던 것들을 여기서 강제한다(§9 재시도·§3 겹침의 전제).
+            if (!ValidateForSave()) return;
+
             var entries = drafts.Select(d => new SongChartEntry
             {
                 template = d.template,
@@ -1307,6 +1402,8 @@ namespace ChartGen
             target.level = level;
             target.bpm = bpm;
             target.beatOffset = beatOffset;
+            target.beatsPerBar = Mathf.Max(beatsPerBar, 1);
+            target.authoredWith = mode;
             target.patternPool = patternPool.Where(p => p != null).ToArray();
             target.entries = entries;
 

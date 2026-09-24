@@ -180,6 +180,21 @@ public class PatternHandler : MonoBehaviour
     /// <summary>현재 입력을 받는 패턴. 선두 패턴이 완료/만료되면 즉시 다음 패턴으로 승계된다.</summary>
     private ActivePattern JudgeTarget => activePatterns.Count > 0 ? activePatterns[0] : null;
 
+    /// <summary>
+    /// 아직 살아 있는 패턴이 있는가(연출 중 포함). 스테이지 종료 판정이 "화면에 남은 것이 없다"를 묻는다.
+    ///
+    /// <para><b>읽기 게터는 §7의 관심사 분리와 어긋나지 않는다</b> — 그 규율은 <i>판정 파이프라인을
+    /// 연출을 위해 고치지 말라</i>는 것이고, <see cref="IsDragging"/>·<see cref="DebugAutoPerfect"/>가
+    /// 이미 같은 성격이다.</para>
+    /// </summary>
+    public bool HasActivePatterns => activePatterns.Count > 0;
+
+    /// <summary>
+    /// 지금 판정 대상이 재시도본인가. <c>OnJudged</c>는 인덱스만 주므로 채점기가 이것을 물어보는 것이
+    /// 유일한 수단이다(노트 단위로 누적을 뺄지 정해야 한다).
+    /// </summary>
+    public bool JudgeTargetIsRetry => JudgeTarget != null && JudgeTarget.IsRetry;
+
     /// <summary>마지막으로 패턴이 완료/만료된 시각. 승계 직후의 잔여 입력을 거르는 데 쓴다.</summary>
     private float lastCompletionTime = -999f;
 
@@ -360,7 +375,7 @@ public class PatternHandler : MonoBehaviour
     /// <paramref name="spawnTimes"/>가 주어지면(채보 재생 경로) 이미 구운 스폰 시각을 그대로 사용하고,
     /// 없으면(디버그/수동 테스트 경로) <paramref name="exposureDurations"/>(없으면 기본값)를 그대로 수축 시간으로 쓴다.
     /// </summary>
-    public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null, bool chained = false)
+    public void SetPattern(Pattern pattern, IReadOnlyList<float> inputTimes, IReadOnlyList<float> spawnTimes = null, IReadOnlyList<float> exposureDurations = null, bool chained = false, bool isRetry = false)
     {
         // 연타는 노드의 나열이 아니라 '창'이다 — 시각이 시작·끝 둘뿐이고 목표 타수는 패턴이 든다.
         int expectedTimes = pattern.IsMash ? 2 : pattern.AllData.Count;
@@ -374,7 +389,7 @@ public class PatternHandler : MonoBehaviour
 
         // StartTime은 '투입 시각'으로 고정한다 — inputTimes/spawnTimes가 이 시점 기준 상대시간이므로,
         // 나중에 판정 대상으로 승계될 때 다시 잡으면 판정 시각이 통째로 밀린다.
-        var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow) { Chained = chained };
+        var active = new ActivePattern(pattern, inputTimes, Time.time, goodWindow) { Chained = chained, IsRetry = isRetry };
 
         if (pattern.IsMash) ScheduleMashRing(active);
         else ScheduleNodeRings(active, spawnTimes, exposureDurations);
@@ -389,7 +404,7 @@ public class PatternHandler : MonoBehaviour
         // 큐 투입 이벤트는 becomesJudgeTarget 분기보다 먼저 낸다 — 두 이벤트의 순서가 얽히지 않게.
         OnPatternQueued?.Invoke(new PatternQueuedInfo(
             active.Template, active.StartTime, active.FirstNodeTime, active.LastNodeTime, active.Deadline,
-            active.BuildNodeTimes()));
+            active.BuildNodeTimes(), active.IsRetry));
 
         if (becomesJudgeTarget)
         {
@@ -868,6 +883,55 @@ public class PatternHandler : MonoBehaviour
         return JudgementResult.Miss;
     }
 
+    /// <summary>
+    /// 살아 있는 패턴을 <b>전부</b> 회수한다. 재시도로 채보 시계를 되감을 때, 이미 큐에 올라가 있는
+    /// (= 플레이어가 입력할 기회가 없는) 패턴을 걷어내는 경로다.
+    ///
+    /// <para><b>⚠ 남아 있는 것은 전부 "입력 기회가 없었던 패턴"이다.</b> 되감기를 결정한 패턴은
+    /// <see cref="CompletePattern"/>에서 이미 큐를 떠났고, 그 순간 뒤에 있던 패턴이 <b>판정 대상으로
+    /// 승계됐다</b> — 그래서 선두도 취소 대상이다(같은 프레임에 승계되는 §3의 규칙이 이 지점을 만든다).</para>
+    ///
+    /// <para><b>⚠ 회수 순서는 FIFO다.</b> 구독자(<c>EnemyDirector</c>·<c>PatternEffectDirector</c>)가
+    /// 자기 큐를 앞에서 꺼내므로, 뒤에서부터 발행하면 <b>취소 통지와 예약이 짝이 어긋난다</b>.</para>
+    ///
+    /// <para><b>새 개념을 만들지 않고 완료 이벤트에 얹는다</b>(<see cref="PatternCompletionInfo.Cancelled"/>) —
+    /// 큐 시점에 상태를 만든 구독자가 전부 이미 그 이벤트를 구독하고 있어 새 배선이 0개다.</para>
+    ///
+    /// <para><b>⚠ <c>AllCorrect</c>를 false로 못박아 보낸다.</b> 손 안 댄 패턴은 그 값이 <b>true</b>라
+    /// 그대로 두면 취소가 처치·성공 연출로 읽힌다.</para>
+    ///
+    /// <para><b>⚠ <c>OnPatternComplete</c> 디스패치 안에서 부르면 안 된다.</b> 구독 순서가 보장되지 않아
+    /// 실패 패턴의 토큰을 아직 꺼내지 못한 구독자가 있으면 엉뚱한 토큰이 버려진다. 부르는 쪽은
+    /// 핸들러에서 플래그만 세우고 자기 <c>Update</c>에서 부른다.</para>
+    /// </summary>
+    /// <returns>회수한 패턴 수.</returns>
+    public int CancelQueuedPatterns()
+    {
+        int cancelled = 0;
+
+        while (activePatterns.Count > 0)
+        {
+            var queued = activePatterns[0];
+            activePatterns.RemoveAt(0);
+            ClearNodesOf(queued);
+            cancelled++;
+
+            OnPatternComplete?.Invoke(new PatternCompletionInfo(
+                false, queued.Template, queued.LastNodeTime, -1f, queued.Deadline,
+                queued.IsRetry, cancelled: true));
+        }
+
+        if (cancelled == 0) return 0;
+
+        ResetPointColors();
+        TriggerLineFadeOut();
+        RefreshJudgeTargetVisuals();
+        ApplyKnobVisibility(knobFadeDuration);
+        if (IsDragging && isKeyboardStroke) EndStroke();
+
+        return cancelled;
+    }
+
     /// <summary>패턴을 종료하고 그 패턴에 속한 노드를 즉시 회수한 뒤, 다음 패턴을 판정 대상으로 승계한다.</summary>
     private void CompletePattern(ActivePattern pattern)
     {
@@ -880,7 +944,7 @@ public class PatternHandler : MonoBehaviour
         // 다음 패턴이 없으면(채보상 공백) -1f → 겹침 방지 속도 제약 없음.
         float nextLastNodeTime = activePatterns.Count > 0 ? activePatterns[0].LastNodeTime : -1f;
         OnPatternComplete?.Invoke(new PatternCompletionInfo(
-            pattern.AllCorrect, pattern.Template, pattern.LastNodeTime, nextLastNodeTime, pattern.Deadline));
+            pattern.AllCorrect, pattern.Template, pattern.LastNodeTime, nextLastNodeTime, pattern.Deadline, pattern.IsRetry));
 
         // 키보드 스트로크는 여기서 끝낸다. 마우스 드래그는 끊지 않는다 —
         // 다음 패턴으로 이어 긋는 중일 수 있고, connectedIndices는 아래에서 어차피 비워지므로 이어져도 안전하다.

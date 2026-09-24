@@ -3,9 +3,9 @@
 namespace EnemySpace
 {
     /// <summary>
-    /// 씬 뷰 기즈모(에디터 전용). 무대 반경·무리 집결지·결투 거리는 숫자만 봐선 못 정해 그림으로 확인한다.
+    /// 씬 뷰 기즈모(에디터 전용). 무대 반경·배회 궤도·결투 거리는 숫자만 봐선 못 정해 그림으로 확인한다.
     ///
-    /// <para><b>클래스를 쪼갠 것이 아니라 파일만 쪼갰다</b>(<c>partial</c>) — 무리·예약·처치가 서로의 상태를
+    /// <para><b>클래스를 쪼갠 것이 아니라 파일만 쪼갰다</b>(<c>partial</c>) — 배회·예약·처치가 서로의 상태를
     /// 직접 읽으므로 진짜 분리는 성립하지 않는다. 얻는 것은 "한 파일을 스크롤하지 않는다" 하나다.</para>
     /// </summary>
     public partial class EnemyDirector
@@ -18,44 +18,21 @@ namespace EnemySpace
         /// <b>편집 중에도 그린다</b> — 플레이 없이 반경을 잡아야 하기 때문.
         /// </summary>
         /// <summary>
-        /// 무리 상태. <b>집결지가 고정인지, 몇 명이 모였는지, 누가 아직 걸어오는 중인지</b>를 그린다 —
-        /// 집결지가 프레임마다 움직이면 그게 곧 예전의 우르르 이동 버그다.
+        /// 배회 궤도. <b>슬롯 수가 인원에서 파생되므로</b>(<c>PickOrbitSlot</c>) 적이 줄면 간격이 벌어진다 —
+        /// 곡 후반에 한두 명만 남았을 때의 그림은 숫자로는 안 보이고 여기서만 보인다.
         /// </summary>
-        private void DrawClusterGizmos()
+        private void DrawWanderGizmos()
         {
-            Vector3 activeCenter = ClusterCenterOf(activeCluster, PlayerPosition);
-
-            Gizmos.color = Color.red;
-            DrawCircle(activeCenter, clusterRadius);
-
-            // 집결지 — 무리가 찰 때까지 여기 고정이다.
-            Gizmos.color = Color.cyan;
-            DrawCircle(stagedCenter, clusterRadius);
-            Gizmos.DrawLine(PlayerPosition, stagedCenter);
-
-            // 아직 걸어오는 중인 적: 현재 위치 → 자기 자리.
-            Gizmos.color = Color.green;
-            foreach (var e in stagedCluster)
-            {
-                if (e == null) continue;
-                Gizmos.DrawLine(e.transform.position, e.Destination);
-            }
-
-            UnityEditor.Handles.color = Color.cyan;
-            UnityEditor.Handles.Label(stagedCenter + Vector3.up * 1.2f,
-                $"집결 {stagedCluster.Count}/{clusterSize}   dist={Vector3.Distance(PlayerPosition, stagedCenter):0.0}m\n" +
-                $"active {activeCluster.Count}   desired={lastDesiredDistance:0.0}m");
-
             if (!wanderEnabled) return;
 
             // 배회 궤도 — 플레이어 주위 standoff 원과, 각 적이 자기 슬롯으로 가는 선.
             Gizmos.color = Color.yellow;
             DrawCircle(PlayerPosition, standoffDistance);
 
-            int count = Mathf.Max(activeCluster.Count, 1);
-            for (int i = 0; i < activeCluster.Count; i++)
+            int count = Mathf.Max(ring.Count, 1);
+            for (int i = 0; i < ring.Count; i++)
             {
-                var view = activeCluster[i];
+                var view = ring[i];
                 if (view == null) continue;
 
                 bool engaged = view == currentOpponent;
@@ -122,15 +99,15 @@ namespace EnemySpace
 
             UnityEditor.Handles.color = gizmoRingColor;
             UnityEditor.Handles.Label(center + Vector3.up * 0.5f,
-                $"stage r={stageRadius:0.0}  count={RingCapacity}  spacing={minSpacing:0.0}m\n" +
+                $"stage r={stageRadius:0.0}  spacing={minSpacing:0.0}m\n" +
                 $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s" +
-                (clusterEnabled ? $"\ncluster {clusterSize}  r={clusterRadius:0.0}  move={clusterMoveSpeed:0.0}m/s" : ""));
+                (Application.isPlaying ? $"\n적 {ring.Count}/{stageRosterCount}명" : ""));
 
             if (!Application.isPlaying) return;
 
             DrawSeparationGizmo();
 
-            if (clusterEnabled) DrawClusterGizmos();
+            DrawWanderGizmos();
 
             foreach (var e in ring)
             {

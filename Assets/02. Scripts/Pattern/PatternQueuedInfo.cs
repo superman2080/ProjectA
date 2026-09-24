@@ -1,4 +1,4 @@
-namespace PatternSpace
+﻿namespace PatternSpace
 {
     /// <summary>
     /// 패턴이 <b>큐에 투입되는 순간</b>의 불변 페이로드. 판정 대상이 되는 시점(<see cref="JudgeTargetInfo"/>)보다
@@ -35,8 +35,13 @@ namespace PatternSpace
         /// </summary>
         public readonly float[] NodeTimes;
 
-        public PatternQueuedInfo(Pattern template, float startTime, float firstNodeTime, float lastNodeTime, float deadline, float[] nodeTimes = null)
+        /// <summary>재시도본인가. <see cref="PatternCompletionInfo.IsRetry"/>와 같은 뜻이며, 큐 시점에 이미 안다.</summary>
+        public readonly bool IsRetry;
+
+        public PatternQueuedInfo(Pattern template, float startTime, float firstNodeTime, float lastNodeTime, float deadline, float[] nodeTimes = null,
+                                 bool isRetry = false)
         {
+            IsRetry = isRetry;
             Template = template;
             StartTime = startTime;
             FirstNodeTime = firstNodeTime;

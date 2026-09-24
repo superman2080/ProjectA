@@ -145,7 +145,7 @@ public class HitStopDirector : MonoBehaviour
     /// </summary>
     private void HandlePatternComplete(PatternCompletionInfo info)
     {
-        if (!hitStopEnabled || !info.AllCorrect) return;
+        if (!hitStopEnabled || info.Cancelled || !info.AllCorrect) return;
 
         if (suppressNextMain)
         {

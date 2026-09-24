@@ -32,13 +32,39 @@ namespace PatternSpace
         /// </summary>
         public readonly float Deadline;
 
-        public PatternCompletionInfo(bool allCorrect, Pattern template, float lastNodeTime, float nextLastNodeTime, float deadline)
+        /// <summary>
+        /// 이 패턴이 <b>재시도본</b>인가(같은 엔트리를 이미 한 번 겪었다). 채점과 마무리 실루엣이
+        /// 이 표식 하나만 보고 물러난다 — "다시 해도 점수는 안 오른다"의 구현 전부다.
+        ///
+        /// <para><b>⚠ 표시 콤보는 다시 쌓인다.</b> 안 오르는 것은 채점의 누적(<c>comboSum</c>·판정 개수·
+        /// <c>MaxCombo</c>)뿐이다 — 재시도 구간 내내 화면 콤보가 0에 박혀 있으면 안 된다.</para>
+        /// </summary>
+        public readonly bool IsRetry;
+
+        /// <summary>
+        /// 이 패턴이 <b>취소</b>됐는가 — 플레이어가 입력할 기회 없이 큐에서 회수됐다.
+        ///
+        /// <para>재시도로 채보 시계를 되감을 때 이미 큐에 올라간 패턴(언제나 최대 1개)을 걷어내는 경로다.
+        /// <b>새 이벤트를 만들지 않고 완료 이벤트에 얹는 이유</b>는 큐 시점에 상태를 만든 구독자
+        /// (<c>EnemyDirector</c>·<c>PatternEffectDirector</c>)가 전부 이미 이 이벤트를 구독하고 있어
+        /// <b>새 배선이 0개</b>라서다.</para>
+        ///
+        /// <para><b>⚠ 구독자는 연출을 건너뛰어야 한다.</b> 그냥 실패로 흘리면 <b>오지도 않은 칼에
+        /// 적이 패링 모션을 한다.</b> 그래서 발행 쪽도 <c>AllCorrect = false</c>로 못박아 보낸다 —
+        /// 손 안 댄 패턴은 <c>AllCorrect</c>가 <b>true</b>라 그대로 두면 취소가 처치로 읽힌다.</para>
+        /// </summary>
+        public readonly bool Cancelled;
+
+        public PatternCompletionInfo(bool allCorrect, Pattern template, float lastNodeTime, float nextLastNodeTime, float deadline,
+                                     bool isRetry = false, bool cancelled = false)
         {
             AllCorrect = allCorrect;
             Template = template;
             LastNodeTime = lastNodeTime;
             NextLastNodeTime = nextLastNodeTime;
             Deadline = deadline;
+            IsRetry = isRetry;
+            Cancelled = cancelled;
         }
     }
 }

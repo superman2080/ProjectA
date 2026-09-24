@@ -440,6 +440,9 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void HandlePatternComplete(PatternCompletionInfo info)
     {
+        // 취소는 화면에서 아무 일도 일어나지 않은 패턴이다 — 실패 큐를 쏘면 오지도 않은 칼에 화면이 흔들린다.
+        if (info.Cancelled) return;
+
         var trigger = info.AllCorrect ? CameraTrigger.PatternSuccess : CameraTrigger.PatternFailure;
 
         float fireTime = info.ImpactTime();

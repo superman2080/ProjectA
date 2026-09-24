@@ -436,6 +436,7 @@ public class CharacterActionPlayer : MonoBehaviour
         {
             handler.OnJudgeTargetBegan += HandleJudgeTargetBegan;
             handler.OnJudgeTargetFirstMiss += HandleJudgeTargetFirstMiss;
+            handler.OnPatternComplete += HandlePatternComplete;
             handler.OnMashHit += HandleMashHit;
         }
 
@@ -450,6 +451,7 @@ public class CharacterActionPlayer : MonoBehaviour
         {
             handler.OnJudgeTargetBegan -= HandleJudgeTargetBegan;
             handler.OnJudgeTargetFirstMiss -= HandleJudgeTargetFirstMiss;
+            handler.OnPatternComplete -= HandlePatternComplete;
             handler.OnMashHit -= HandleMashHit;
         }
 
@@ -1309,6 +1311,24 @@ public class CharacterActionPlayer : MonoBehaviour
 
         hasPendingHit = true;
         pendingHitTime = pendingImpactAlignTime;
+    }
+
+    /// <summary>
+    /// 패턴이 <b>취소</b>됐다 — 재시도 되감기로 큐에서 걷힌 패턴이다.
+    ///
+    /// <para><b>⚠ 이 클래스는 이미 그 패턴의 베기를 예약해 뒀다.</b> 취소될 패턴이 한 프레임 동안
+    /// 판정 대상이 되므로 <c>OnJudgeTargetBegan</c>이 이미 돌았고, 그대로 두면 오지도 않을 패턴의
+    /// 임팩트 시각에 <b>허공을 베는 스윙</b>이 나간다(되감기 간격이 1초 남짓이라 눈에 그대로 보인다).</para>
+    ///
+    /// <para><b>⚠ 이미 시작한 재생은 끊지 않는다</b> — §6의 "휘둘렀는데 막혔다"와 같은 결이고,
+    /// 여기서 끊으면 <c>swingActive</c>가 내려가 히트스톱 가드와 트레일이 스윙 도중에 꺼진다.</para>
+    /// </summary>
+    private void HandlePatternComplete(PatternSpace.PatternCompletionInfo info)
+    {
+        if (!info.Cancelled) return;
+
+        hasPending = false;
+        hasPendingHit = false;
     }
 
     /// <summary>적 칼이 도착하는 시각에 피격을 재생한다. 예약 메커니즘은 성공 애니와 동일하다.</summary>

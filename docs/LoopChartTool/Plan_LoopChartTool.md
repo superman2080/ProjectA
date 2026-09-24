@@ -34,7 +34,7 @@ private class ChartEntryDraft {
 
 ## 단계
 
-### - [ ] Step 1 — 새 필드 둘 (`SongChart`)
+### - [x] Step 1 — 새 필드 둘 (`SongChart`)
 
 ```csharp
 [Min(1)] public int beatsPerBar = 4;
@@ -50,7 +50,7 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - **⚠ 기본값이 `Linear`여야** 기존 채보 17개가 지금 편집기로 열린다(회귀 0).
 - `Loop`인 채보를 Linear 편집기로 열면 **`분석` 버튼을 비활성**한다(저작이 통째로 날아가는 유일한 경로).
 
-### - [ ] Step 2 — 모드 토글과 구역 분기 (`PatternChartWindow`)
+### - [x] Step 2 — 모드 토글과 구역 분기 (`PatternChartWindow`)
 
 `OnGUI`(:100~129) 상단에 모드 툴바. 구역별 분기:
 
@@ -68,7 +68,7 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - **⚠ `level → subdivision` 매핑을 Loop에서 쓰지 않는다.** `BeatGrid.LevelToSubdivision`은 "레벨이 높으면 잘게 썬다"인데 격자 저작에서는 저작자가 해상도를 직접 고른다. `level`은 `SongChart`의 표시용 난이도로 남는다.
 - **⚠ 모드 전환 시 드래프트를 버리지 않는다** — 경고만 띄우고 유지한다. Linear로 구운 채보를 Loop 편집기에서 다듬는 것은 **유효한 작업 흐름**이다(온셋이 이미 격자에 스냅돼 있으므로 스텝으로 환산된다).
 
-### - [ ] Step 3 — 마디 격자 캔버스
+### - [x] Step 3 — 마디 격자 캔버스
 
 `DrawWaveform`(:~429) 자리를 대체한다. 좌표는 `BeatGrid`가 그대로 준다 — **새 수학이 0이다.**
 
@@ -78,7 +78,7 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - **⚠ 캔버스 길이가 `clip.length`에서 안 끝난다**(R-T15). `barCount`를 곡 길이에서 유도하되 **저작자가 늘릴 수 있게** 한다 — 루프 2~3바퀴를 쓰는 채보가 정상이다. 곡 1바퀴가 끝나는 마디에 **경계선**을 긋는다.
 - 클릭으로 배치, 드래그로 이동, 선택 후 `Delete`. **⚠ 리스트 변경은 그리는 도중에 하지 않는다** — 기존 `pending` 액션 큐(:83)를 그대로 쓴다(안 그러면 `GUILayout`이 터진다).
 
-### - [ ] Step 4 — 배치 모델
+### - [x] Step 4 — 배치 모델
 
 엔트리 = **(시작 스텝, 노드 간격 스텝, 템플릿)**. 온셋은 `start + i × gap`으로 자동 생성되므로 **격자 위에 있는 것이 구조적으로 보장**된다.
 
@@ -87,7 +87,7 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - 연타는 **(시작 스텝, 끝 스텝)** 둘. `ConvertToMash`(:1135)는 **Loop에서 훨씬 단순해진다** — 양 끝만 남기는 게 아니라 처음부터 둘이다.
 - `onsetTimes` = `BeatGrid.GridIndexToTime(step)`으로 **매 편집마다 재계산**한다. BPM/offset을 고치면 전부 따라온다(연구 §3-3).
 
-### - [ ] Step 5 — 저장 검증 (**이 계획에서 새 코드의 절반**)
+### - [x] Step 5 — 저장 검증 (**이 계획에서 새 코드의 절반**)
 
 `Save()`(:1277)의 기존 검증 뒤에 붙인다. **음악이 공짜로 보장하던 것을 여기서 강제한다.**
 
@@ -112,13 +112,13 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 
 - **⚠ 2·3번을 경고가 아니라 중단으로 두는 이유**: 어긴 채보는 *조금 이상한* 게 아니라 **취소 경로(Step 4-A)가 1개만 회수하고 나머지를 흘려 적 배정이 영구히 밀린다.** 조용히 잘못된 채보를 쓰는 것보다 낫다는 기존 규율(`spawnTimes == null` 처리)과 같다.
 
-### - [ ] Step 6 — 격자 표시와 요약
+### - [x] Step 6 — 격자 표시와 요약
 
 - 상단 요약: `패턴 12개 (공격 8 · 방어 4) · 8마디 × 2바퀴 · 최소 간격 2스텝(0.67s)`
 - **⚠ `RequiredHits` 표시(:98)를 고친다.** 사슬 전체 재시도로 `chainKillRatio`가 죽은 노브가 됐으므로(R-T14) 지금 표시는 **거짓말이다.** `사슬 3타 — 전부 성공해야 처치` 로 바꾸고, 그 옆에 `실패 시 이 사슬 전체가 다시 나옵니다`를 적는다.
 - 사슬을 캔버스에서 **한 덩어리로 묶어 그린다**(재시도 단위이므로). 지금은 목록 뱃지로만 보인다.
 
-### - [ ] Step 7 — 미리듣기 (메트로놈) · **범위 안**
+### - [x] Step 7 — 미리듣기 (메트로놈) · **범위 안**
 
 분석이 없어졌으므로 **"이 리듬이 곡과 맞는가"를 귀로 확인해야 한다**(연구 §3-5). 그 확인 수단이 통째로 사라진 채로 저작하는 것이 이 개편의 가장 큰 실무 위험이라 **넣는다.**
 
@@ -126,15 +126,16 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - **⚠ 루프 균질성(R-L5)을 확인하는 유일한 수단이기도 하다.** 드리프트가 쌓이면 패턴이 곡의 다른 부분 위에 얹히는데(코드가 못 푸는 제작 요구), **여러 마디에서 같은 리듬을 들어 보는 것**이 그 판단의 전부다. → 재생 시작 마디를 **저작자가 고를 수 있어야 한다**(처음부터만 재생되면 확인이 안 된다).
 - **⚠ 에디터 오디오 재생은 공개 API가 없다.** `AudioUtil` 리플렉션(비공개)이나 임시 `AudioSource`가 필요하다 — **깨지기 쉬우므로 실패하면 조용히 비활성**되게 한다(기존 배선 누락 규율). 재생이 안 돼도 나머지 저작은 성립해야 한다.
 - **⚠ 클릭은 오디오가 아니라 시각으로도 낼 수 있다.** 재생 위치 커서를 캔버스에 그리는 것만으로도 격자 정합의 절반은 눈에 보인다 — 리플렉션이 막히는 환경의 폴백.
+- **⚠ 구현 결과 — 클릭은 폴백만 넣었다.** 에디터의 미리듣기 채널이 **하나뿐이라**(`AudioUtil`은 새 미리듣기가 이전 것을 끊는다) 온셋마다 클릭을 울리면 **그 클릭이 곡을 잘라 먹는다.** 그래서 들어간 것은 *"선택 마디부터 곡 재생 + 캔버스에 재생 커서"*이고, 클릭이 실제로 필요해지면 그 문은 **런타임 `AudioSource`를 에디터에서 돌리는 별개 작업**이다(두 채널이 필요하다).
 - 나머지 단계와 독립이므로 **구현 순서는 마지막**이지만 **범위에는 들어간다.**
 
-### - [ ] Step 8 — Linear 격리 확인(회귀 방지)
+### - [x] Step 8 — Linear 격리 확인(회귀 방지)
 
 - `OnsetDetector`·`OnsetGrouper`·`OnsetChunkSplitter`·`PatternTemplateLibrary.GetNextTemplate`/`GetRandomTemplate` 호출 지점이 **Linear 분기 안에만** 있는지 확인.
 - `ChartGen/Tests`의 기존 코어 유닛테스트가 **한 개도 안 깨져야 한다**(그 셋은 순수 함수라 Loop가 안 건드린다).
 - 기존 채보 17개를 열어 **저장 → diff가 비어야 한다**(`authoredWith` 기본값이 `Linear`라 경로가 같다).
 
-### - [ ] Step 9 — 검증(수동)
+### - [ ] Step 9 — 검증(수동) — **미실행: 에디터에서 사람이 돌려야 한다**
 
 - [ ] Loop 채보를 굽고 **`StageMode.Loop`로 재생** → 패턴이 박에 맞는다
 - [ ] 재시도를 여러 번 해도 박이 유지된다(드리프트 × 격자)
@@ -149,7 +150,7 @@ public ChartAuthoring authoredWith = ChartAuthoring.Linear;
 - [ ] 미리듣기: **중간 마디부터 재생**되고 온셋마다 클릭이 난다 (Step 7)
 - [ ] 미리듣기가 실패하는 환경에서도 **저작이 정상 동작**한다(커서만 남는다)
 
-### - [ ] Step 10 — 문서
+### - [x] Step 10 — 문서
 
 - `CLAUDE.md` §5(채보 시스템)에 모드 이원화와 `beatsPerBar`·`authoredWith` 반영.
 - `docs/!Guides/Guide_PatternChartTool.md`를 **두 절로 나눈다**(Linear 현행 + Loop 신규).

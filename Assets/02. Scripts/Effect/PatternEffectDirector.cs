@@ -220,9 +220,29 @@ public class PatternEffectDirector : MonoBehaviour
         {
             if (run.hasOutcome) continue;
 
+            // 취소 — 그 패턴의 남은 예약을 통째로 버린다. 결과를 채워 두면 일어나지 않은 사건의
+            // 이펙트가 제 시각에 그대로 뜬다(앵커였던 적은 이미 다른 패턴을 상대하고 있다).
+            if (info.Cancelled)
+            {
+                DiscardRun(run);
+                return;
+            }
+
             run.hasOutcome = true;
             run.success = info.AllCorrect;
             return;
+        }
+    }
+
+    /// <summary>런 하나의 남은 예약을 버린다. 런 자체는 <c>pending</c>이 0이 되어 <c>Update</c> 끝에서 정리된다.</summary>
+    private void DiscardRun(PatternRun run)
+    {
+        for (int i = reservations.Count - 1; i >= 0; i--)
+        {
+            if (reservations[i].run != run) continue;
+
+            reservations.RemoveAt(i);
+            run.pending--;
         }
     }
 

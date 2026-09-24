@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using ChartGen;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -35,8 +35,6 @@ public class BattleSceneBootstrap : MonoBehaviour
 
         yield return LoadStageBackground();
 
-        ApplyClusterOverride();
-
         Subscribe();
 
         // ⚠ 걷어낸 다음에 시작한다. 프리웜(PrepareStage)이 도는 창에 씬 로드를 겹치면
@@ -64,14 +62,6 @@ public class BattleSceneBootstrap : MonoBehaviour
         yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
     }
 
-    private void ApplyClusterOverride()
-    {
-        if (enemyDirector == null || GameSession.Instance == null) return;
-
-        int size = GameSession.Instance.ClusterSizeOverride;
-        if (size > 0) enemyDirector.SetClusterSize(size);
-    }
-
     private void Subscribe()
     {
         if (chartPlayer != null) chartPlayer.OnSongEnded += HandleSongEnded;
@@ -90,7 +80,24 @@ public class BattleSceneBootstrap : MonoBehaviour
     private void HandleSongEnded()
     {
         if (resolved) return;
-        resolved = true;
+        resolved = true;   // ⚠ 가드는 코루틴 밖에서 즉시 세운다(두 신호가 같은 프레임에 올 수 있다).
+
+        StartCoroutine(ReportAndReturn());
+    }
+
+    /// <summary>
+    /// <b>한 프레임 미룬 뒤</b> 등급을 기록한다.
+    ///
+    /// <para><b>⚠ 순서 보장이 없다.</b> <c>session.LastResult</c>는 <c>ScoreDirector.HandleSongEnded</c>가
+    /// 채우는데, 두 클래스가 같은 이벤트를 구독하고 그 호출 순서는 <b>씬 오브젝트 순서</b>다 —
+    /// 먼저 불리면 <b>직전 곡의 등급</b>(또는 기본값)이 박힌다.</para>
+    ///
+    /// <para><c>ChartPlayer.outroHold</c>는 <i>마지막 패턴 완료 뒤의 여유</i>이지
+    /// <b>같은 호출 흐름 안의 순서를 바꾸지 않는다</b> — 둘은 다른 문제다.</para>
+    /// </summary>
+    private IEnumerator ReportAndReturn()
+    {
+        yield return null;
 
         GameSession session = GameSession.Instance;
         if (session != null && !string.IsNullOrEmpty(session.EncounterId))
@@ -101,6 +108,15 @@ public class BattleSceneBootstrap : MonoBehaviour
 
         Return();
     }
+
+    /// <summary>
+    /// 플레이어가 이 무대를 <b>포기</b>했다(일시정지 → 나가기). <see cref="HandleDepleted"/>와 <b>같은 처리</b>다 —
+    /// 곡을 끊고 아무것도 기록하지 않는다. 새 분기가 0개다.
+    ///
+    /// <para><b>왜 필요한가</b>: <see cref="ChartGen.StageMode.Loop"/>에서는 공격 패턴을 못 깨면
+    /// 스테이지가 끝나지 않으므로, 나가는 수단이 없으면 플레이어가 갇힌다.</para>
+    /// </summary>
+    public void Abandon() => HandleDepleted();
 
     /// <summary>목숨이 0. <b>아무것도 기록하지 않는다</b> — 그 무대는 아직 완곡한 적이 없는 자리다.</summary>
     private void HandleDepleted()

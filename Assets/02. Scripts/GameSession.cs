@@ -1,4 +1,4 @@
-using ChartGen;
+﻿using ChartGen;
 using UnityEngine;
 
 /// <summary>씬 간 선택된 SongChart를 전달하는 DontDestroyOnLoad 싱글톤.</summary>
@@ -36,8 +36,11 @@ public class GameSession : Singleton<GameSession>
     /// <summary>배경 씬(<c>StageBackground_Stage{N}</c>) 선택에 쓴다.</summary>
     public int StageIndex { get; set; }
 
-    /// <summary>그 무대의 적 수. 0이면 씬의 <c>EnemyDirector</c> 값을 그대로 쓴다.</summary>
-    public int ClusterSizeOverride { get; set; }
+    /// <summary>
+    /// 이 전투의 스테이지 모드. <b>비어 있으면 씬 <c>ChartPlayer</c>의 인스펙터 값</b>을 쓴다
+    /// (<c>SelectedChart ?? debugChart</c>와 같은 관용구).
+    /// </summary>
+    public ChartGen.StageMode? StageModeOverride { get; set; }
 
     protected override void Awake()
     {

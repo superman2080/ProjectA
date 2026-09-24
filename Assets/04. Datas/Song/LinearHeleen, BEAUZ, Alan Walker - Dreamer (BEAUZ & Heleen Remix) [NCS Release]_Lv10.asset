@@ -1,0 +1,1593 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63e536d865f0b1941a7fa08068edb7cb, type: 3}
+  m_Name: LinearHeleen, BEAUZ, Alan Walker - Dreamer (BEAUZ & Heleen Remix) [NCS
+    Release]_Lv10
+  m_EditorClassIdentifier: Assembly-CSharp::ChartGen.SongChart
+  song: {fileID: 8300000, guid: 42c02541f02cf614b916d06c6e71db8b, type: 3}
+  level: 10
+  bpm: 150
+  beatOffset: 0
+  beatsPerBar: 4
+  authoredWith: 0
+  patternPool:
+  - {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
+  - {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
+  - {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
+  - {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+  - {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+  - {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
+  - {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+  - {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+  - {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+  - {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
+  - {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+  - {fileID: 11400000, guid: 7ae21e8dfeadce242949667a8896cf69, type: 2}
+  - {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+  - {fileID: 11400000, guid: 34f81ebb68cdb3f40a29b14eda9bd14d, type: 2}
+  maxScore: 0
+  entries:
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 2.8
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 2.3
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 3.2
+    - 3.6000001
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 2.7
+    - 3.1000001
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    onsetTimes:
+    - 4
+    - 4.4
+    - 4.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 3.5
+    - 3.9
+    - 4.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 6.4
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 5.9
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 6.8
+    - 7.2000003
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 6.3
+    - 6.7000003
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 7.6
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 7.1
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 9.2
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 8.7
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 9.6
+    - 10
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 9.1
+    - 9.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
+    onsetTimes:
+    - 10.400001
+    - 10.8
+    - 11.2
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 9.900001
+    - 10.3
+    - 10.7
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 11.6
+    - 12
+    - 12.400001
+    - 12.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 11.1
+    - 11.5
+    - 11.900001
+    - 12.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
+    onsetTimes:
+    - 13.2
+    - 13.6
+    - 14
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 12.7
+    - 13.1
+    - 13.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 15.6
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 15.1
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 16
+    - 16.4
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 15.5
+    - 15.9
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
+    onsetTimes:
+    - 16.800001
+    - 17.2
+    - 17.6
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 16.300001
+    - 16.7
+    - 17.1
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 18
+    - 18.4
+    - 18.800001
+    - 19.2
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 17.5
+    - 17.9
+    - 18.300001
+    - 18.7
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 19.6
+    - 20
+    - 20.4
+    - 20.800001
+    - 21.2
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 19.1
+    - 19.5
+    - 19.9
+    - 20.300001
+    - 20.7
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 21.6
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 21.1
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 22
+    - 22.4
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 21.5
+    - 21.9
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
+    onsetTimes:
+    - 22.800001
+    - 23.2
+    - 23.6
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 22.300001
+    - 22.7
+    - 23.1
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 24
+    - 24.4
+    - 24.800001
+    - 25.2
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 23.5
+    - 23.9
+    - 24.300001
+    - 24.7
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 25.6
+    - 26
+    - 26.4
+    - 26.800001
+    - 27.2
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 25.1
+    - 25.5
+    - 25.9
+    - 26.300001
+    - 26.7
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 27.6
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 27.1
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 28
+    - 28.4
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 27.5
+    - 27.9
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    onsetTimes:
+    - 28.800001
+    - 29.2
+    - 29.6
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 28.300001
+    - 28.7
+    - 29.1
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 30
+    - 30.4
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 29.5
+    - 29.9
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 32
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 31.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 32.4
+    - 32.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 31.900002
+    - 32.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
+    onsetTimes:
+    - 33.2
+    - 33.600002
+    - 34
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 32.7
+    - 33.100002
+    - 33.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 34.4
+    - 34.8
+    - 35.2
+    - 35.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 33.9
+    - 34.3
+    - 34.7
+    - 35.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 36
+    - 36.4
+    - 36.8
+    - 37.2
+    - 37.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 35.5
+    - 35.9
+    - 36.3
+    - 36.7
+    - 37.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 38
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 37.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 38.4
+    - 38.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 37.9
+    - 38.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 7ae21e8dfeadce242949667a8896cf69, type: 2}
+    onsetTimes:
+    - 39.2
+    - 39.600002
+    - 40
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 38.7
+    - 39.100002
+    - 39.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 40.4
+    - 40.8
+    - 41.2
+    - 41.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 39.9
+    - 40.3
+    - 40.7
+    - 41.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 42
+    - 42.4
+    - 42.8
+    - 43.2
+    - 43.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 41.5
+    - 41.9
+    - 42.3
+    - 42.7
+    - 43.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 44
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 43.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 44.4
+    - 44.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 43.9
+    - 44.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    onsetTimes:
+    - 45.2
+    - 45.600002
+    - 46
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 44.7
+    - 45.100002
+    - 45.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 46.4
+    - 46.8
+    - 47.2
+    - 47.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 45.9
+    - 46.3
+    - 46.7
+    - 47.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 48
+    - 48.4
+    - 48.8
+    - 49.2
+    - 49.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 47.5
+    - 47.9
+    - 48.3
+    - 48.7
+    - 49.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 50
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 49.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 50.4
+    - 50.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 49.9
+    - 50.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
+    onsetTimes:
+    - 51.2
+    - 51.600002
+    - 52
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 50.7
+    - 51.100002
+    - 51.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 52.4
+    - 52.8
+    - 53.2
+    - 53.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 51.9
+    - 52.3
+    - 52.7
+    - 53.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 54
+    - 54.4
+    - 54.8
+    - 55.2
+    - 55.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 53.5
+    - 53.9
+    - 54.3
+    - 54.7
+    - 55.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 56
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 55.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 56.4
+    - 56.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 55.9
+    - 56.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
+    onsetTimes:
+    - 57.2
+    - 57.600002
+    - 58
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 56.7
+    - 57.100002
+    - 57.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 58.4
+    - 58.8
+    - 59.2
+    - 59.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 57.9
+    - 58.3
+    - 58.7
+    - 59.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 60
+    - 60.4
+    - 60.8
+    - 61.2
+    - 61.600002
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 59.5
+    - 59.9
+    - 60.3
+    - 60.7
+    - 61.100002
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 62
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 61.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 62.4
+    - 62.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 61.9
+    - 62.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
+    onsetTimes:
+    - 63.2
+    - 63.600002
+    - 64
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 62.7
+    - 63.100002
+    - 63.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 64.4
+    - 64.8
+    - 65.200005
+    - 65.6
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 63.9
+    - 64.3
+    - 64.700005
+    - 65.1
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 66
+    - 66.4
+    - 66.8
+    - 67.200005
+    - 67.6
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 65.5
+    - 65.9
+    - 66.3
+    - 66.700005
+    - 67.1
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 68
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 67.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 68.4
+    - 68.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 67.9
+    - 68.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 70
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 69.5
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 70.4
+    - 70.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 69.9
+    - 70.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
+    onsetTimes:
+    - 71.200005
+    - 71.6
+    - 72
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 70.700005
+    - 71.1
+    - 71.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 73.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 72.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 73.6
+    - 74
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 73.1
+    - 73.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: ea0441c25111cce4aa3084253d2c065d, type: 2}
+    onsetTimes:
+    - 74.4
+    - 74.8
+    - 75.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 73.9
+    - 74.3
+    - 74.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 75.6
+    - 76
+    - 76.4
+    - 76.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 75.1
+    - 75.5
+    - 75.9
+    - 76.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 77.200005
+    - 77.6
+    - 78
+    - 78.4
+    - 78.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 76.700005
+    - 77.1
+    - 77.5
+    - 77.9
+    - 78.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 79.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 78.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 79.6
+    - 80
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 79.1
+    - 79.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: d2d2efe983b8a68438c89c15a09ac642, type: 2}
+    onsetTimes:
+    - 80.4
+    - 80.8
+    - 81.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 79.9
+    - 80.3
+    - 80.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 81.6
+    - 82
+    - 82.4
+    - 82.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 81.1
+    - 81.5
+    - 81.9
+    - 82.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 83.200005
+    - 83.6
+    - 84
+    - 84.4
+    - 84.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 82.700005
+    - 83.1
+    - 83.5
+    - 83.9
+    - 84.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 85.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 84.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 85.6
+    - 86
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 85.1
+    - 85.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 7ae21e8dfeadce242949667a8896cf69, type: 2}
+    onsetTimes:
+    - 86.4
+    - 86.8
+    - 87.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 85.9
+    - 86.3
+    - 86.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 87.6
+    - 88
+    - 88.4
+    - 88.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 87.1
+    - 87.5
+    - 87.9
+    - 88.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 89.200005
+    - 89.6
+    - 90
+    - 90.4
+    - 90.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 88.700005
+    - 89.1
+    - 89.5
+    - 89.9
+    - 90.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 91.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 90.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 91.6
+    - 92
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 91.1
+    - 91.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+    onsetTimes:
+    - 92.4
+    - 92.8
+    - 93.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 91.9
+    - 92.3
+    - 92.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 93.6
+    - 94
+    - 94.4
+    - 94.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 93.1
+    - 93.5
+    - 93.9
+    - 94.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 95.200005
+    - 95.6
+    - 96
+    - 96.4
+    - 96.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 94.700005
+    - 95.1
+    - 95.5
+    - 95.9
+    - 96.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 97.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 96.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 97.6
+    - 98
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 97.1
+    - 97.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
+    onsetTimes:
+    - 98.4
+    - 98.8
+    - 99.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 97.9
+    - 98.3
+    - 98.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 99.6
+    - 100
+    - 100.4
+    - 100.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 99.1
+    - 99.5
+    - 99.9
+    - 100.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 101.200005
+    - 101.6
+    - 102
+    - 102.4
+    - 102.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 100.700005
+    - 101.1
+    - 101.5
+    - 101.9
+    - 102.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 103.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 102.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 103.6
+    - 104
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 103.1
+    - 103.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: f9dda0e00c774b04a9053db3b83311d4, type: 2}
+    onsetTimes:
+    - 104.4
+    - 104.8
+    - 105.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 103.9
+    - 104.3
+    - 104.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 105.6
+    - 106
+    - 106.4
+    - 106.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 105.1
+    - 105.5
+    - 105.9
+    - 106.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 107.200005
+    - 107.6
+    - 108
+    - 108.4
+    - 108.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 106.700005
+    - 107.1
+    - 107.5
+    - 107.9
+    - 108.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 109.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 108.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 63aaddec9f74fa041878121cb39c3db9, type: 2}
+    onsetTimes:
+    - 109.6
+    - 110
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 109.1
+    - 109.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 92642c7a0a3def44882546e37cb0f913, type: 2}
+    onsetTimes:
+    - 110.4
+    - 110.8
+    - 111.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 109.9
+    - 110.3
+    - 110.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
+    onsetTimes:
+    - 111.6
+    - 112
+    - 112.4
+    - 112.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 111.1
+    - 111.5
+    - 111.9
+    - 112.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
+    onsetTimes:
+    - 113.200005
+    - 113.6
+    - 114
+    - 114.4
+    - 114.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 112.700005
+    - 113.1
+    - 113.5
+    - 113.9
+    - 114.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
+    onsetTimes:
+    - 115.200005
+    exposureDurations:
+    - 0.5
+    spawnTimes:
+    - 114.700005
+    enemyCue:
+      killOnSuccess: 0
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 115.6
+    - 116
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 115.1
+    - 115.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 5f3556a157438ae46a851a99b968e103, type: 2}
+    onsetTimes:
+    - 116.4
+    - 116.8
+    - 117.200005
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 115.9
+    - 116.3
+    - 116.700005
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+    onsetTimes:
+    - 117.6
+    - 118
+    - 118.4
+    - 118.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 117.1
+    - 117.5
+    - 117.9
+    - 118.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 759b5ffee1d04bb47a0f648887e24a97, type: 2}
+    onsetTimes:
+    - 119.200005
+    - 119.6
+    - 120
+    - 120.4
+    - 120.8
+    exposureDurations:
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 118.700005
+    - 119.1
+    - 119.5
+    - 119.9
+    - 120.3
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}
+  - template: {fileID: 11400000, guid: 6f99946cef38138489b5f36471d166c0, type: 2}
+    onsetTimes:
+    - 121.6
+    - 122
+    exposureDurations:
+    - 0.5
+    - 0.5
+    spawnTimes:
+    - 121.1
+    - 121.5
+    enemyCue:
+      killOnSuccess: 1
+      projectile: {fileID: 0}

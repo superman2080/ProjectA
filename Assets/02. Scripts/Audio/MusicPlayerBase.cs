@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 음악을 내는 것들의 공통부. <b>"이 씬에서 음악을 내는 것"이라는 하나의 타입</b>이 존재하게 하는 것이
@@ -81,11 +81,18 @@ public abstract class MusicPlayerBase : MonoBehaviour
             ApplyMusicVolume();
     }
 
+    /// <summary>
+    /// 파생이 곱하는 추가 계수(기본 1). <b>페이드는 <c>audioSource.volume</c>에 직접 대입할 수 없다</b> —
+    /// 여기가 볼륨의 주인이라 페이드 도중 <c>OnVolumeChanged</c>가 오면 값이 되돌아간다.
+    /// 계수로 두면 채널 볼륨과 페이드가 서로를 덮지 않는다.
+    /// </summary>
+    protected virtual float VolumeFactor => 1f;
+
     protected void ApplyMusicVolume()
     {
         if (audioSource == null || SoundManager.Instance == null)
             return;
 
-        audioSource.volume = SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Music) * volumeScale;
+        audioSource.volume = SoundManager.Instance.GetEffectiveVolume(VolumeChannel.Music) * volumeScale * VolumeFactor;
     }
 }

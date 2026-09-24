@@ -74,7 +74,7 @@ finishAt = cleared가 된 시각 + outroHold
 
 ## 단계
 
-### - [ ] Step 1 — 밖에서 물을 수 있게 게터를 연다 (R-S3·R-S4·R-R5)
+### - [x] Step 1 — 밖에서 물을 수 있게 게터를 연다 (R-S3·R-S4·R-R5)
 
 - `PatternHandler`에 `public bool HasActivePatterns => activePatterns.Count > 0;`
 - `PatternHandler`에 `public bool JudgeTargetIsRetry` — 지금 판정 대상이 재시도본인가. `ScoreDirector.HandleJudged`가 물어본다(그 이벤트는 인덱스만 주므로 다른 방법이 없다).
@@ -83,7 +83,7 @@ finishAt = cleared가 된 시각 + outroHold
 
 **판정 로직은 한 줄도 안 고친다.** §7의 "PatternHandler는 연출을 위해 수정하지 않는다"는 *판정 파이프라인*에 대한 규율이며 읽기 게터는 어긋나지 않는다(`IsDragging`·`DebugAutoPerfect`가 이미 같은 성격).
 
-### - [ ] Step 2 — 재시도 표식을 페이로드에 싣는다 (R-R5·R-R6 · **둘을 한 번에**)
+### - [x] Step 2 — 재시도 표식을 페이로드에 싣는다 (R-R5·R-R6 · **둘을 한 번에**)
 
 - `PatternHandler.SetPattern(..., bool isRetry = false)` — 기본값이 있어 **기존 호출자(튜토리얼 드릴 포함)가 한 줄도 안 바뀐다.**
 - `ActivePattern`에 `IsRetry` 저장, `PatternCompletionInfo`·`PatternQueuedInfo`에 `IsRetry` 필드 추가.
@@ -112,7 +112,7 @@ finishAt = cleared가 된 시각 + outroHold
 | `comboSum` · `perfectCount`/`goodCount`/`missCount` · `successPatterns` | **안 오른다** | 점수·등급 |
 | `MaxCombo` | **안 오른다** | ⚠ 점수가 아니라 `IsPerfect()`의 `MaxCombo == totalNotes`가 쓴다 — 부풀면 **SSS가 영영 안 나온다** |
 
-### - [ ] Step 3 — 루프를 넘어 단조 증가하는 채보 시계 (R-L1·R-P1·R-R1 · **치명**)
+### - [x] Step 3 — 루프를 넘어 단조 증가하는 채보 시계 (R-L1·R-P1·R-R1 · **치명**)
 
 `ChartPlayer`에 `songStarted`(bool) · `loops`(int) · `prevAudioTime`(float) · `songTime`(float) · `chartOffset`(float). `Update`의 게이트를 바꾼다(0-2의 식).
 
@@ -122,7 +122,7 @@ finishAt = cleared가 된 시각 + outroHold
 - **폴백**: 어떤 이유로든 오디오가 멈추면(`!isPlaying`) `songTime += Time.deltaTime`으로 이어 간다. 루프곡에서는 안 쓰이는 경로지만, 커스텀 모드(루프 꺼짐)와 오디오 로드 실패를 덮는다.
   - **⚠ `Time.deltaTime`이지 `unscaledDeltaTime`이 아니다.** 스폰은 판정(`Time.time`)과 짝이 맞아야 한다 — unscaled로 이으면 마무리 실루엣의 0.1배속에서 스폰만 10배 빨라진다.
 
-### - [ ] Step 4 — `ChartPlayer`가 결과를 듣고 재시도를 판단한다 (R-R2·R-R3·R-R9 · **이 계획의 심장**)
+### - [x] Step 4 — `ChartPlayer`가 결과를 듣고 재시도를 판단한다 (R-R2·R-R3·R-R9 · **이 계획의 심장**)
 
 `ChartPlayer`가 `patternHandler.OnPatternComplete`를 구독한다. 새 상태: `inFlight`(진행 중 엔트리) · `chainHead`(그 엔트리가 속한 사슬의 첫 엔트리 인덱스).
 
@@ -154,27 +154,41 @@ OnPatternComplete(info):
 - **⚠ 되감을 때 이미 큐에 올라간 패턴이 있다**(R-R10). **언제나 정확히 최대 1개**이며(사슬이어도 같다 — 투입이 완료 0.2초 전마다 하나씩 일어난다) 그 회수는 **Step 4-A**가 맡는다.
   - **⚠ 그 "최대 1개"는 `gap ≥ 0.4초`에 기대는데, 그 값은 지금까지 강제된 적이 없다**(온셋이 음악에서 나와 실측상 그랬을 뿐이다, §3). 격자 저작에서는 즉시 깨질 수 있어 **`docs/LoopChartTool/` Step 5가 간격·노출을 저장 차단으로 강제한다** — 그래야 Step 4-A가 "1개만 회수하면 된다"는 전제 위에 설 수 있다. **툴과 런타임이 짝이다.**
 
-### - [ ] Step 4-A — 취소를 "완료의 한 종류"로 만든다 (R-R10 · **미결 3번의 답**)
+### - [x] Step 4-A — 취소를 "완료의 한 종류"로 만든다 (R-R10 · **미결 3번의 답**)
 
 되감기 시점에 큐에 올라가 있는 패턴 1개를 회수한다. **새 개념을 안 만들고 기존 완료 경로에 얹는다.**
 
 ```csharp
-// PatternCompletionInfo — 필드 하나
+// PatternCompletionInfo — 필드 둘 (IsRetry는 Step 2)
 public readonly bool Cancelled;
 
-// PatternHandler — ⚠ 판정 대상(선두, index 0)은 건드리지 않는다
-public void CancelQueuedPatterns()
+// PatternHandler — ⚠ 남아 있는 것은 전부 취소 대상이다(아래 정정)
+public int CancelQueuedPatterns()
 {
-    for (int i = activePatterns.Count - 1; i >= 1; i--)
+    while (activePatterns.Count > 0)
     {
-        var p = activePatterns[i];
-        activePatterns.RemoveAt(i);
+        var p = activePatterns[0];
+        activePatterns.RemoveAt(0);
         ClearNodesOf(p);                    // ⚠ 이미 있는 함수 (PatternHandler.cs:978)
-        OnPatternComplete?.Invoke(new PatternCompletionInfo(..., cancelled: true));
+        OnPatternComplete?.Invoke(new PatternCompletionInfo(
+            false, ..., cancelled: true));  // ⚠ AllCorrect를 false로 못박는다(아래)
     }
+    ResetPointColors(); TriggerLineFadeOut(); RefreshJudgeTargetVisuals();
     ApplyKnobVisibility(knobFadeDuration);
 }
 ```
+
+**⚠ 구현 중 정정된 것 둘** (계획의 스니펫이 틀렸다):
+
+1. **선두(`index 0`)를 건너뛰면 안 된다.** 이 함수가 불리는 시점에 되감기를 결정한 패턴은
+   `CompletePattern`에서 **이미 큐를 떠났고**, 그 순간 뒤에 있던 패턴이 판정 대상으로 승계됐다 —
+   즉 `index 0`이 바로 취소해야 할 그 패턴이다. `i >= 1`로 두면 **취소가 통째로 no-op**이 된다.
+   (이 계획 자신이 아래 "그 한 프레임 동안 취소될 패턴이 판정 대상이 된다"로 같은 사실을 적고 있었다.)
+2. **`AllCorrect`를 `false`로 못박아 보낸다.** 손 안 댄 패턴은 그 값이 **`true`**(초기값)라
+   그대로 흘리면 **취소가 처치·성공 연출로 읽힌다** — `EnemyDirector`가 적을 죽이고
+   `HitStopDirector`가 정지를 걸고 실루엣이 터진다. 구독자별 `Cancelled` 조기 반환과 **둘 다** 둔다.
+3. **회수 순서는 FIFO다**(뒤에서부터가 아니라). 구독자가 자기 큐를 앞에서 꺼내므로 역순으로 발행하면
+   취소 통지와 예약이 짝이 어긋난다.
 
 **왜 완료 이벤트로 쏘는가** — 큐 시점에 상태를 만든 구독자 셋이 **전부 `OnPatternComplete`를 이미 구독**하고 있다. 취소를 그 이벤트로 보내면 **새 배선이 0개**다:
 
@@ -201,7 +215,7 @@ public void CancelQueuedPatterns()
 지금은 **구독자가 0**이다(결정: 재시도 피드백은 나중에 붙인다). `CharacterActionPlayer.OnSwingBegan`처럼 **발행만 하고 비워 두는 확장 포인트**이며, 여기에 전용 SFX·HUD·화면 효과가 붙는다. `attempt`(몇 번째 시도인가)를 같이 싣는 이유는 나중 연출이 *"또 실패했다"*를 구분할 유일한 수단이라서다 — 나중에 추가하면 시그니처가 깨진다.
   - → **⚠ 이것이 이 계획에서 가장 큰 미결 지점이다.** 아래 「피드백 자리」 3번.
 
-### - [ ] Step 5 — 종료 상태기 (R-P2·R-P3·R-P4·R-S2·R-S4)
+### - [x] Step 5 — 종료 상태기 (R-P2·R-P3·R-P4·R-S2·R-S4)
 
 `RaiseSongEndedIfFinished`를 `TickFinish`로 교체. 새 필드 `finishAt`(`NaN` = 아직 아님).
 
@@ -224,7 +238,7 @@ finishAt 경과 && !(finale != null && finale.IsBusy):
 - 페이드는 `audioSource.volume`을 직접 대입하지 않는다 — `ApplyMusicVolume()`이 볼륨의 주인이라(MusicPlayerBase.cs:84) 페이드 중 `OnVolumeChanged`가 오면 값이 되돌아간다. **페이드 계수를 하나 두고 `ApplyMusicVolume`이 곱하게** 한다.
 - `finale` 참조는 선택 배선이다. 비면 대기가 없고 예전처럼 동작한다.
 
-### - [ ] Step 6 — 모드와 가드 (R-M1·R-M3·R-T4·R-P5)
+### - [x] Step 6 — 모드와 가드 (R-M1·R-M3·R-T4·R-P5)
 
 - `ChartGen`에 `public enum StageMode { Loop, Linear }`.
   - **`Loop`** — 곡이 무한 루프하고, 공격 실패는 재시도하며, **모든 엔트리가 소비되면** 끝난다. 기본값.
@@ -240,7 +254,7 @@ finishAt 경과 && !(finale != null && finale.IsBusy):
 - **빈 채보 가드**: `Play()`에서 `entries == null || Length == 0`이면 기존 에러 가드들과 같은 자리에서 `LogError` 후 return(R-T4).
 - **튜토리얼 가드**: 종료 판정·재시도 판단 모두 `songStarted`일 때만 돈다. 튜토리얼은 `Play()`를 안 부르므로 `pendingEntries == null`이고 `Update` 첫 줄에서 return한다(R-P5). **드릴의 자체 재시도와 절대 겹치지 않는다.**
 
-### - [ ] Step 7 — 일시정지 / 포기 (R-R7 · **신규 기능 · 이것이 없으면 갇힌다**)
+### - [x] Step 7 — 일시정지 / 포기 (R-R7 · **신규 기능 · 이것이 없으면 갇힌다**)
 
 무한 재시도가 설계상 정상이므로 **플레이어가 나가는 수단이 필수**다. 코드베이스에 일시정지가 0건이라 새로 만든다.
 
@@ -251,22 +265,26 @@ finishAt 경과 && !(finale != null && finale.IsBusy):
 - **포기**: `BattleSceneBootstrap`에 `Abandon()` 공개 메서드. `HandleDepleted`와 **같은 처리**다 — 곡을 끊고 아무것도 기록하지 않고 복귀(§9의 "중단에서 등급이 새어 나가면 `Fresh`가 `Retry`로 바뀐다"). 새 분기가 0개.
 - 입력은 `Esc`. **⚠ `EventSystem`의 입력 모듈이 씬마다 다르다**(§10) — 전투 씬은 `InputSystemUIInputModule`.
 
-### - [ ] Step 8 — `ScoreDirector` 이중 확정 가드 (R-M2)
+### - [x] Step 8 — `ScoreDirector` 이중 확정 가드 (R-M2)
 
 `HandleSongEnded`에 `if (finalized) return; finalized = true;`, `ResetRun`에서 해제. `BattleSceneBootstrap.resolved`와 같은 성격이다.
 
-### - [ ] Step 9 — 등급 기록을 한 프레임 미룬다 (R-S1·R-C2)
+### - [x] Step 9 — 등급 기록을 한 프레임 미룬다 (R-S1·R-C2)
 
 `BattleSceneBootstrap.HandleSongEnded`를 코루틴으로 바꿔 `yield return null` 뒤에 `GameProgress.ReportGrade(...)`를 부른다(`resolved` 가드는 지금 자리에서 **즉시** 세운다).
 
 - 근거: `session.LastResult`는 `ScoreDirector.HandleSongEnded`가 채우는데 두 클래스의 구독 순서가 씬 오브젝트 순서라 **보장이 없다.**
 - `outroHold`(Step 5)는 *마지막 패턴 완료 뒤의 여유*이지 **같은 호출 흐름 안의 순서를 바꾸지 않는다.** 둘은 다른 문제다.
 
-> **⚠ Step 10·11은 `Linear` 모드(현행 툴) 기준이다.** `Loop` 모드는 굽기 방식을 통째로 새로 짜며
+> **⚠ Step 10·11은 두 모드가 공유하는 `Save()`/엔트리 행에 구현됐다.** 검증 함수는
+> `PatternChartWindow.ValidateForSave`(`docs/LoopChartTool/` Step 5와 **같은 코드**)이고,
+> 역할 뱃지·요약은 `DrawChartSummary`/`DrawEntryRow`에 있다 — 아래 표의 항목이 전부 그 안에 있다.
+>
+> **⚠ 원래 이 절은 `Linear` 모드(현행 툴) 기준이었다.** `Loop` 모드는 굽기 방식을 통째로 새로 짜며
 > **온셋 분석이 근거를 잃는다**(드리프트가 트랜지언트와의 대응을 지운다). 그 설계와 검증은
 > **`docs/LoopChartTool/`**이 든다 — 여기 아래 검증들도 그쪽에서 격자 저작 형태로 다시 강제된다.
 
-### - [ ] Step 10 — 굽기 툴(Linear): 저장을 막는 검증 (R-T1·R-T4)
+### - [x] Step 10 — 굽기 툴(Linear): 저장을 막는 검증 (R-T1·R-T4)
 
 `Save()`의 기존 검증 옆에 셋을 더한다. 저장 중단은 앞의 둘, 마지막은 경고만:
 
@@ -291,7 +309,7 @@ bars = (clip.length − beatOffset) / (60/bpm × beatsPerBar)
 - **⚠ 경고이지 차단이 아니다.** 커스텀 모드(루프 꺼짐)에서는 상관없는 값이고, 툴은 어느 모드로 쓰일지 모른다.
 - **⚠ `AudioClip`의 Compression Format이 이 값을 바꾼다**(R-L3). 경고에 한 줄 덧붙인다 — `압축 포맷의 패딩이 원인일 수 있습니다(PCM으로 확인하세요).`
 
-### - [ ] Step 11 — 굽기 툴(Linear): 새 규칙을 숫자로 보여 준다 (R-T2·R-T3·R-T5·R-T6)
+### - [x] Step 11 — 굽기 툴(Linear): 새 규칙을 숫자로 보여 준다 (R-T2·R-T3·R-T5·R-T6)
 
 `Attacker`가 이제 **진행 규칙의 입력**이므로(Research §8-4) 채보 화면에서 읽혀야 한다.
 
@@ -303,7 +321,7 @@ bars = (clip.length − beatOffset) / (60/bpm × beatsPerBar)
 - 꼬리(`clip.length − onsetTimes[^1]`)가 `tailWarnSeconds`(기본 3초)를 넘으면 표시. 파형에 마지막 온셋 세로선.
 - 사슬 안 역할 혼재 경고에 한 줄 덧붙인다 — `사슬 안의 공격 타는 개별 재시도됩니다(chainKillRatio가 사실상 무의미해집니다).`(R-T5·R-R4)
 
-### - [ ] Step 12 — 검증(수동 시나리오)
+### - [ ] Step 12 — 검증(수동 시나리오) — **미실행: 에디터에서 사람이 돌려야 한다**
 
 `BattleScene` + 실채보. **오토플레이(§8)는 실패 경로를 못 만든다** — 재시도 경로 검증에 쓸 수 없다.
 
@@ -340,7 +358,7 @@ bars = (clip.length − beatOffset) / (60/bpm × beatsPerBar)
 - [ ] 튜토리얼 씬 → 드릴이 이 시스템과 **아무 상호작용도 안 한다** (R-P5)
 - [ ] `stageMode = Linear` → 재시도 없이 지금과 완전히 같다
 
-### - [ ] Step 13 — 문서
+### - [x] Step 13 — 문서
 
 - `CLAUDE.md` §2(판정)·§5(`ChartPlayer`)·§7-3(timeScale 금지의 **경계**가 하나 늘었다)·§9·§12·§14 갱신.
 - 새 절 후보: **§16 진행과 재시도** — `Attacker`가 연출이 아니라 진행을 가른다는 사실이 지금 어느 절에도 없다.
