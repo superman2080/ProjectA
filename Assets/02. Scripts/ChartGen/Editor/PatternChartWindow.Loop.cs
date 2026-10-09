@@ -71,6 +71,12 @@ namespace ChartGen
         /// <summary>루프 길이가 마디 정수배에서 벗어나도 봐줄 오차(초).</summary>
         private const float LoopToleranceSeconds = 0.015f;
 
+        /// <summary>씬 <c>EnemyDirector.maxAliveEnemies</c>의 기본값 복제. 툴은 씬을 모른다(<see cref="WarnEngagedCapacity"/>).</summary>
+        private const int AssumedMaxAlive = 10;
+
+        /// <summary>씬 <c>EnemyDirector.engageSlotCount</c>의 기본값 복제.</summary>
+        private const int AssumedEngageSlots = 3;
+
         private bool IsLoopMode => mode == ChartAuthoring.Loop;
 
         private int StepsPerBar => Mathf.Max(beatsPerBar, 1) * Mathf.Max(stepsPerBeat, 1);
@@ -525,8 +531,9 @@ namespace ChartGen
                 else attack++;
             }
 
-            // 이 무대에 설 적 수 = 처치 수의 합(EnemyDirector.PrepareStage가 같은 값을 받는다).
-            // ⚠ 라벨이 "killOnSuccess N"이 아니라 "적 N명"인 이유: 한 엔트리가 여럿을 죽이게 되면 둘이 갈라진다.
+            // 이 채보의 <b>총원</b> = 처치 수의 합(EnemyDirector.PrepareStage가 같은 값을 받는다).
+            // ⚠ "동시 인원"이 아니다 — 그쪽은 씬의 maxAliveEnemies가 정하고 나머지는 처치마다 보충된다.
+            // ⚠ 라벨이 "killOnSuccess N"이 아닌 이유: 한 엔트리가 여럿을 죽이게 되면 둘이 갈라진다.
             int enemies = KillCount();
 
             float lastInput = drafts.Count > 0 ? drafts.Max(d => d.onsetTimes != null && d.onsetTimes.Length > 0 ? d.onsetTimes[^1] : 0f) : 0f;
@@ -539,22 +546,54 @@ namespace ChartGen
             string gapPart = drafts.Count > 1 ? $" · 최소 간격 {MinObservedGap():F2}s" : string.Empty;
 
             EditorGUILayout.LabelField(
-                $"패턴 {drafts.Count}개 (재시도 {attack} · 통과 {pass}) · 적 {enemies}명 · 마지막 판정 {FormatTime(lastInput)} / 곡 {FormatTime(songLength)}" +
+                $"패턴 {drafts.Count}개 (재시도 {attack} · 통과 {pass}) · 총 {enemies}명 · 마지막 판정 {FormatTime(lastInput)} / 곡 {FormatTime(songLength)}" +
                 $" · 꼬리 {Mathf.Max(songLength - lastInput, 0f):F1}초{barsPart}{gapPart}",
                 EditorStyles.miniBoldLabel);
         }
 
         /// <summary>
-        /// 이 채보가 죽이는 적의 수. <c>EnemyDirector.PrepareStage</c>가 세울 인원과 <b>같은 식</b>이어야 한다
-        /// (<c>ChartPlayer.CountKills</c>) — 다르면 툴이 거짓말을 한다.
+        /// 이 채보가 죽이는 적의 <b>총수</b>. <c>ChartPlayer.CountKills</c>와 <b>같은 식</b>이어야 한다 —
+        /// 다르면 툴이 거짓말을 한다.
         /// </summary>
         private int KillCount()
         {
             int total = 0;
             foreach (var d in drafts)
-                total += d.enemyCue.killOnSuccess ? 1 : 0;
+            {
+                if (!d.enemyCue.killOnSuccess) continue;
+
+                // 처치 엔트리 하나가 그 패턴의 교전 인원만큼 죽인다(ChartPlayer.CountKills와 같은 식이어야 한다).
+                total += d.template != null ? d.template.EngagedCount : 1;
+            }
 
             return total;
+        }
+
+        /// <summary>
+        /// 교전 인원이 씬의 동시 인원 상한을 넘보는지 경고한다.
+        ///
+        /// <para><b>⚠ 툴은 씬 값을 모른다</b>(짝 에디터가 <c>DuelBaseDistance</c>를 읽는 것과 달리 여기는
+        /// 씬을 열지 않는다) → <b>기본값을 복제해 두고 가정한 숫자를 메시지에 찍는다</b> —
+        /// <c>MinEntryGap</c>·<c>chainKillRatio</c>가 이미 쓰는 방식이고, 어긋남을 눈으로 보게 하는 유일한 방어다.</para>
+        ///
+        /// <para>런타임은 모자라면 상한을 <b>끌어올리고</b> 경고를 찍으므로(<c>EnemyDirector.ResolveMaxAlive</c>)
+        /// 전투가 깨지지는 않는다. 여기서 막지 않는 이유가 그것이다.</para>
+        /// </summary>
+        private void WarnEngagedCapacity()
+        {
+            int max = 1;
+            foreach (var d in drafts)
+            {
+                if (d.template == null) continue;
+                max = Mathf.Max(max, d.template.EngagedCount);
+            }
+
+            if (max + AssumedEngageSlots <= AssumedMaxAlive) return;
+
+            Report(
+                $"[PatternChartWindow] 최대 교전 인원이 {max}명입니다 - 씬의 동시 인원(가정 {AssumedMaxAlive}) + " +
+                $"대기 자리(가정 {AssumedEngageSlots})로는 모자라 런타임이 상한을 {max + AssumedEngageSlots}으로 끌어올립니다. " +
+                "의도한 인원이면 EnemyDirector.maxAliveEnemies를 그만큼 올려 두세요.");
         }
 
         private static string FormatTime(float seconds) => $"{(int)(seconds / 60f)}:{seconds % 60f:00.0}";
@@ -621,10 +660,23 @@ namespace ChartGen
                 return false;
             }
 
+            // 1-c) 마지막 일격에 벨 적이 모자라면 안 된다.
+            //   적 총원은 처치 수의 합이고 동시 인원은 씬이 정하지만(docs/CombatLegibility),
+            //   <b>마지막 엔트리가 상대하는 수보다 총원이 적으면</b> 그 일격에 벨 대상이 구조적으로 없다.
+            int lastEngaged = last.template != null ? last.template.EngagedCount : 1;
+            if (KillCount() < lastEngaged)
+            {
+                Debug.LogError(
+                    $"[PatternChartWindow] 적 총원({KillCount()})이 마지막 엔트리의 교전 인원({lastEngaged})보다 적습니다 - " +
+                    "마지막 일격에 벨 적이 모자랍니다. 처치 엔트리를 늘리거나 마지막 패턴의 배치를 줄이세요.");
+                return false;
+            }
+
             // 2~3) 간격과 큐 깊이. ⚠ 차단은 Loop 저작에서만이다 — 아래 CheckSpacing 주석 참조.
             if (!CheckSpacing() && IsLoopMode) return false;
 
-            // 4~5) 경고만. 저장은 막지 않는다.
+            // 4~6) 경고만. 저장은 막지 않는다.
+            WarnEngagedCapacity();
             WarnLoopLength();
             WarnNegativeSpawn();
             return true;

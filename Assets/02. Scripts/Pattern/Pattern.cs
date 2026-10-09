@@ -89,6 +89,16 @@ namespace PatternSpace
                  "저작은 Tools/Animation Clip Trimmer. 구동 구간은 플레이어 클립 재생 구간이다.")]
         [SerializeField] private AnimationCurve duelDistanceCurve = new AnimationCurve();
 
+        [Tooltip("패턴 진행 중 플레이어 높이(m). 키 시간 = 임팩트 기준 상대초(간격 커브와 같은 축), 값 = 지면 기준 절대 높이.\n" +
+                 "비우면 0(지면)이라 기존 동작 그대로다. 저작은 Tools/Animation Clip Trimmer.\n" +
+                 "⚠ 적 높이가 아니다 - 움직이는 것은 플레이어뿐이고 무대 원 안은 평면이다.")]
+        [SerializeField] private AnimationCurve duelHeightCurve = new AnimationCurve();
+
+        [Tooltip("이 패턴이 상대하는 적들이 설 자리. <b>리스트 길이가 곧 교전 인원이다.</b>\n" +
+                 "좌표는 임팩트 시점 플레이어를 원점으로 한 결투 축 로컬 평면(m) - y = 앞, x = 오른쪽.\n" +
+                 "⚠ 비우면 마주보고 한 명(예전 경로). 저작은 Tools/Animation Clip Trimmer의 배치 패드.")]
+        [SerializeField] private List<Vector2> engageOffsets = new List<Vector2>();
+
         [Header("Mash (연타)")]
         [Tooltip("연타 패턴인가. 켜면 아무 노드나 눌러 타수를 채우는 구간이 된다(노드 순서를 보지 않는다).\n" +
                  "⚠ patternDatas는 정확히 1칸이어야 한다 — 그 자리가 게이지(포커스 링)가 앉는 곳이다.\n" +
@@ -243,6 +253,23 @@ namespace PatternSpace
         /// </summary>
         public float MashInputDeadlineLead => ClipSequence.AuthoredImpactSpan(playerAttack);
 
+        /// <summary>
+        /// 플레이어의 클립 시퀀스가 <b>임팩트보다 얼마나 먼저 시작하는가</b>(저작 초).
+        /// <c>CharacterActionPlayer</c>의 <c>pendingScheduleStart</c>를 역산하는 것과 같은 값이다.
+        ///
+        /// <para><b>결투 도착 마감이 이 값을 읽어야 한다.</b> <c>EnemyDirector</c>는 원래 <b>적 클립</b>으로만
+        /// 마감을 잡는데, <c>Attacker.Player</c> 패턴에는 그 클립이 없어 마감이 임팩트 그 자체가 된다 —
+        /// 그러면 플레이어가 <b>자기 와인드업이 도는 내내 미끄러진다</b>(애니메이션 도중 다음 적에게 접근).
+        /// 커브를 든 패턴만 우연히 멀쩡했던 것은 <c>BuildDuelPlan</c>이 <c>DuelCurveStartTime</c>으로
+        /// 마감을 따로 앞당기기 때문이다.</para>
+        ///
+        /// <para><b>저작 필드를 만들지 않는다</b> — 와인드업은 이미 슬롯의 트림·임팩트·배속과 리드인에 들어 있다
+        /// (<see cref="MashInputDeadlineLead"/>와 같은 관용구). 슬롯이 비면 0이라 <b>무연출 패턴은 예전 동작</b>이다.</para>
+        /// </summary>
+        public float PlayerSwingLead => ClipSequence.AuthoredSpan(
+            playerLeadInClips,
+            attacker == EnemySpace.Attacker.Enemy ? playerParry : playerAttack);
+
         /// <summary>재생할 리드인 원소가 하나라도 있는가. 없으면 예전의 단일 클립 경로와 완전히 같다.</summary>
         public bool HasLeadInClips
         {
@@ -320,6 +347,32 @@ namespace PatternSpace
         /// 값은 <b>절대 간격(m)</b>이다. 비어 있으면 상수 경로(<see cref="DuelDistanceOffset"/>)를 쓴다.
         /// </summary>
         public AnimationCurve DuelDistanceCurve => duelDistanceCurve;
+
+        /// <summary>
+        /// 패턴 진행 중 플레이어 높이 커브. <b>간격 커브와 같은 축·같은 시계</b>를 쓴다(임팩트 기준 상대초).
+        /// 비우면 지면(0)이라 기존 동작 그대로다.
+        /// </summary>
+        public AnimationCurve DuelHeightCurve => duelHeightCurve;
+
+        /// <summary>이 커브가 높이를 시간 함수로 그리는가. 없으면 지면에 붙어 있다.</summary>
+        public bool HasDuelHeightCurve => DuelGap.Has(duelHeightCurve);
+
+        /// <summary><paramref name="relTime"/>(임팩트 기준 상대초)에서의 높이(m). 커브가 없으면 0.</summary>
+        public float DuelHeightAt(float relTime) => DuelGap.HeightAt(duelHeightCurve, relTime);
+
+        /// <summary>
+        /// 이 패턴이 상대하는 적들의 자리(임팩트 시점 플레이어 기준 결투 축 로컬 평면, m).
+        /// <b>비어 있으면 마주보고 한 명</b>이고 그것이 기존 동작이다.
+        /// </summary>
+        public IReadOnlyList<Vector2> EngageOffsets => engageOffsets;
+
+        /// <summary>
+        /// 이 패턴이 <b>동시에 상대하는 적 수</b>. <b>배치 리스트의 길이가 곧 인원이다</b>(최소 1) —
+        /// 인원을 별도 필드로 들면 "인원 3인데 오프셋 2개"라는 어긋난 조합이 표현 가능해진다.
+        ///
+        /// <para><c>ChartPlayer</c>가 총원(처치 수의 합)과 동시 인원 하한을 여기서 센다(docs/CombatLegibility).</para>
+        /// </summary>
+        public int EngagedCount => EngageSlots.CountOf(engageOffsets);
 
         /// <summary>이 패턴이 시간 함수로 간격을 그리는가. 비면 예전 상수 경로다.</summary>
         public bool HasDuelDistanceCurve => DuelGap.Has(duelDistanceCurve);
@@ -431,6 +484,7 @@ namespace PatternSpace
             enemyFeint?.ValidateImpactTime(this, "EnemyFeint");
             ValidateLeadInClips();
             ValidateMash();
+            ValidateEngageOffsets();
             WarnUnusedSlots();
             ValidateEffectCues();
 #endif
@@ -563,6 +617,23 @@ namespace PatternSpace
         /// 이 패턴의 역할에서 <b>절대 재생되지 않을 슬롯</b>에 클립이 배선돼 있으면 경고한다.
         /// 인스펙터가 그 슬롯을 숨기므로, 이관 후 남은 찌꺼기를 찾을 유일한 장치다.
         /// </summary>
+        /// <summary>
+        /// 배치 검증. <b>연타와 다수 상대는 같이 쓸 수 없다</b> —
+        /// 연타는 "아무 노드나 눌러 타수를 채우는" 단일 상대 구간이고(CLAUDE.md 2-1)
+        /// <c>PlayMashReaction</c>이 현재 상대 <b>하나</b>를 젖힌다. 허용하면 그 경로가 조용히 하나만 반응한다.
+        ///
+        /// <para><b>표현 불가능하게 막는 쪽이 싸다</b> — 그래서 "연타로 주변을 쓸기"는 다수 상대의 용례에서 빠진다
+        /// (남는 용례는 광역 베기와 사슬 중 둘이 덤빔이다, docs/PatternMultiTarget).</para>
+        /// </summary>
+        private void ValidateEngageOffsets()
+        {
+            if (!isMash || EngagedCount <= 1) return;
+
+            Debug.LogError(
+                $"[Pattern] '{name}'은 연타인데 교전 배치가 {EngagedCount}개입니다 - " +
+                "연타는 단일 상대 전용입니다(타격 리액션이 현재 상대 하나만 젖힙니다). 배치를 비우세요.", this);
+        }
+
         private void WarnUnusedSlots()
         {
             bool enemyIsAttacker = attacker == EnemySpace.Attacker.Enemy;

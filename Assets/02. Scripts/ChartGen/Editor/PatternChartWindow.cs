@@ -860,6 +860,11 @@ namespace ChartGen
             if (!unassigned)
                 label += draft.template.HitsOnFail ? "   통과(실패 시 피격)" : "   재시도(실패 시 다시)";
 
+            // 동시 인원 뱃지 — 인원은 패턴이 들지만(배치 리스트 길이) 총원 셈과 저장 검증이 이 값을 보므로
+            // 채보 화면에서 읽혀야 한다(docs/PatternMultiTarget).
+            if (!unassigned && draft.template.EngagedCount > 1)
+                label += $"   동시 {draft.template.EngagedCount}명";
+
             // 사슬 뱃지 — 엔트리가 수백 개라 토글 하나만 보고는 몇 번째 타인지 셀 수 없다.
             // ⚠ chainKillRatio는 더 이상 쓰이지 않는다: 사슬 전체가 되감기므로 모든 타가 결국 성공한다(§9).
             var chain = ChainInfoAt(index);
@@ -1015,6 +1020,11 @@ namespace ChartGen
                 EditorGUILayout.FloatField(
                     new GUIContent("결투 거리 보정", "패턴 에셋(짝 에디터)에서 편집. 이 모션의 리치에 맞춘 ±m."),
                     template != null ? template.DuelDistanceOffset : 0f);
+                EditorGUILayout.IntField(
+                    new GUIContent("교전 인원",
+                        "패턴 에셋(짝 에디터의 배치 패드)에서 편집. 배치 리스트의 길이가 곧 인원이다.\n" +
+                        "처치 엔트리는 이 수만큼 죽이므로 총원 셈이 이 값을 읽는다."),
+                    template != null ? template.EngagedCount : 1);
             }
 
             if (template != null)

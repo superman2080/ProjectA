@@ -194,7 +194,39 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// <summary>기준 거리를 씬 앵커에서 읽었는가. 못 읽으면 수동 입력이 그대로 산다.</summary>
     private bool duelBaseFromScene;
 
+    /// <summary>높이 커브(창의 것이 진실의 원천 — 저장 전 상태를 프리뷰에 반영한다).</summary>
+    private AnimationCurve duelHeightCurve = new AnimationCurve();
+
+    /// <summary>
+    /// 이 패턴이 상대하는 적들의 자리(임팩트 시점 플레이어 기준 결투 축 로컬 평면, m).
+    /// <b>길이가 곧 교전 인원이다</b> — 비어 있으면 마주보고 한 명(예전 동작).
+    /// </summary>
+    private readonly List<Vector2> engageOffsets = new List<Vector2>();
+
+    /// <summary>
+    /// 적 2..N의 <b>프리뷰 전용</b> 몸. 클립은 전원이 공유하므로(A안, docs/PatternMultiTarget)
+    /// 저작 상태(<see cref="Actor"/>)를 늘리지 않고 <b>몸만</b> 늘린다.
+    /// </summary>
+    private readonly List<GameObject> enemyMirrors = new List<GameObject>();
+
+    /// <summary>적마다의 칼–몸 간격(m). 음수 = 관통(닿았다). 인덱스가 <see cref="engageOffsets"/>와 짝이다.</summary>
+    private readonly List<float> mirrorGaps = new List<float>();
+
+    /// <summary>배치 패드에서 지금 끌고 있는 점. -1이면 없음.</summary>
+    private int padDragIndex = -1;
+
     private bool HasCurve => duelDistanceCurve != null && duelDistanceCurve.length > 0;
+
+    private bool HasHeightCurve => duelHeightCurve != null && duelHeightCurve.length > 0;
+
+    /// <summary>이 패턴이 동시에 상대하는 적 수. <b>배치 리스트의 길이가 곧 인원이다.</b></summary>
+    private int EngagedCount => EngageSlots.CountOf(engageOffsets);
+
+    /// <summary>
+    /// <paramref name="time"/>에서의 플레이어 높이(m, 지면 기준). <b>런타임 <see cref="DuelGap.HeightAt"/>과 같은 식</b>이며
+    /// 커브만 창의 것을 쓴다 — 저장 전에도 프리뷰가 편집 중인 값을 보여 줘야 한다.
+    /// </summary>
+    private float HeightAt(float time) => DuelGap.HeightAt(duelHeightCurve, time);
 
     /// <summary>임팩트 시점(t = 0)의 간격. 적 배치와 카메라 폴백이 이 값을 쓴다.</summary>
     private float DuelDistance => GapAt(0f);
@@ -219,6 +251,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
         EditorApplication.update -= OnEditorUpdate;
         DestroyInstance(player);
         DestroyInstance(enemy);
+        DestroyMirrors();
         previewUtil?.Cleanup();
         previewUtil = null;
     }
@@ -550,12 +583,309 @@ public class AnimationClipTrimmerWindow : EditorWindow
             EditorStyles.miniLabel);
 
         DrawDuelCurve();
+        DrawHeightCurve();
+        DrawEngagePad();
 
         lockRootPosition = EditorGUILayout.Toggle(
             new GUIContent("루트 위치 고정", "루트 모션이 배우를 밀어내면 프레임마다 거리가 변해 배치 확인이 무의미해진다."),
             lockRootPosition);
 
         EditorGUILayout.Space();
+    }
+
+    /// <summary>배치 패드의 높이(px). 무대 반경이 아니라 <b>결투 근방</b>만 보여 준다.</summary>
+    private const float PadHeight = 190f;
+
+    /// <summary>패드에서 점을 집을 수 있는 반경(px).</summary>
+    private const float PadGrabRadius = 12f;
+
+    /// <summary>
+    /// <b>배치 패드</b> — 적들이 설 자리를 평면도에서 끌어 저작한다.
+    ///
+    /// <para><b>⚠ 씬 뷰 핸들을 쓸 수 없다.</b> 이 창의 프리뷰는 <see cref="PreviewRenderUtility"/>(창 안 오프스크린)이고
+    /// 배우 인스턴스는 <c>HideAndDontSave</c>라 <b>씬에 없다</b>. 시퀀스 저작이 <c>Handles.PositionHandle</c>을
+    /// 쓰는 것은 러너가 씬 오브젝트이기 때문이라 그 관용구를 여기로 옮길 수 없다(docs/PatternMultiTarget).</para>
+    ///
+    /// <para>좌표가 <c>Vector2</c>(결투 축 로컬 평면)라 <b>평면도 하나로 저작이 완결된다</b> — 3D 피킹 수학이 없다.</para>
+    /// </summary>
+    private void DrawEngagePad()
+    {
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField(
+            engageOffsets.Count == 0
+                ? "교전 배치 — 비어 있음 (마주보고 한 명)"
+                : $"교전 배치 — {EngagedCount}명",
+            EditorStyles.boldLabel);
+
+        Rect rect = GUILayoutUtility.GetRect(10f, PadHeight, GUILayout.ExpandWidth(true));
+        DrawPad(rect);
+        HandlePadInput(rect);
+
+        DrawEngageRows();
+    }
+
+    /// <summary>패드 평면도. 플레이어가 중앙 아래, 결투 축(앞)이 위쪽이다.</summary>
+    private void DrawPad(Rect rect)
+    {
+        EditorGUI.DrawRect(rect, new Color(0.16f, 0.16f, 0.18f));
+
+        Vector2 origin = PadOrigin(rect);
+        float scale = PadScale(rect);
+
+        Handles.BeginGUI();
+
+        // 1m 격자 — 저작한 자리가 리치 안인지 눈으로 보는 기준이다.
+        Handles.color = new Color(1f, 1f, 1f, 0.07f);
+        for (float m = -8f; m <= 8f; m += 1f)
+        {
+            float x = origin.x + m * scale;
+            if (x > rect.xMin && x < rect.xMax)
+                Handles.DrawLine(new Vector3(x, rect.yMin), new Vector3(x, rect.yMax));
+
+            float y = origin.y - m * scale;
+            if (y > rect.yMin && y < rect.yMax)
+                Handles.DrawLine(new Vector3(rect.xMin, y), new Vector3(rect.xMax, y));
+        }
+
+        // 임팩트 간격 원 — 거리 커브가 정한 t=0의 간격이다. 이 원 위에 있으면 마주보기와 같은 거리다.
+        Handles.color = new Color(0.4f, 0.7f, 1f, 0.5f);
+        DrawPadCircle(origin, DuelDistance * scale);
+
+        Handles.color = new Color(0.4f, 0.8f, 1f, 1f);
+        DrawPadCircle(origin, 6f);
+        Handles.Label(origin + new Vector2(8f, -4f), "플레이어", EditorStyles.miniLabel);
+
+        // 칼날 선분(지금 t의 실제 칼) — "칼 한 번이 셋에 다 닿는가"를 재는 기준이다.
+        if (TryBladeSegment(out Vector3 bladeFrom, out Vector3 bladeTo))
+        {
+            Handles.color = new Color(1f, 0.95f, 0.5f, 0.9f);
+            Handles.DrawLine(PadPoint(origin, scale, bladeFrom), PadPoint(origin, scale, bladeTo));
+        }
+
+        float impactGap = DuelDistance;
+        bool authored = engageOffsets.Count > 0;
+
+        for (int i = 0; i < EngagedCount; i++)
+        {
+            Vector2 point = PadPoint(origin, scale, SlotOf(i, impactGap));
+
+            // 닿지 않는 적은 빨갛다. 막지는 않는다 — 스치는 연출이 의도일 수 있다.
+            bool reaching = i < mirrorGaps.Count && !float.IsNaN(mirrorGaps[i]) && mirrorGaps[i] < 0f;
+
+            Handles.color = !authored
+                ? new Color(0.6f, 0.6f, 0.6f, 0.8f)
+                : reaching ? new Color(0.4f, 0.9f, 0.5f, 1f) : new Color(1f, 0.45f, 0.4f, 1f);
+
+            DrawPadCircle(point, 7f);
+            Handles.Label(point + new Vector2(9f, -4f), authored ? i.ToString() : "기본", EditorStyles.miniLabel);
+        }
+
+        Handles.EndGUI();
+
+        EditorGUI.LabelField(
+            new Rect(rect.xMin + 6f, rect.yMin + 4f, rect.width - 12f, 16f),
+            "위 = 결투 축(앞) · 격자 1m · 초록 = 칼이 닿음 / 빨강 = 안 닿음",
+            EditorStyles.miniLabel);
+    }
+
+    /// <summary>패드에서 점을 끌어 오프셋을 고친다. 드래그는 대략, 아래 숫자 필드는 정확.</summary>
+    private void HandlePadInput(Rect rect)
+    {
+        if (engageOffsets.Count == 0) return; // 저작 전에는 읽기 전용(기본 자리만 보여 준다)
+
+        Vector2 origin = PadOrigin(rect);
+        float scale = PadScale(rect);
+        var e = Event.current;
+
+        if (e.type == EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
+        {
+            padDragIndex = -1;
+            float best = PadGrabRadius;
+
+            for (int i = 0; i < engageOffsets.Count; i++)
+            {
+                float distance = Vector2.Distance(PadPoint(origin, scale, SlotOf(i, DuelDistance)), e.mousePosition);
+                if (distance > best) continue;
+
+                best = distance;
+                padDragIndex = i;
+            }
+
+            if (padDragIndex >= 0) e.Use();
+        }
+        else if (e.type == EventType.MouseDrag && padDragIndex >= 0)
+        {
+            Vector2 local = (e.mousePosition - origin) / scale;
+
+            // 화면 y는 아래로 증가하고 결투 축은 위로 간다 — 부호를 뒤집는다.
+            engageOffsets[padDragIndex] = new Vector2(local.x, -local.y);
+            Repaint();
+            e.Use();
+        }
+        else if (e.type == EventType.MouseUp && padDragIndex >= 0)
+        {
+            padDragIndex = -1;
+            e.Use();
+        }
+    }
+
+    /// <summary>적마다 숫자 필드 한 줄 + 추가·삭제·순서 이동. <b>순서가 곧 적 인덱스다.</b></summary>
+    private void DrawEngageRows()
+    {
+        for (int i = 0; i < engageOffsets.Count; i++)
+        {
+            EditorGUILayout.BeginHorizontal();
+
+            string gapText = i < mirrorGaps.Count && !float.IsNaN(mirrorGaps[i])
+                ? $"{mirrorGaps[i]:+0.00;-0.00;0.00}m"
+                : "—";
+
+            EditorGUILayout.LabelField($"적 {i}", GUILayout.Width(40f));
+            engageOffsets[i] = EditorGUILayout.Vector2Field(GUIContent.none, engageOffsets[i]);
+            EditorGUILayout.LabelField(gapText, EditorStyles.miniLabel, GUILayout.Width(60f));
+
+            bool moveUp = false, moveDown = false, remove = false;
+
+            using (new EditorGUI.DisabledScope(i == 0))
+                moveUp = GUILayout.Button("▲", GUILayout.Width(26f));
+
+            using (new EditorGUI.DisabledScope(i == engageOffsets.Count - 1))
+                moveDown = GUILayout.Button("▼", GUILayout.Width(26f));
+
+            remove = GUILayout.Button("삭제", GUILayout.Width(50f));
+
+            EditorGUILayout.EndHorizontal();
+
+            // 리스트를 그리는 도중에 바꾸면 이 프레임의 나머지 행이 어긋난다 — 그려낸 뒤에 적용하고 나간다.
+            if (moveUp) { SwapOffsets(i, i - 1); break; }
+            if (moveDown) { SwapOffsets(i, i + 1); break; }
+            if (remove) { engageOffsets.RemoveAt(i); break; }
+        }
+
+        EditorGUILayout.BeginHorizontal();
+
+        if (GUILayout.Button("+ 적 추가", GUILayout.Width(90f)))
+        {
+            // 첫 원소는 마주보는 그 자리여야 한다 — 저작을 시작하는 순간 그림이 바뀌면 안 된다.
+            engageOffsets.Add(engageOffsets.Count == 0
+                ? EngageSlots.DefaultOffset(DuelDistance)
+                : engageOffsets[engageOffsets.Count - 1] + new Vector2(1f, 0f));
+        }
+
+        using (new EditorGUI.DisabledScope(engageOffsets.Count == 0))
+            if (GUILayout.Button("배치 비우기", GUILayout.Width(100f))) engageOffsets.Clear();
+
+        EditorGUILayout.LabelField(
+            engageOffsets.Count == 0
+                ? "비우면 마주보고 한 명 — 예전 동작이다"
+                : "리스트 길이가 곧 교전 인원이다",
+            EditorStyles.miniLabel);
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    private void SwapOffsets(int a, int b)
+    {
+        Vector2 held = engageOffsets[a];
+        engageOffsets[a] = engageOffsets[b];
+        engageOffsets[b] = held;
+    }
+
+    /// <summary>패드에서 플레이어(원점)가 놓이는 자리. 앞쪽(위)에 공간을 더 준다.</summary>
+    private static Vector2 PadOrigin(Rect rect) => new Vector2(rect.center.x, rect.yMax - 40f);
+
+    /// <summary>패드의 한 미터당 픽셀. 가장 먼 적과 임팩트 간격이 화면에 남도록 맞춘다.</summary>
+    private float PadScale(Rect rect)
+    {
+        float span = Mathf.Max(DuelDistance, 1f);
+        foreach (var offset in engageOffsets)
+            span = Mathf.Max(span, Mathf.Abs(offset.x), Mathf.Abs(offset.y));
+
+        span = Mathf.Max(span, 0.5f);
+
+        return Mathf.Min((rect.height - 60f) / span, rect.width * 0.45f / span);
+    }
+
+    /// <summary>프리뷰 공간의 자리를 패드 좌표로. 결투 축(+Z)이 위쪽이다.</summary>
+    private static Vector2 PadPoint(Vector2 origin, float scale, Vector3 slot) =>
+        new Vector2(origin.x + slot.x * scale, origin.y - slot.z * scale);
+
+    private static void DrawPadCircle(Vector2 center, float radius)
+    {
+        const int Segments = 24;
+        Vector3 previous = center + new Vector2(radius, 0f);
+
+        for (int i = 1; i <= Segments; i++)
+        {
+            float angle = i * Mathf.PI * 2f / Segments;
+            Vector3 next = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+            Handles.DrawLine(previous, next);
+            previous = next;
+        }
+    }
+
+    /// <summary>
+    /// 지금 <c>t</c>의 칼날 선분(프리뷰 공간). 프리뷰 인스턴스가 없으면 false.
+    /// <b>최장 축이 날 길이라는 규칙은 <c>BladePath</c>·<c>MeshSliceBakerWindow.SampleWeapon</c>과 같다.</b>
+    /// </summary>
+    private bool TryBladeSegment(out Vector3 from, out Vector3 to)
+    {
+        from = to = Vector3.zero;
+        if (player.instance == null) return false;
+
+        Transform weapon = FindDeep(player.instance.transform, WeaponBoneName);
+        var bladeRenderer = weapon != null ? weapon.GetComponentInChildren<Renderer>() : null;
+        if (bladeRenderer == null) return false;
+
+        Bounds bounds = bladeRenderer.bounds;
+        Vector3 extents = bounds.extents;
+
+        Vector3 axis = extents.x >= extents.y && extents.x >= extents.z
+            ? Vector3.right
+            : extents.y >= extents.z ? Vector3.up : Vector3.forward;
+
+        float half = Vector3.Scale(extents, axis).magnitude;
+        from = bounds.center - axis * half;
+        to = bounds.center + axis * half;
+        return true;
+    }
+
+    /// <summary>
+    /// 높이 커브 저작 줄. <b>거리 커브와 같은 축·같은 시계</b>라 필드 하나만 얹으면 된다 —
+    /// 새 저작 화면이 0개다(docs/PatternMultiTarget).
+    /// </summary>
+    private void DrawHeightCurve()
+    {
+        EditorGUI.BeginChangeCheck();
+        duelHeightCurve = EditorGUILayout.CurveField(
+            new GUIContent("높이 커브",
+                "키 시간 = 임팩트 기준 상대초(거리 커브와 같은 축), 값 = 지면 기준 절대 높이(m).\n" +
+                "비우면 0 = 지면이라 기존 동작 그대로다. 도약·낙하 참격이 이 커브로 표현된다.\n" +
+                "⚠ 적 높이가 아니다 - 움직이는 것은 플레이어뿐이다."),
+            duelHeightCurve);
+        if (EditorGUI.EndChangeCheck()) Repaint();
+
+        if (!HasHeightCurve)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(" ", "커브 없음 — 지면(0m)", EditorStyles.miniLabel);
+
+            if (GUILayout.Button("+ 커브 만들기", GUILayout.Width(110f)))
+            {
+                // 지면에서 시작해 지면으로 끝난다 — 만들자마자 그림이 바뀌면 무엇이 바뀐 건지 알 수 없다.
+                duelHeightCurve = AnimationCurve.Linear(CurveDriveStart, 0f, 0f, 0f);
+            }
+            EditorGUILayout.EndHorizontal();
+            return;
+        }
+
+        EditorGUILayout.LabelField(" ",
+            $"높이 t={t:+0.00;-0.00;0.00}s : {HeightAt(t):0.00}m" +
+            (Mathf.Abs(duelHeightCurve[duelHeightCurve.length - 1].value) > 0.01f
+                ? "   ⚠ 끝 키가 지면이 아니다 — 착지가 안 되면 발이 떠 있다"
+                : string.Empty),
+            EditorStyles.miniLabel);
     }
 
     /// <summary>
@@ -743,6 +1073,15 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
         duelDistanceOffset = so.FindProperty("duelDistanceOffset")?.floatValue ?? 0f;
         duelDistanceCurve = so.FindProperty("duelDistanceCurve")?.animationCurveValue ?? new AnimationCurve();
+        duelHeightCurve = so.FindProperty("duelHeightCurve")?.animationCurveValue ?? new AnimationCurve();
+
+        engageOffsets.Clear();
+        var offsetsProp = so.FindProperty("engageOffsets");
+        if (offsetsProp != null)
+        {
+            for (int i = 0; i < offsetsProp.arraySize; i++)
+                engageOffsets.Add(offsetsProp.GetArrayElementAtIndex(i).vector2Value);
+        }
         PullDuelBaseFromScene();
         t = 0f;
     }
@@ -801,9 +1140,11 @@ public class AnimationClipTrimmerWindow : EditorWindow
         PlaceActors();
         EnsureInstance(player);
         EnsureInstance(enemy);
+        EnsureMirrors();
         PoseActor(player, player);
         PoseActor(enemy, ActiveEnemyActor()); // 리그는 적 하나, 모션만 시간으로 갈린다
-        bladeGap = MeasureBladeGap();
+        PoseMirrors();
+        MeasureBladeGaps();
 
         previewUtil.BeginPreview(rect, GUIStyle.none);
         SetupCameraAndLights();
@@ -842,10 +1183,31 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         float impactGap = DuelDistance;
 
-        player.placement = Vector3.forward * (impactGap - GapAt(t));
+        // 원점 = 임팩트 시점의 플레이어 위치. EngageSlots의 기준점 정의가 그것이라 프리뷰 좌표가 그대로 맞는다.
+        player.placement = Vector3.forward * (impactGap - GapAt(t)) + Vector3.up * HeightAt(t);
         player.facing = Quaternion.identity;
-        enemy.placement = Vector3.forward * impactGap;
-        enemy.facing = Quaternion.Euler(0f, 180f, 0f);
+
+        // 적 0번은 저작 상태를 가진 배우가 맡고, 나머지는 프리뷰 전용 몸(미러)이 맡는다.
+        enemy.placement = SlotOf(0, impactGap);
+        enemy.facing = FacingAt(enemy.placement);
+    }
+
+    /// <summary>
+    /// 적 <paramref name="index"/>의 프리뷰 자리. <b>런타임과 같은 함수를 부른다</b>
+    /// (<see cref="EngageSlots.Resolve"/>) — 식이 두 곳에 적히면 프리뷰와 게임이 조용히 갈라진다.
+    /// </summary>
+    private Vector3 SlotOf(int index, float fallbackGap) =>
+        EngageSlots.Resolve(engageOffsets, index, Vector3.zero, Vector3.forward, fallbackGap);
+
+    /// <summary>그 자리에서 플레이어(원점)를 바라보는 회전. 배치가 부채꼴이면 적마다 각도가 다르다.</summary>
+    private static Quaternion FacingAt(Vector3 slot)
+    {
+        Vector3 toPlayer = -slot;
+        toPlayer.y = 0f;
+
+        return toPlayer.sqrMagnitude < 1e-6f
+            ? Quaternion.Euler(0f, 180f, 0f)
+            : Quaternion.LookRotation(toPlayer);
     }
 
     private void EnsureInstance(Actor actor)
@@ -859,6 +1221,68 @@ public class AnimationClipTrimmerWindow : EditorWindow
         actor.instance.hideFlags = HideFlags.HideAndDontSave;
         previewUtil.AddSingleGO(actor.instance);
         actor.cachedPrefab = actor.prefab;
+    }
+
+    /// <summary>
+    /// 적 2..N의 프리뷰 몸을 인원에 맞춘다. <b>저작 상태를 늘리지 않는다</b> —
+    /// 클립은 전원이 공유하므로(A안) 필요한 것은 몸뿐이다.
+    ///
+    /// <para>⚠ 한때 이 창은 <b>배우를 둘로 그리지 않겠다</b>고 적어 두었다. 그 근거는 "적 한 명의 다른 시각 구간을
+    /// 시간으로 나눠 쓴다"였고 <b>인원이 1일 때는 여전히 참이다</b> — 미러는 그 한 줄 진행을 <b>그대로 복제</b>할 뿐
+    /// 새 구간을 만들지 않는다. 여럿이 서 있는 것이 이제 맞는 그림이다(docs/PatternMultiTarget).</para>
+    /// </summary>
+    private void EnsureMirrors()
+    {
+        int want = enemy.prefab == null ? 0 : EngagedCount - 1;
+
+        while (enemyMirrors.Count > want)
+        {
+            int last = enemyMirrors.Count - 1;
+            if (enemyMirrors[last] != null) DestroyImmediate(enemyMirrors[last]);
+            enemyMirrors.RemoveAt(last);
+        }
+
+        // 프리팹이 바뀌면 통째로 다시 만든다 — 미러는 상태가 없어 비교할 것이 프리팹뿐이다.
+        for (int i = 0; i < enemyMirrors.Count; i++)
+        {
+            if (enemyMirrors[i] != null) continue;
+
+            enemyMirrors[i] = Instantiate(enemy.prefab);
+            enemyMirrors[i].hideFlags = HideFlags.HideAndDontSave;
+            previewUtil.AddSingleGO(enemyMirrors[i]);
+        }
+
+        while (enemyMirrors.Count < want)
+        {
+            var go = Instantiate(enemy.prefab);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            previewUtil.AddSingleGO(go);
+            enemyMirrors.Add(go);
+        }
+    }
+
+    /// <summary>미러를 각자 자리에 세운다. 포즈는 <see cref="ActiveEnemyActor"/>의 것을 그대로 쓴다.</summary>
+    private void PoseMirrors()
+    {
+        var motion = ActiveEnemyActor();
+        float impactGap = DuelDistance;
+
+        for (int i = 0; i < enemyMirrors.Count; i++)
+        {
+            var go = enemyMirrors[i];
+            if (go == null) continue;
+
+            Vector3 slot = SlotOf(i + 1, impactGap);
+            PoseBody(go, motion, slot, FacingAt(slot));
+        }
+    }
+
+    private void DestroyMirrors()
+    {
+        foreach (var go in enemyMirrors)
+            if (go != null) DestroyImmediate(go);
+
+        enemyMirrors.Clear();
     }
 
     private static void DestroyInstance(Actor actor)
@@ -884,19 +1308,28 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         if (rig.instance == null) return;
 
-        var tr = rig.instance.transform;
+        PoseBody(rig.instance, motion, rig.placement, rig.facing);
+    }
+
+    /// <summary>
+    /// 몸 하나를 지금 <c>t</c>의 포즈로 세운다. <b>배우와 미러가 같은 경로를 쓴다</b> —
+    /// 포즈 규칙(중립 샘플링 → 배치 합성)이 두 곳에 적히면 미러만 어긋난다.
+    /// </summary>
+    private void PoseBody(GameObject body, Actor motion, Vector3 placement, Quaternion facing)
+    {
+        var tr = body.transform;
 
         // 중립에서 샘플링 — 이래야 나온 값이 순수한 루트 모션이 된다.
         tr.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-        if (motion.HasClip) motion.clip.SampleAnimation(rig.instance, motion.SampleTime(t));
+        if (motion.HasClip) motion.clip.SampleAnimation(body, motion.SampleTime(t));
 
         Quaternion rootRotation = tr.localRotation;
         Vector3 rootOffset = tr.localPosition;
 
         // 루트 모션이 배우를 밀어내면 두 배우의 거리가 프레임마다 변해 배치 확인이 무의미해진다.
         // 위치만 잠그고 회전은 살린다 — 방향 전환은 봐야 한다.
-        Vector3 position = rig.placement + (lockRootPosition ? Vector3.zero : rig.facing * rootOffset);
-        tr.SetPositionAndRotation(position, rig.facing * rootRotation);
+        Vector3 position = placement + (lockRootPosition ? Vector3.zero : facing * rootOffset);
+        tr.SetPositionAndRotation(position, facing * rootRotation);
     }
 
     private void HandlePreviewInput(Rect rect)
@@ -977,21 +1410,42 @@ public class AnimationClipTrimmerWindow : EditorWindow
     /// 칼날과 적 사이의 최단거리. <b>t=0에서 음수(관통)여야 벤 것이다</b> —
     /// 각도를 눈으로 보는 것보다 이 숫자 하나가 확실하다.
     /// </summary>
-    private float MeasureBladeGap()
+    /// <summary>
+    /// 칼–적 간격을 <b>적마다</b> 잰다. <see cref="bladeGap"/>에는 <b>가장 먼 값</b>이 들어간다 —
+    /// "칼 한 번이 셋에 다 닿는가"의 답은 <b>가장 안 닿는 적</b>이 정하기 때문이다.
+    /// </summary>
+    private void MeasureBladeGaps()
     {
-        if (player.instance == null || enemy.instance == null) return float.NaN;
+        mirrorGaps.Clear();
+        bladeGap = float.NaN;
+
+        if (player.instance == null || enemy.instance == null) return;
 
         Transform weapon = FindDeep(player.instance.transform, WeaponBoneName);
         var bladeRenderer = weapon != null ? weapon.GetComponentInChildren<Renderer>() : null;
-        if (bladeRenderer == null) return float.NaN;
+        if (bladeRenderer == null) return;
 
-        var enemyRenderers = enemy.instance.GetComponentsInChildren<Renderer>();
-        if (enemyRenderers.Length == 0) return float.NaN;
+        float worst = float.NegativeInfinity;
 
-        Bounds enemyBounds = enemyRenderers[0].bounds;
-        for (int i = 1; i < enemyRenderers.Length; i++) enemyBounds.Encapsulate(enemyRenderers[i].bounds);
+        AddGap(bladeRenderer, enemy.instance, ref worst);
+        foreach (var mirror in enemyMirrors) AddGap(bladeRenderer, mirror, ref worst);
 
-        return BoundsGap(bladeRenderer.bounds, enemyBounds);
+        if (mirrorGaps.Count > 0) bladeGap = worst;
+    }
+
+    private void AddGap(Renderer bladeRenderer, GameObject body, ref float worst)
+    {
+        if (body == null) { mirrorGaps.Add(float.NaN); return; }
+
+        var renderers = body.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0) { mirrorGaps.Add(float.NaN); return; }
+
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+
+        float gap = BoundsGap(bladeRenderer.bounds, bounds);
+        mirrorGaps.Add(gap);
+        worst = Mathf.Max(worst, gap);
     }
 
     /// <summary>AABB 두 개의 간격. 겹치면 음수(가장 얕은 축의 침투 깊이).</summary>
@@ -1461,6 +1915,17 @@ public class AnimationClipTrimmerWindow : EditorWindow
         var curveProp = so.FindProperty("duelDistanceCurve");
         if (curveProp != null) curveProp.animationCurveValue = duelDistanceCurve ?? new AnimationCurve();
 
+        var heightProp = so.FindProperty("duelHeightCurve");
+        if (heightProp != null) heightProp.animationCurveValue = duelHeightCurve ?? new AnimationCurve();
+
+        var offsetsProp = so.FindProperty("engageOffsets");
+        if (offsetsProp != null)
+        {
+            offsetsProp.arraySize = engageOffsets.Count;
+            for (int i = 0; i < engageOffsets.Count; i++)
+                offsetsProp.GetArrayElementAtIndex(i).vector2Value = engageOffsets[i];
+        }
+
         so.ApplyModifiedProperties();
         EditorUtility.SetDirty(targetPattern);
         AssetDatabase.SaveAssetIfDirty(targetPattern);
@@ -1470,7 +1935,9 @@ public class AnimationClipTrimmerWindow : EditorWindow
         Debug.Log(
             $"[PatternActionEditor] '{targetPattern.name}' 저장 — " +
             $"{Describe(player)} / {Describe(feint)} / {Describe(enemy)} / 거리보정 {duelDistanceOffset:+0.00;-0.00;0.00}m" +
-            (HasCurve ? $" / 거리커브 키 {duelDistanceCurve.length}개" : string.Empty),
+            (HasCurve ? $" / 거리커브 키 {duelDistanceCurve.length}개" : string.Empty) +
+            (HasHeightCurve ? $" / 높이커브 키 {duelHeightCurve.length}개" : string.Empty) +
+            (engageOffsets.Count > 0 ? $" / 교전 {engageOffsets.Count}명" : string.Empty),
             targetPattern);
     }
 

@@ -198,6 +198,16 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     public event Action<float, float> OnIdleWindow;
 
+    /// <summary>
+    /// 지금 액션의 <b>마무리 동작 노출이 끝나는 시각</b>(= 애니메이션이 완전히 마무리되는 시각).
+    /// 다음 교전으로의 <b>이동은 이 시각 이후에 시작한다</b>(<c>DuelPlan.PlayerDepartTime</c>) —
+    /// 그 전에 움직이면 칼을 휘두르는 채로 미끄러진다.
+    ///
+    /// <para><b>히트스톱이 밀면 이 값도 같이 밀린다</b>(<see cref="ApplyHitStop"/>이 <c>recoveryEndTime</c>을 민다) —
+    /// 예약 시점에 읽은 값보다 늦어질 수 있고, 그래서 출발 판단은 <c>PlayerCombatMover</c>가 매 프레임 다시 본다.</para>
+    /// </summary>
+    public float ActionSettleTime => recoveryEndTime;
+
     /// <summary>스윙 구간 안인지. 종료 신호가 두 경로(트림 끝 / 인터럽트)로 들어와 중복 발행되지 않게 한다.</summary>
     private bool swingActive;
 
@@ -480,6 +490,15 @@ public class CharacterActionPlayer : MonoBehaviour
     {
         if (attackLayerIndex < 0) return;
 
+        // 보류한 수렴 계획은 출발 시각(= 마무리 동작 노출 끝)에 푼다. 복귀 로직보다 먼저 돌아야
+        // SwitchBaseStateUnlessConverging이 방금 건 대시를 Idle로 되돌리지 않는다.
+        if (pendingConvergePlan.HasValue && Time.time >= pendingConvergePlan.Value.PlayerDepartTime)
+        {
+            var plan = pendingConvergePlan.Value;
+            pendingConvergePlan = null;
+            ApplyConvergeLocomotion(plan);
+        }
+
         // ⚠ 정지 중에는 아래를 하나도 통과시키지 않는다. actionEndTime 분기가 열리면
         // AttackSpeed가 1로 복원되어 캐치업이 통째로 무산된다.
         if (hitStopped)
@@ -594,6 +613,29 @@ public class CharacterActionPlayer : MonoBehaviour
     /// </summary>
     private void HandleDuelScheduled(EnemySpace.EnemyDirector.DuelPlan plan)
     {
+        // 도착할 때까지 base의 주인은 수렴이다. 복귀 로직이 매 프레임 되찾아가지 못하게 막는다.
+        // ⚠ 대시 클립보다 <b>먼저</b> 잡아 둔다 — RaiseIdleWindow(기습 창)가 이 값을 바로 읽으므로,
+        //   출발과 함께 세우면 그 사이 창이 '서 있는 시간'으로 잘못 신고된다.
+        convergeUntil = plan.PlayerArriveTime;
+
+        // ⚠ 대시는 <b>출발 시각</b>에 건다. 여기서 바로 걸면 마무리 동작을 노출하는 동안(Attack 웨이트 1)
+        //   base 레이어가 안 보이는 채로 흐르므로 <b>단발 Quickshift가 화면 밖에서 소비된다</b>.
+        if (Time.time < plan.PlayerDepartTime)
+        {
+            pendingConvergePlan = plan;
+            return;
+        }
+
+        pendingConvergePlan = null;
+        ApplyConvergeLocomotion(plan);
+    }
+
+    /// <summary>출발 시각을 기다리는 수렴 계획. 최대 하나면 된다 — 계획은 순차적이다(<c>PlayerCombatMover</c>와 같은 규율).</summary>
+    private EnemySpace.EnemyDirector.DuelPlan? pendingConvergePlan;
+
+    /// <summary>실제로 대시 클립을 거는 몸통. 창·거리를 <b>부르는 시점</b>에 재므로 보류가 배속을 어긋내지 않는다.</summary>
+    private void ApplyConvergeLocomotion(EnemySpace.EnemyDirector.DuelPlan plan)
+    {
         Vector3 move = Vector3.ProjectOnPlane(plan.PlayerPosition - transform.position, Vector3.up);
         float distance = move.magnitude;
 
@@ -609,10 +651,6 @@ public class CharacterActionPlayer : MonoBehaviour
         if (runningLayerIndex < 0) { LogConverge("레이어 없음", distance, window); return; }
         if (distance < convergeMinDistance) { LogConverge("거리 부족", distance, window); return; }
         if (window <= 0f) { LogConverge("시간 없음", distance, window); return; }
-
-        // 도착할 때까지 base의 주인은 수렴이다. 복귀 로직이 매 프레임 되찾아가지 못하게 막는다.
-        // 도착 뒤 남는 시간은 복귀 로직에 돌려준다(서 있는 구간이 로코모션에 묶이지 않게).
-        convergeUntil = plan.PlayerArriveTime;
 
         // 뒤로 갈 때는 백스텝 클립의 길이로 배속을 역산한다(길이가 다르면 창을 못 채운다).
         AnimationClip dashClip = backward && quickshiftBackClip != null ? quickshiftBackClip : quickshiftClip;

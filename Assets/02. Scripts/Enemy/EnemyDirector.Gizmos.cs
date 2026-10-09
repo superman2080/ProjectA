@@ -25,24 +25,28 @@ namespace EnemySpace
         {
             if (!wanderEnabled) return;
 
-            // 배회 궤도 — 플레이어 주위 standoff 원과, 각 적이 자기 슬롯으로 가는 선.
+            // 거리 두 겹 — 대기(engageDistance)와 후방(standoffDistance).
+            // 두 겹이 눈으로 안 보이면 노브를 못 잡는다.
             Gizmos.color = Color.yellow;
+            DrawCircle(PlayerPosition, engageDistance);
+
+            Gizmos.color = Color.grey;
             DrawCircle(PlayerPosition, standoffDistance);
 
-            int count = Mathf.Max(ring.Count, 1);
-            for (int i = 0; i < ring.Count; i++)
+            foreach (var view in ring)
             {
-                var view = ring[i];
                 if (view == null) continue;
 
-                bool engaged = view == currentOpponent;
-                Gizmos.color = engaged ? Color.red : (view.Wandering ? Color.yellow : Color.grey);
+                // 색이 곧 단계다 — 교전(빨강) / 대기(노랑) / 후방(회색).
+                bool engaged = IsEngaged(view);
+                bool waiting = engageRing.Contains(view);
+                Gizmos.color = engaged ? Color.red : (waiting ? Color.yellow : Color.grey);
 
                 if (engaged) continue;
 
-                Vector3 slot = EnemyRing.PickOrbitSlot(
-                    PlayerPosition, i, count, standoffDistance, orbitPhase,
-                    Center, stageRadius, JitterOf(view, orbitJitter));
+                // ⚠ 슬롯을 다시 계산하지 않는다 — 두 겹의 index·count·phase를 여기서 복제하면
+                //   TickWander와 조용히 어긋난다. 뷰가 든 목표를 그대로 읽는다.
+                Vector3 slot = view.WanderTarget;
 
                 Gizmos.DrawLine(view.transform.position, slot);
                 Gizmos.DrawWireSphere(slot, 0.2f);
@@ -101,7 +105,9 @@ namespace EnemySpace
             UnityEditor.Handles.Label(center + Vector3.up * 0.5f,
                 $"stage r={stageRadius:0.0}  spacing={minSpacing:0.0}m\n" +
                 $"share={playerShare:0.00}  cruise={cruiseSpeed:0.0}m/s" +
-                (Application.isPlaying ? $"\n적 {ring.Count}/{stageRosterCount}명" : ""));
+                (Application.isPlaying
+                    ? $"\n적 {ring.Count}/{effectiveMaxAlive}명  ·  총원 {spawnedTotal}/{stageRosterCount}"
+                    : ""));
 
             if (!Application.isPlaying) return;
 

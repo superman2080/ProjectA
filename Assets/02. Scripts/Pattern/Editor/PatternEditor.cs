@@ -24,6 +24,9 @@ namespace PatternSpace.EditorTools
         private const string AttackerProperty = "attacker";
         private const string RetreatDistanceProperty = "retreatDistance";
 
+        /// <summary>교전 배치. <b>저작 지점은 짝 에디터의 배치 패드 하나</b>라 여기서는 요약만 보여 준다.</summary>
+        private const string EngageOffsetsProperty = "engageOffsets";
+
         // 역할별로 살아 있는 슬롯. 나머지는 접이식으로 내려간다.
         private static readonly string[] EnemyRoleSlots = { "enemyAttack", "playerParry" };
         private static readonly string[] PlayerRoleSlots = { "playerAttack", "enemyDeath" };
@@ -53,7 +56,13 @@ namespace PatternSpace.EditorTools
             // 밀려나는 거리는 적이 공격자일 때만 쓰인다(RetreatDistanceOf). 다른 역할에서 보이면
             // 저작자가 조용히 무시되는 값을 채우게 된다 - 위 클립 슬롯과 같은 근거다.
             if (!enemyIsAttacker) excluded.Add(RetreatDistanceProperty);
+
+            // 배치는 짝 에디터의 패드에서 저작한다. 숫자 리스트를 인스펙터에도 열어 두면 저작 지점이 둘이 되고,
+            // 한쪽에서 원소를 늘리는 것만으로 교전 인원이 바뀌어 버린다(길이가 곧 인원이다).
+            excluded.Add(EngageOffsetsProperty);
+
             DrawPropertiesExcluding(serializedObject, excluded.ToArray());
+            DrawEngageSummary();
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(
@@ -69,6 +78,31 @@ namespace PatternSpace.EditorTools
             DrawHiddenSlots(hidden);
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>
+        /// 교전 배치 요약. <b>읽기 전용이다</b> — 인원은 배치 리스트의 길이에서 파생되므로
+        /// 두 곳에서 만지면 어긋난 조합이 생긴다(docs/PatternMultiTarget).
+        /// </summary>
+        private void DrawEngageSummary()
+        {
+            var prop = serializedObject.FindProperty(EngageOffsetsProperty);
+            if (prop == null) return;
+
+            int count = Mathf.Max(prop.arraySize, 1);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("교전 배치", EditorStyles.boldLabel);
+
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUILayout.IntField("교전 인원", count);
+
+            EditorGUILayout.LabelField(
+                " ",
+                prop.arraySize == 0
+                    ? "비어 있음 — 마주보고 한 명(예전 동작). Tools/Animation Clip Trimmer에서 배치합니다."
+                    : "↑ Tools/Animation Clip Trimmer의 배치 패드에서 편집합니다",
+                EditorStyles.miniLabel);
         }
 
         /// <summary>

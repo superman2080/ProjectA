@@ -253,9 +253,16 @@ namespace ChartGen
             // (스키닝 메쉬 생성 한 프레임이 히치가 되고, 그게 곧 판정 손실이다).
             // 절단 세트는 EnemyDefinition이 소유하므로 rosterPool을 훑는 것만으로 프리웜이 끝난다.
             //
-            // ⚠ 적 수는 채보가 정한다(docs/CombatLegibility) — 엔트리별 처치 수의 합이라
+            // ⚠ 총원은 채보가 정한다(docs/CombatLegibility) — 엔트리별 처치 수(패턴의 교전 인원)의 합이라
             //   마지막 엔트리에서 마지막 적이 죽고 잔여가 0이 된다. 여기가 채보를 아는 유일한 자리다.
-            enemyDirector?.PrepareStage(CountKills(ActiveChart));
+            //   동시 인원은 씬이 정하고(EnemyDirector.maxAliveEnemies) 나머지는 처치마다 보충된다.
+            //
+            // ⚠ 둘째 인자는 "한 패턴이 최대 몇을 상대하는가"다. 그 수의 소유자는 Pattern이고
+            //   디렉터는 받기만 한다 — 두 곳이 정의하면 어긋난 조합이 조용히 만들어진다.
+            // ⚠ deferEntrance: 카운트다운에는 <b>교전에 필요한 최소</b>만 세우고 나머지는 곡 시작 후 순차로 낸다.
+            //   이 3초는 카메라 인트로가 도는 구간이라(§7-2) 여기서 전부 나오면 등장을 아무도 못 본다.
+            //   ⚠ 프리웜은 그대로 여기서 끝난다 — 미루는 것은 스폰뿐이라 곡 도중 Instantiate는 안 난다(§5).
+            enemyDirector?.PrepareStage(CountKills(ActiveChart), MaxEngagedOf(ActiveChart), deferEntrance: true);
 
             if (countdownDuration > 0f)
             {
@@ -267,6 +274,9 @@ namespace ChartGen
             fadeFactor = 1f;
             ApplyMusicVolume();
             audioSource.Play();
+
+            // ⚠ deferEntrance와 짝이다 — 안 열면 위에서 세운 최소 인원만 서 있다.
+            enemyDirector?.BeginStageEntrance();
 
             prevAudioTime = 0f;
             songStarted = true;
@@ -550,10 +560,9 @@ namespace ChartGen
         }
 
         /// <summary>
-        /// 이 채보가 <b>죽이는 적의 수</b>. <c>EnemyDirector.PrepareStage</c>가 세울 인원이다.
+        /// 이 채보가 <b>죽이는 적의 총수</b>. <c>EnemyDirector.PrepareStage</c>가 그만큼을 평생 태운다.
         ///
-        /// <para><b>⚠ <c>Count(…)</c>가 아니라 합이다.</b> 값은 지금 같지만, 한 엔트리가 여럿을 죽이게 되면
-        /// (다수 상대) <b>이 한 항만 바뀐다</b> — <c>Count</c>로 적으면 셈의 뜻 자체를 다시 정해야 한다.</para>
+        /// <para><b>⚠ 엔트리 수가 아니라 합이다</b> — 처치 엔트리 하나가 그 패턴의 교전 인원만큼 죽인다.</para>
         /// </summary>
         private static int CountKills(SongChart chart)
         {
@@ -561,9 +570,35 @@ namespace ChartGen
 
             int total = 0;
             foreach (var entry in chart.entries)
-                total += entry.enemyCue.killOnSuccess ? 1 : 0;
+            {
+                if (!entry.enemyCue.killOnSuccess) continue;
+
+                // 처치는 전원 또는 아무도다(killOnSuccess가 bool로 남은 이유) — 그래서 한 항이면 충분하다.
+                total += entry.template != null ? entry.template.EngagedCount : 1;
+            }
 
             return total;
+        }
+
+        /// <summary>
+        /// 이 채보에서 <b>한 패턴이 최대 몇을 상대하는가</b>. <c>EnemyDirector</c>가 동시 인원 상한의
+        /// <b>하한</b>을 잡는 데만 쓴다 — 그 값이 교전 인원보다 작으면 대기 링이 구조적으로 얇아진다
+        /// (docs/CombatLegibility).
+        ///
+        /// <para><b>정의하는 것이 아니라 세는 것이다</b> — 인원의 소유자는 <c>Pattern</c>이다.</para>
+        /// </summary>
+        private static int MaxEngagedOf(SongChart chart)
+        {
+            if (chart == null || chart.entries == null) return 1;
+
+            int max = 1;
+            foreach (var entry in chart.entries)
+            {
+                if (entry.template == null) continue;
+                max = Mathf.Max(max, entry.template.EngagedCount);
+            }
+
+            return max;
         }
 
         private IEnumerator FinishRoutine()

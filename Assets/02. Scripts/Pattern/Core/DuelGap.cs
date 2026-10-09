@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace PatternSpace
 {
@@ -30,6 +30,19 @@ namespace PatternSpace
 
         /// <summary>이 커브가 간격을 시간 함수로 그리는가. 키가 없으면 상수 경로다.</summary>
         public static bool Has(AnimationCurve curve) => curve != null && curve.length > 0;
+
+        /// <summary>
+        /// <paramref name="relTime"/>에서의 <b>높이</b>(m, 지면 기준 절대값). 커브가 없으면 0 = 지면이다.
+        ///
+        /// <para><b>간격과 같은 축·같은 시계를 쓴다</b> — 키 시간이 임팩트 기준 상대초이고 구동은
+        /// <c>CharacterActionPlayer.DuelCurveTime</c>이 민다. 그래서 새 시계가 0개다.</para>
+        ///
+        /// <para><b>⚠ 높이는 <see cref="ResolveAxis"/>·<see cref="EndsBehind"/>에 섞이지 않는다.</b>
+        /// 그 둘은 <b>평면</b> 거리 판정(관통 여부)이고 높이는 완전히 독립된 축이다 —
+        /// 섞으면 공중에 뜬 것이 "지나쳐 뒤로 갔다"로 읽힌다.</para>
+        /// </summary>
+        public static float HeightAt(AnimationCurve curve, float relTime) =>
+            Has(curve) ? curve.Evaluate(relTime) : 0f;
 
         /// <summary>
         /// 커브가 그리기를 <b>시작</b>하는 시각(임팩트 기준 상대초). 커브가 없으면 0.

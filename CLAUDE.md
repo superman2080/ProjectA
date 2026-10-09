@@ -198,6 +198,7 @@ Assets/
 
 ### 3. 패턴 데이터 모델
 **`Pattern`** (ScriptableObject, `PatternSpace`) — 패턴의 **'모양 원본'**. 진행 상태를 갖지 않는다.
+- **교전 배치는 패턴이 든다**(`engageOffsets : List<Vector2>`, 임팩트 시점 플레이어 기준 결투 축 로컬 평면 m — `y`=앞, `x`=오른쪽). **⚠ 리스트 길이가 곧 교전 인원이다**(`EngagedCount`) — 인원을 따로 두면 "인원 3인데 오프셋 2개"가 표현 가능해진다. **비우면 마주보고 한 명**(예전 경로)이라 기존 템플릿 회귀 0. 자리 계산은 `Pattern/Core/EngageSlots`(asmdef·테스트됨)이고 **런타임과 짝 에디터가 같은 함수를 부른다**. ⚠ 저작 지점은 **짝 에디터의 배치 패드 하나**다(인스펙터는 읽기 전용 요약). ⚠ **연타와 다수는 같이 못 쓴다**(`OnValidate`가 막는다 — `PlayMashReaction`이 상대 하나만 젖힌다). 상세: `docs/PatternMultiTarget/`
 - `PatternData[]`(각 `index` 0~8의 나열), `GetNodeType(position)`(0=Start, 마지막=End, 그 외=Progress), 그리고 **클립 슬롯들**(`PlayerAttack`·`PlayerParry`·`EnemyAttack`·`EnemyFeint`·`EnemyHit`·`EnemyParry`·`EnemyDeath` — 전부 `ClipAlignment`). 클립은 '모양에 종속된 정적 데이터'라 에셋에 두어도 원칙과 충돌하지 않는다.
 - 진행 상태를 에셋에 두면 같은 템플릿을 쓰는 두 패턴이 동시에 살아 있을 때 서로의 상태를 덮어쓴다 → 그래서 상태는 `ActivePattern`으로 분리.
 
@@ -446,7 +447,7 @@ Assets/
 - **해금은 시퀀스가 하나씩 연다**(§15). 스토리 씬의 특정 지점을 지나면 `SequenceZoneTrigger`가 시퀀스를 재생하고, 그 시퀀스의 `UnlockStep`이 플래그를 세운다. **해금 순서표·의존 그래프를 만들지 않는다** — "하나씩"은 시퀀스가 재생되는 순서가 이미 표현하고 있고, 순서를 두 곳에 적으면 어긋난 조합이 조용히 만들어진다.
   - **⚠ 브리핑이 "그 장소를 처음 열 때만" 재생되는 것도 같은 플래그가 한다**(`SequenceZoneTrigger.onceFlag`). "들었다"를 기록하는 상태를 새로 만들지 않는다.
   - **⚠ `SequenceRunner.SetFlag`와 `GameProgress.SetFlag`는 다른 물건이다.** 러너 쪽은 **씬 한정 런타임 조건**이라 전투 씬을 다녀오면 사라지고, `GameProgress` 쪽은 영구 진행도다. 합치지 않는다.
-- **잡몹·튜토리얼 전투도 `Encounter`다** — 적 1~2마리(채보의 처치 엔트리 수가 그대로 인원이다, §11-6), 패턴 2~3개, 10초 안팎의 짧은 `SongChart`. **탐색 씬에 전투를 심지 않는다**: 이 게임에서 벤다는 것은 `PatternHandler` 입력 → 판정 → `CharacterActionPlayer` 재생이라 연습용 적 한 마리도 전투 오브젝트 일습을 통째로 요구한다.
+- **잡몹·튜토리얼 전투도 `Encounter`다** — 적 1~2마리(채보의 처치 엔트리 수가 그대로 총원이다, §11-6), 패턴 2~3개, 10초 안팎의 짧은 `SongChart`. **탐색 씬에 전투를 심지 않는다**: 이 게임에서 벤다는 것은 `PatternHandler` 입력 → 판정 → `CharacterActionPlayer` 재생이라 연습용 적 한 마리도 전투 오브젝트 일습을 통째로 요구한다.
   - **연습 모드를 따로 만들지 않는다** — `Retry` 상태가 이미 반복 진입이라 튜토리얼 자리가 그대로 연습장이다.
   - **⚠ 짧은 곡일수록 전환 비용이 도드라진다.** 잡몹은 길목마다 뿌리지 말고 몇 군데에만 둔다. 그것이 실제로 리듬을 끊으면 그때 여는 문은 **전투 일습을 `CombatRig.unity`로 추출해 Additive로 올리는 것**이다(그러면 전환이 통째로 사라진다).
 - **진행도 저장은 `GameProgress` 하나가 든다**(자리별 최고 등급 + 플래그). **⚠ `PlayerPrefs`는 임시 백엔드**이고, 저장 시스템이 생길 때까지 **다른 클래스가 `PlayerPrefs`를 직접 부르지 않는다** — 창구가 하나라 교체가 그 파일 안에서 끝난다.
@@ -532,12 +533,22 @@ Assets/
 - 상세: `docs/ActorSeparation/` · 무대 배치: `docs/StageTraversal/` (폐기: `docs/DuelConverge/`의 리시·대기석 결정)
 ### 11-6. 무대의 적 — 전원 미리 세우고, 벨 때마다 준다 (CombatLegibility)
 - **적은 곡 시작 전에 <b>전원</b> 태어나 무대 원 안에 흩어져 서고, 플레이어를 중심으로 배회한다.** 그중 지금 패턴이 요구하는 하나만 표적(`currentOpponent`)이 되고 나머지는 예비 적이다. 목록은 **`ring` 하나뿐**이다.
-- **⚠ 적 수는 채보가 정한다** — `ChartPlayer`가 `killOnSuccess` 엔트리 수의 합을 세어 `EnemyDirector.PrepareStage(count)`에 넘긴다. **사망 보충이 없으므로 화면 위 인원이 벨 때마다 줄고, 마지막 엔트리에서 무대가 정확히 빈다.** "정리했다"가 화면에 남는 것이 이 모델의 요구다.
-  - **⚠ `Count(…)`가 아니라 합으로 적는다**(`ChartPlayer.CountKills`). 값은 지금 같지만 한 엔트리가 여럿을 죽이게 되면(다수 상대) 그 한 항만 바뀐다.
+- **⚠ 인원의 축이 둘이다** — **총원**은 채보가 정하고(`ChartPlayer.CountKills` = `killOnSuccess` 엔트리의 처치 수 합 → `PrepareStage(total, maxEngaged)`), **동시에 서 있는 수**는 씬이 정한다(`maxAliveEnemies`, 기본 10). 처치마다 하나씩 보충하되 **총원을 넘기지 않으므로**(`spawnedTotal < stageRosterCount && ring.Count < effectiveMaxAlive`) 인원이 0까지 마르고 **마지막 엔트리에서 무대가 정확히 빈다.** "정리했다"가 화면에 남는 것이 이 모델의 요구다.
+  - **⚠ 총원을 그대로 세우면 안 된다** — 30명짜리 채보가 곡 시작에 30명을 한꺼번에 세운다. 첫 스폰은 `min(총원, 동시 인원)`이다.
+  - **⚠ 동시 인원 상한은 교전 인원을 모르면 대기 링을 얇게 만든다**(교전이 8이면 10 중 2만 남는다). 그래서 `ResolveMaxAlive`가 `maxEngaged + engageSlotCount`까지 **끌어올리고 경고를 찍는다** — 올리기만 하므로 크게 적은 쪽의 의도는 존중된다. `WarnPoolCapacity`가 `EnemyDefinition.MaxPoolSize`도 같이 본다(못 담으면 곡 도중 `Instantiate`, §5).
+  - **⚠ 교전 인원은 `EnemyDirector`가 정의하지 않는다** — 그 수의 소유자는 **`Pattern`**이다(아직 필드는 없다). `PrepareStage`의 둘째 인자가 그 자리이고 지금은 호출부가 1을 넘긴다. 두 곳이 정의하면 어긋난 조합이 조용히 만들어진다(§5가 `Attacker`·`impactOffset`을 패턴에 둔 것과 같은 근거 — "이 획이 몇을 베는가"는 모션의 성질이다).
+  - **⚠ 엔트리 수가 아니라 합이다**(`ChartPlayer.CountKills` = `killOnSuccess ? 패턴의 EngagedCount : 0`의 합). 처치는 **전원 또는 아무도**라(`killOnSuccess`가 bool로 남은 이유) 한 항이면 충분하다. `MaxEngagedOf`가 동시 인원 하한을 같이 센다.
   - **⚠ 마지막 엔트리가 `killOnSuccess`여야 한다**(굽기 툴이 저장을 막는다, §5). 그래야 마무리 실루엣(§14)이 터지는 프레임에 적이 하나도 안 남는다 — **런타임에 맞추는 코드가 0줄**이다.
   - **마름 방지 가드는 `TakeTargetForWindow` 하나뿐이다.** 무대가 비었는데 처치 패턴이 남았으면 한 명 세우고 경고를 찍는다 — 채보와 런타임이 어긋난 경우이지 정상 경로가 아니다.
 - **⚠ `StageMode.Loop`에서는 잔여가 구조적으로 0이다**(실패하면 재시도돼 결국 전부 성공한다, §16). `Linear`에서만 실패한 처치 엔트리만큼 남고, 그것은 `ChartPlayer.FinishRoutine`의 `DissolveAll`이 지운다 — **실루엣을 기다린 뒤, 오디오 페이드 앞**이라 소멸이 화면에 보인다.
-- **배회는 `ring` 전체가 한다**(`TickWander`, docs/EnemyIdleWander). 지금 상대만 빠진다. **⚠ 궤도 슬롯 수가 `ring.Count`라 인원이 줄면 간격이 벌어진다**(`PickOrbitSlot`이 원주를 그 수로 나눈다) — 곡 후반에 한두 명만 남으면 그 그림이 가장 잘 보이므로, 어색하면 `standoffDistance`를 인원에 따라 줄인다.
+- **적은 거리로 세 단계로 갈린다** — **교전**(`IsEngaged`가 참인 적들, 거리는 `Pattern.duelDistanceCurve`) · **대기**(`engageDistance` 5m, `engageSlotCount` 3자리) · **후방**(`standoffDistance` 8m). 배회는 대기·후방 두 겹이 각자 자기 `count`와 자기 거리로 `PickOrbitSlot`을 부른다 — **`EnemyRing`에 새 함수가 0개다.**
+  - **⚠ 두 겹이 위상을 공유하면 안 된다** — 같은 `orbitPhase`면 안쪽과 바깥쪽이 같은 방위에 겹쳐 서서 **두 겹이 한 겹으로 보인다.** 바깥에 반 칸(`180 / count`) 오프셋을 준다.
+  - **대기 멤버는 `BindReservation`에서 패턴당 한 번 뽑는다**(`RefreshEngageRing`, 교전 중인 적 제외, 가까운 순). 매 프레임 거리로 고르면 경계에 선 둘이 계속 자리를 바꾼다. **⚠ 그 목록은 "다음 표적"이 아니다**(§11-1) — **자리**일 뿐이다. 다만 그 자리가 `TakeTargetForWindow`의 선택 확률을 바꿔 **짧은 창엔 안쪽, 긴 창엔 바깥쪽**이 뽑힌다(거리 이산화의 대가를 일부 되찾는다).
+  - **후방에서 저절로 끌어온다 — 승격 코드가 0줄이다.** 후보가 "교전 중이 아닌 적 전부"라 대기 링이 얇으면 후방이 채운다. 그마저 없으면 있는 만큼만 선다(곡 후반에 인원이 진짜 적은 경우이고, 거기까지 메우면 "적이 줄어드는 것이 곡의 끝"과 싸운다).
+  - **⚠ 풀 반납에서 대기 링에서 뺀다**(`ReleaseEnemy` 첫 줄) — 안 빼면 다음 대여가 잘못된 겹으로 나온다.
+  - **⚠ `separationRadius`의 실질 하한은 이제 `engageDistance`가 잡는다**(예전엔 `standoffDistance`).
+  - **⚠ 기즈모가 슬롯 선을 다시 계산하지 않는다** — 두 겹의 `index`·`count`·`phase`를 복제하면 `TickWander`와 조용히 어긋나므로 `EnemyView.WanderTarget`을 읽는다.
+- **⚠ "교전 중인 적"은 집합이다** — 지금 크기가 1인 것은 구현 상태일 뿐이고, 앞으로 한 패턴이 여럿을 상대한다. **묻는 곳은 `EnemyDirector.IsEngaged(view)` 하나**이고(배회 제외·거리 단계·이격 면제·기즈모 색이 전부 이것을 부른다) 여럿이 되면 **그 한 줄만 바뀐다.** `== currentOpponent`를 다른 곳에 새로 적으면 넷 중 하나를 빠뜨린다. 남은 자리(상태 필드·불가침 캡슐 N개·카메라 칸·거리 커브의 대표 하나·배정 루프)는 `docs/CombatLegibility/`의 표에 있다.
 - **⚠ 표적에게는 가드 자세를 준다**(`EnemyView.BeginGuard`). 표적이 얻는 시각적 사실이 "배회를 멈춘다" 하나인데 나머지가 계속 도므로 **정지가 배경이 아니라 움직임이 배경**이라 멈춤은 신호가 못 된다. 무연출 폴백 경로(`AssignAttack`/`AssignFeint`에 클립이 없거나 창이 `minFeintWindow`보다 짧을 때)에서 `LookAtInstant` + `guardIdleClip`(`Samurai_BlockIdle`)을 상체 레이어(§11-7)에 얹는다.
   - **⚠ 그 클립은 배회 상체 후보에서 코드가 자동으로 뺀다**(`NextUpperIdleClip`). 비표적이 같은 자세를 쓰면 **"가드 = 지금 표적"의 뜻이 둘로 갈린다.** 에셋을 고치지 않는 이유는 배선이 한 곳(`guardIdleClip`)뿐이라 어긋날 수가 없어서다.
   - 해제는 따로 없다 — `Resolve`의 `reactionUntil`과 `MarkDying`의 `Phase.Dying`을 `TickUpperBody`가 이미 보고, 풀 반납은 `ResetState`가 되돌린다.
@@ -601,6 +612,11 @@ Assets/
   - **⚠ 비우는 게 아니라 뒤집는다.** 계획은 임팩트보다 이르게 잡히므로(완료 = 마지막 노드, 임팩트는 `goodWindow` 뒤) 비우면 **아직 관통 전인 위치**에서 축이 재파생돼 증상이 그대로 남는다. 뒤집으면 `DuelGap.ResolveAxis`가 관통 전/후 어느 쪽에서 물어도 같은 답을 준다(테스트가 지키는 지점).
   - **⚠ `ResolveAxis`의 기존 가드는 그대로 둔다** — 그것은 *전이 상태*(커브가 그리는 도중)에서 축이 파생되는 것을 막는 장치이고, 이쪽은 *저작된 최종 상태*를 반영하는 별개 사건이다. **둘을 가르는 정보가 끝 키의 부호다.**
   - **저작 필드가 0개다**(§2-1·§11-10과 같은 관용구 — 분기가 아니라 데이터로 갈린다). 돌아서는 회전도 새 코드가 0줄이다: 플레이어는 `PlayerCombatMover.ApplyPlan`의 기존 회전이, 적은 `EnemyView.TickGaze`가 한다.
+- **높이도 같은 커브 관용구다**(`Pattern.duelHeightCurve`, `DuelGap.HeightAt`) — 키 시간이 **간격 커브와 같은 축**(임팩트 기준 상대초)이고 값은 **지면 기준 절대 높이 m**다. 비우면 0(지면)이라 회귀 0. 도약·낙하 참격이 이것으로 표현된다.
+  - **⚠ 지면 Y를 구동 시작에 캐시한다**(`PlayerCombatMover.curveGroundY`) — 매 프레임 현재 Y를 읽으면 **자기 출력이 다음 프레임 입력이 되어 높이가 누적된다.**
+  - **⚠ 높이를 `ResolveAxis`·`EndsBehind`에 섞지 않는다** — 그 둘은 **평면** 거리(관통 여부) 판정이라, 섞으면 공중에 뜬 것이 "지나쳐 뒤로 갔다"로 읽힌다.
+  - **⚠ 구르기는 높이도 놓는다**(주인 순서 그대로) — 안 놓으면 도약 중 회피가 **공중에 뜬 채로 원을 그린다.**
+  - **⚠ `Attacker.Enemy`에서는 저작자 책임이다**(간격과 같은 근거) — 적 칼은 예약 시점 자리를 겨냥하므로 임팩트에 플레이어가 공중이면 빗나간다. 카메라 프레이밍(§7-2)이 바운즈를 보므로 도약이 크면 두 높이 노브의 전제(머리 높이 1.5)가 흔들린다.
 - **구동 구간 = 플레이어 클립 재생 구간**(도착 이후). 도착 목표 간격이 `curve(arriveTime − impactTime)`이라 이음매가 연속이고, 구간 밖은 `AnimationCurve`의 기본 Clamp가 **끝 키 값으로 홀드**한다(홀드 코드 0줄). 채보의 창 길이와는 무관하다.
 - **위치의 주인 순서**: `rolling`(구르기) > **커브 구동** > 수렴 이동. 구르기는 진입 시 커브 구동을 놓는다(구른 뒤 자리는 구르기가 정한다).
 - **⚠ `Attacker.Enemy`에서는 저작자 책임이다** — 적 칼은 예약 시점의 자리를 겨냥하므로 임팩트 시점 간격이 저작값과 다르면 빗나간다. 막지 않는 이유는 툴 프리뷰가 그 어긋남을 그대로 보여 주기 때문.

@@ -35,6 +35,10 @@ namespace EnemySpace
         [Tooltip("투사체 연출. 비우면 원거리 오브젝트 없음.")]
         [SerializeField] private SliceTargetDirector projectileDirector;
 
+        [Tooltip("플레이어 액션. 직전 애니메이션이 완전히 마무리되는 시각(출발 시각)을 여기서 읽는다.\n" +
+                 "비우면 완료 즉시 출발한다 - 예전 동작.")]
+        [SerializeField] private CharacterActionPlayer playerActionPlayer;
+
         [Header("Stage")]
         [Tooltip("원형 무대의 반경(m). 적은 이 원 '안'에 흩어져 서고 플레이어가 그 사이를 오간다.")]
         [SerializeField] private float stageRadius = 8f;
@@ -47,7 +51,7 @@ namespace EnemySpace
 
         [Header("Separation")]
         [Tooltip("불가침 캡슐의 반경(m). 플레이어 원 · 현재 상대 원 · 둘을 잇는 통로를 이 두께로 비운다.\n" +
-                 "⚠ standoffDistance(3.5)보다 한참 작아야 한다 — 크면 배회 슬롯과 상시 싸워 적이 계속 밀린다.\n" +
+                 "⚠ engageDistance(5)보다 한참 작아야 한다 — 크면 배회 슬롯과 상시 싸워 적이 계속 밀린다.\n" +
                  "0이면 이격 끄기(다른 층은 그대로 돈다).")]
         [SerializeField] private float separationRadius = 1f;
 
@@ -57,8 +61,16 @@ namespace EnemySpace
                  "⚠ 균열 경로(Spawn Warp)에서는 쓰지 않는다 - 거기는 거리가 아니라 시각을 맞춘다.")]
         [SerializeField] private float spawnMoveSpeed = 3f;
 
-        [Tooltip("곡 시작에 전원을 세울 때 한 명씩 나오는 간격(초). 동시에 나타나면 팝인이 티 난다.")]
+        [Tooltip("한 명씩 나오는 간격(초). 동시에 나타나면 팝인이 티 난다.\n" +
+                 "곡 시작 전 첫 배치와 곡 시작 후 순차 등장이 같은 값을 쓴다 - 뜻이 하나라 노브도 하나다.")]
         [SerializeField] private float spawnStagger = 0.15f;
+
+        [Tooltip("무대에 <b>동시에</b> 서 있을 적 수의 상한. 총원과 다른 축이다 -\n" +
+                 "총원은 '이 곡에서 몇을 베는가'(채보가 정한다), 이 값은 '화면이 몇을 담는가'(연출·성능·가독성).\n" +
+                 "⚠ 교전 인원 + 대기 자리보다 작으면 PrepareStage가 필요한 만큼 끌어올리고 경고를 찍는다 -\n" +
+                 "  대기 링이 얇아지면 '곧 교전할 몇이 서 있다'가 깨지기 때문이다(docs/CombatLegibility).")]
+        [Min(1)]
+        [SerializeField] private int maxAliveEnemies = 10;
 
 
         [Tooltip("스폰이 화면에 걸릴 때 자기 자리에서 밀어낼 수 있는 최대 거리(m).\n" +
@@ -106,8 +118,19 @@ namespace EnemySpace
                  "⚠ 무대에 선 적 전원이 대상이다 - 지금 상대만 빠진다.")]
         [SerializeField] private bool wanderEnabled = true;
 
-        [Tooltip("배회하며 플레이어와 유지할 거리(m). ⚠ duelDistance보다 커야 한다 — 교전 시 좁혀 들어갈 여지.")]
-        [SerializeField] private float standoffDistance = 3.5f;
+        [Tooltip("<b>후방</b>이 플레이어와 유지할 거리(m) - 거리 세 단계의 가장 바깥이다.\n" +
+                 "교전(거리 커브) < 대기(engageDistance) < 후방(이 값) 순서가 유지돼야 단계가 화면에서 갈린다.")]
+        [SerializeField] private float standoffDistance = 8f;
+
+        [Tooltip("<b>대기</b>가 서는 거리(m). 교전과 후방 사이의 중간 겹이며, 한 걸음이면 닿는 거리에\n" +
+                 "몇이 서 있어야 '다음'이 읽힌다. ⚠ separationRadius의 실질 하한을 이 값이 잡는다.")]
+        [SerializeField] private float engageDistance = 5f;
+
+        [Tooltip("대기 링에 둘 자리 수.\n" +
+                 "⚠ <b>교전 인원이 아니다</b> - 한 패턴이 몇을 상대하는가는 패턴이 든다(docs/CombatLegibility).\n" +
+                 "교전 중인 적은 이 후보에서 빠지므로, 남은 적이 이 수보다 적으면 있는 만큼만 선다.")]
+        [Min(0)]
+        [SerializeField] private int engageSlotCount = 3;
 
         [Tooltip("배회 이동 속도(m/s). ⚠ 걷기 클립의 실제 루트 이동 속도와 같아야 발이 안 미끄러진다.\n" +
                  "Walk 4종 실측값이 정확히 1.297 m/s다.")]
@@ -255,6 +278,20 @@ namespace EnemySpace
             /// </summary>
             public readonly float PlayerArriveTime;
 
+            /// <summary>
+            /// 플레이어가 <b>출발해도 되는 시각</b> = 직전 액션의 애니메이션이 완전히 마무리되는 시각
+            /// (<c>CharacterActionPlayer.ActionSettleTime</c>). 그 전에 움직이면 칼을 휘두르는 채로 미끄러진다.
+            ///
+            /// <para><b>이동 창은 <c>PlayerArriveTime − PlayerDepartTime</c>이고, 그것이 표적 거리를 정한다</b>
+            /// (<see cref="TakeTargetForWindow"/>). 창만 줄이고 거리를 그대로 두면 같은 거리를 짧은 시간에
+            /// 달려 <c>cruiseSpeed</c>를 넘는다 — 둘은 한 쌍이다.</para>
+            ///
+            /// <para><b>예전에 이 값이 폐기된 이유는 사라졌다</b>(<c>docs/FailConverge</c>) — 당시엔 계획 시점에
+            /// 플레이어 스윙 시작을 몰라 출발을 늦추면 대시가 자기 스윙 한복판으로 들어갔다. 지금은
+            /// <c>Pattern.PlayerSwingLead</c>가 그 시각을 주므로 도착 마감이 스윙 시작으로 좁혀져 있다.</para>
+            /// </summary>
+            public readonly float PlayerDepartTime;
+
             /// <summary>플레이어 → 적 방향의 단위벡터(평면). 거리 커브가 이 축 위에서 플레이어를 민다.</summary>
             public readonly Vector3 Axis;
 
@@ -265,12 +302,13 @@ namespace EnemySpace
             public readonly Pattern Template;
 
             public DuelPlan(Vector3 player, Vector3 enemy, float arriveTime, float playerArriveTime,
-                            Vector3 axis, float impactTime, Pattern template)
+                            float playerDepartTime, Vector3 axis, float impactTime, Pattern template)
             {
                 PlayerPosition = player;
                 EnemyPosition = enemy;
                 ArriveTime = arriveTime;
                 PlayerArriveTime = playerArriveTime;
+                PlayerDepartTime = playerDepartTime;
                 Axis = axis;
                 ImpactTime = impactTime;
                 Template = template;
@@ -425,6 +463,28 @@ namespace EnemySpace
         /// </summary>
         public EnemyView CurrentOpponent => currentOpponent;
 
+        /// <summary>
+        /// 이 적이 <b>지금 교전 중</b>인가. 배회 제외 · 거리 단계 분류 · 이격 면제 · 기즈모 색이 전부 이것을 묻는다.
+        ///
+        /// <para><b>⚠ 한 패턴이 여럿을 상대하게 되면 바뀌는 곳이 이 한 줄이다</b>(docs/CombatLegibility).
+        /// 그래서 <c>== currentOpponent</c>를 다른 곳에 새로 적지 않는다 — 넷 중 하나를 빠뜨리게 된다.
+        /// <b>교전 인원을 정하는 것은 이 클래스가 아니라 패턴이다.</b></para>
+        /// </summary>
+        public bool IsEngaged(EnemyView view) =>
+            view != null && (view == currentOpponent || engagedOpponents.Contains(view));
+
+        /// <summary>
+        /// 지금 교전 중인 적 <b>전원</b>. <c>[0]</c>이 대표(<see cref="currentOpponent"/>)다.
+        ///
+        /// <para><b>⚠ <c>currentOpponent</c>를 리스트로 갈아엎지 않는다.</b> 거리 커브·결투 축·후퇴 자리·
+        /// 반응 이벤트·카메라는 전부 <b>하나를 골라야 하는</b> 성질이라 리스트로 바꿔도 결국 대표를 뽑게 된다.
+        /// 그 다섯은 대표를 그대로 읽고, 여기 목록은 <b>배정·리액션·처치</b>만 늘린다(docs/CombatLegibility).</para>
+        /// </summary>
+        private readonly List<EnemyView> engagedOpponents = new List<EnemyView>();
+
+        /// <summary>처치 루프용 사본. 처치가 목록을 비우므로 순회 중에 직접 돌면 안 된다.</summary>
+        private readonly List<EnemyView> engagedScratch = new List<EnemyView>();
+
         /// <summary>적 클립의 자동 배속 상한. 기습도 같은 상한을 써야 정렬 규율이 한 벌로 남는다.</summary>
         public float MaxAttackSpeed => maxAttackSpeed;
 
@@ -449,6 +509,40 @@ namespace EnemySpace
 
         /// <summary>채보 없이 무대를 세우는 디버그 경로의 인원. 정상 경로에서는 아무도 안 읽는다.</summary>
         private const int DebugRosterCount = 4;
+
+        /// <summary>
+        /// 곡이 시작돼 <b>남은 적이 순차적으로 등장해도 되는가</b>. <see cref="BeginStageEntrance"/>가 연다.
+        ///
+        /// <para>안 열면 <c>PrepareStage</c>가 세운 만큼만 서 있다 — 그래서 게이트를 여는 일과
+        /// <c>deferEntrance</c>를 켜는 일은 <b>호출부 한 곳에서 짝으로</b> 한다(<c>ChartPlayer</c>).</para>
+        /// </summary>
+        private bool entranceOpen;
+
+        /// <summary>다음 등장 시각. 간격은 <see cref="spawnStagger"/>를 그대로 쓴다(뜻이 이미 그것이다).</summary>
+        private float nextEntranceAt;
+
+        /// <summary>
+        /// 이 무대에서 지금까지 태운 적 수. <b>총원 초과 보충을 막는 것이 이 값의 유일한 일이다</b> —
+        /// 그래서 "누가 몇 번째로 태어났는가"를 들 필요가 없고 카운터 하나로 끝난다.
+        /// </summary>
+        private int spawnedTotal;
+
+        /// <summary>
+        /// 실제로 적용되는 동시 인원 상한. <c>maxAliveEnemies</c>를 <b>끌어올린</b> 값이다 —
+        /// 교전 인원 + 대기 자리보다 작으면 대기 링이 구조적으로 얇아지기 때문(<see cref="ResolveMaxAlive"/>).
+        /// </summary>
+        private int effectiveMaxAlive = 1;
+
+        /// <summary>
+        /// <b>대기</b> 겹에 선 적들. 패턴당 한 번(<see cref="RefreshEngageRing"/>) 뽑아 그 패턴 동안 불변이다 —
+        /// 매 프레임 거리로 고르면 경계에 선 둘이 계속 자리를 바꾼다.
+        /// </summary>
+        private readonly List<EnemyView> engageRing = new List<EnemyView>();
+
+        // 배회 그룹 버퍼. 매 프레임 두 겹으로 나눠 담는다(할당 0).
+        private readonly List<EnemyView> innerScratch = new List<EnemyView>();
+        private readonly List<EnemyView> outerScratch = new List<EnemyView>();
+        private readonly List<EnemyView> engageScratch = new List<EnemyView>();
 
         // 프리팹별 인스턴스 풀. Pool(PoolKey 단일 매핑)은 프리팹 수 증가에 맞지 않는다.
         // 적은 무대 위를 자유롭게 움직이므로 대여 시 비활성 root에서 떼어낸다(detachOnRent).
@@ -565,13 +659,13 @@ namespace EnemySpace
             {
                 if (view == null) continue;
 #if UNITY_EDITOR
-                if (view == currentOpponent) { rejectedOpponent++; continue; }
+                if (IsEngaged(view)) { rejectedOpponent++; continue; }
                 if (!view.IsIdle) { rejectedBusy++; continue; }
                 if (isVisible != null && !isVisible(view.transform.position)) { rejectedOffscreen++; continue; }
                 if (hasAmbushClip != null && !hasAmbushClip(view)) { rejectedNoClip++; continue; }
                 if (canReach != null && !canReach(view)) { rejectedTooFar++; continue; }
 #else
-                if (view == currentOpponent) continue;
+                if (IsEngaged(view)) continue;
                 if (!view.IsIdle) continue;
                 if (isVisible != null && !isVisible(view.transform.position)) continue;
                 if (hasAmbushClip != null && !hasAmbushClip(view)) continue;
@@ -690,26 +784,136 @@ namespace EnemySpace
         /// 스키닝 메쉬 생성 한 프레임이 히치가 되고, 그게 곧 판정 손실이다.
         /// <c>ChartPlayer</c>가 카운트다운 구간에서 호출한다.
         ///
-        /// <para><b>인원은 채보가 정한다</b>(docs/CombatLegibility) — <c>killOnSuccess</c> 엔트리 수의 합이라
-        /// <b>마지막 엔트리에서 마지막 적이 죽고 잔여가 0</b>이 된다. 사망 보충이 없으므로
-        /// 화면 위 인원은 벨 때마다 줄어든다.</para>
+        /// <para><b>인원의 축이 둘이다</b>(docs/CombatLegibility) — <b>총원</b>은 채보가 정하고
+        /// (<c>killOnSuccess</c> 엔트리의 처치 수 합) <b>동시 인원</b>은 씬이 정한다(<see cref="maxAliveEnemies"/>).
+        /// 총원을 다 태우면 보충이 멈춰 인원이 0까지 마르고, <b>마지막 엔트리에서 무대가 정확히 빈다</b>.</para>
         /// </summary>
-        /// <param name="count">세울 적 수. 0 이하면 <see cref="DebugRosterCount"/>(채보 없는 디버그 경로).</param>
-        public void PrepareStage(int count = 0)
+        /// <param name="count">이 무대의 <b>총원</b>. 0 이하면 <see cref="DebugRosterCount"/>(채보 없는 디버그 경로).</param>
+        /// <param name="maxEngaged">
+        /// 한 패턴이 <b>최대 몇을 상대하는가</b>. 동시 인원 상한의 하한을 잡는 데만 쓴다.
+        ///
+        /// <para><b>⚠ 이 값을 여기서 정의하지 않는다</b> — 소유자는 <c>Pattern</c>이고(docs/CombatLegibility)
+        /// 디렉터는 받기만 한다. 두 곳이 정의하면 어긋난 조합이 조용히 만들어진다.
+        /// 지금은 전 패턴이 하나만 상대하므로 호출부가 1을 넘긴다.</para>
+        /// </param>
+        public void PrepareStage(int count = 0, int maxEngaged = 1, bool deferEntrance = false)
         {
             Prewarm();
 
             stageRosterCount = count > 0 ? count : DebugRosterCount;
+            spawnedTotal = 0;
+            entranceOpen = false;
+            engageRing.Clear();
+
+            effectiveMaxAlive = ResolveMaxAlive(Mathf.Max(maxEngaged, 1));
+            WarnPoolCapacity();
 
             // 자리는 무대 원 전체에 흩어진다 — 거리 선택지가 많을수록 표적 선택(TakeTargetForWindow)이
             // 창에 맞는 거리를 실제로 고를 수 있다. 등장은 한 명씩 시차를 둔다(동시에 나타나면 팝인이 티 난다).
-            for (int i = ring.Count; i < stageRosterCount; i++)
+            //
+            // ⚠ 총원이 아니라 동시 인원만큼만 세운다. 나머지는 처치마다 하나씩 보충된다(KillOpponent) —
+            //   총원을 그대로 세우면 30명짜리 채보가 곡 시작에 30명을 한꺼번에 세운다.
+            // 미루는 경로에서는 <b>교전에 필요한 최소</b>만 세운다 — 나머지는 곡 시작 후 순차로 나온다.
+            // ⚠ 전원을 미루면 첫 패턴의 상대가 없다: TakeTargetForWindow가 등장 중인 적(SpawnWarping)을
+            //   일부러 거르므로(§11-11) 후보가 0이 되고 마름 가드가 상시 발동한다 — 그 가드는
+            //   "채보와 런타임이 어긋났다"는 뜻이라 정상 경로가 되면 안 된다.
+            int opening = deferEntrance ? Mathf.Max(maxEngaged, 1) : effectiveMaxAlive;
+            int first = Mathf.Min(stageRosterCount, opening);
+            for (int i = ring.Count; i < first; i++)
             {
                 if (SpawnIntoStage(i * Mathf.Max(spawnStagger, 0f), warpOnPrepareStage) == null)
                     break; // 풀이 말랐거나 예산이 떨어졌다
             }
 
             ReleaseCurrentOpponent();
+        }
+
+        /// <summary>
+        /// 실제 동시 인원 상한. <b>씬 값을 끌어올리기만 한다</b> — 크게 적은 쪽의 의도는 존중되고,
+        /// 작게 적혀 있으면 전투가 성립하도록 필요한 만큼만 올린다.
+        ///
+        /// <para><b>왜 필요한가</b>: 상한이 교전 인원을 모른 채 정해지면 <b>대기 링이 구조적으로 얇아진다</b> —
+        /// 교전이 8이면 10 중 2만 남아 "곧 교전할 몇이 서 있다"가 깨진다.</para>
+        /// </summary>
+        private int ResolveMaxAlive(int maxEngaged)
+        {
+            int needed = maxEngaged + Mathf.Max(engageSlotCount, 0);
+            if (needed <= maxAliveEnemies) return maxAliveEnemies;
+
+            // 저작자가 적은 값과 실제로 서는 수가 다르면 그 이유를 화면 밖에서 알 수 있어야 한다.
+            Debug.LogWarning(
+                $"[EnemyDirector] maxAliveEnemies({maxAliveEnemies})가 교전 {maxEngaged} + 대기 {engageSlotCount}보다 작아 " +
+                $"{needed}로 올립니다 - 대기 링이 얇아지는 것을 막기 위한 하한입니다(docs/CombatLegibility).", this);
+
+            return needed;
+        }
+
+        /// <summary>
+        /// 풀 상한이 동시 인원을 담는지 본다. <b>못 담으면 곡 도중 <c>Instantiate</c>가 나고 그 히치가 곧 판정 손실이다</b>.
+        /// 에셋이 소유한 값이라 코드가 올릴 수 없어 경고만 찍는다.
+        /// </summary>
+        private void WarnPoolCapacity()
+        {
+            if (rosterPool == null) return;
+
+            foreach (var definition in rosterPool)
+            {
+                if (definition == null || !definition.IsUsable) continue;
+                if (definition.MaxPoolSize >= effectiveMaxAlive) continue;
+
+                Debug.LogWarning(
+                    $"[EnemyDirector] '{definition.name}'의 MaxPoolSize({definition.MaxPoolSize})가 " +
+                    $"동시 인원 {effectiveMaxAlive}보다 작습니다 - 곡 도중 Instantiate가 날 수 있습니다.", this);
+            }
+        }
+
+        /// <summary>
+        /// <b>대기</b> 겹에 설 적들을 다시 뽑는다 — 플레이어에게 가장 가까운 <see cref="engageSlotCount"/>명.
+        /// <b>패턴당 한 번</b>(<see cref="BindReservation"/>)만 돈다.
+        ///
+        /// <para><b>⚠ 이 목록은 "다음 표적"이 아니다</b> — 다음 상대는 지금 패턴의 성패가 정하므로 미리 알 수 없다(§11-1).
+        /// 이것은 <b>자리</b>일 뿐이다. 다만 그 자리가 <see cref="TakeTargetForWindow"/>의 선택 확률을 바꾼다 —
+        /// 짧은 창에서는 안쪽(<c>engageDistance</c>)이, 긴 창에서는 바깥쪽(<c>standoffDistance</c>)이 자연히 뽑힌다.</para>
+        ///
+        /// <para><b>얇아지면 후방에서 저절로 끌어온다</b> — 후보가 "교전 중이 아닌 적 전부"라
+        /// <b>승격 코드가 따로 없다.</b> 그마저 모자라면 있는 만큼만 선다(곡 후반에 인원이 진짜 적은 경우이고,
+        /// 거기까지 메우면 "적이 줄어드는 것이 곡의 끝"과 싸운다).</para>
+        /// </summary>
+        private void RefreshEngageRing()
+        {
+            engageRing.Clear();
+            if (engageSlotCount <= 0) return;
+
+            engageScratch.Clear();
+            foreach (var view in ring)
+            {
+                if (view == null || IsEngaged(view)) continue;
+                engageScratch.Add(view);
+            }
+
+            Vector3 from = PlayerPosition;
+            int take = Mathf.Min(engageSlotCount, engageScratch.Count);
+
+            // 가까운 순으로 take명. 인원이 10 남짓이라 선택 정렬로 충분하다.
+            for (int n = 0; n < take; n++)
+            {
+                EnemyView best = null;
+                float bestSqr = float.MaxValue;
+
+                foreach (var view in engageScratch)
+                {
+                    if (engageRing.Contains(view)) continue;
+
+                    float sqr = Vector3.ProjectOnPlane(view.transform.position - from, Vector3.up).sqrMagnitude;
+                    if (sqr >= bestSqr) continue;
+
+                    bestSqr = sqr;
+                    best = view;
+                }
+
+                if (best == null) break;
+                engageRing.Add(best);
+            }
         }
 
 #if UNITY_EDITOR
@@ -879,6 +1083,7 @@ namespace EnemySpace
             view.SetGazeTarget(duelAnchor != null ? duelAnchor : transform);
             view.ApplyBackgroundBudget(true);
             ring.Add(view);
+            spawnedTotal++;   // 총원 초과 보충을 막는 유일한 근거(KillOpponent)
             if (spawnBudget > 0) spawnBudget--;
             return view;
         }
@@ -922,14 +1127,15 @@ namespace EnemySpace
             amount <= 0f ? 0f : (Mathf.Abs(view.GetInstanceID() * 0.6180339887f % 1f) - 0.5f) * 2f * amount;
 
         /// <summary>
-        /// 교전 중이 아닌 <b>무대의 적 전원</b>을 플레이어 주위 궤도에 세운다.
+        /// 교전 중이 아닌 적들을 플레이어 주위 궤도에 세운다. <b>두 겹으로 갈린다</b> —
+        /// <b>대기</b>(<see cref="engageDistance"/>)와 <b>후방</b>(<see cref="standoffDistance"/>).
+        /// 교전 중인 적은 여기서 빠진다(위치의 주인이 결투 계획·거리 커브다).
         ///
         /// <para><b>슬롯 인덱스는 리스트 순서로 고정한다.</b> 매 프레임 가까운 자리로 재배정하면
         /// 적끼리 자리를 바꾸며 서로를 가로지른다.</para>
         ///
-        /// <para><b>⚠ 슬롯 수가 <c>ring.Count</c>라 인원이 줄면 간격이 벌어진다</b>(<c>PickOrbitSlot</c>이
-        /// 원주를 그 수로 나눈다). 사망 보충이 없어 곡 후반에는 한두 명만 남으므로, 그때 궤도가
-        /// 어색하면 <c>standoffDistance</c>를 인원에 따라 줄이는 것이 그 손잡이다(docs/CombatLegibility).</para>
+        /// <para><b>⚠ 교전 인원이 늘어도 이 루프는 안 고친다</b>(docs/CombatLegibility) — 빠지는 인원이
+        /// 1에서 N으로 바뀔 뿐이고, 두 겹의 <c>count</c>는 남은 수에서 파생되므로 원주 분할이 자동으로 맞는다.</para>
         /// </summary>
         private void TickWander()
         {
@@ -947,18 +1153,41 @@ namespace EnemySpace
             orbitPhase += orbitSpeed * orbitDirection * Time.deltaTime;
 
             Vector3 player = PlayerPosition;
-            int count = Mathf.Max(ring.Count, 1);
 
-            for (int i = 0; i < ring.Count; i++)
+            innerScratch.Clear();
+            outerScratch.Clear();
+
+            foreach (var view in ring)
             {
-                var view = ring[i];
                 if (view == null) continue;
 
-                // 지금 싸우는 상대는 배회하지 않는다. 나머지 금지 조건은 EnemyView가 스스로 거른다.
-                if (view == currentOpponent) { view.StopWander(); continue; }
+                // 교전 중인 적은 배회하지 않는다. 나머지 금지 조건은 EnemyView가 스스로 거른다.
+                if (IsEngaged(view)) { view.StopWander(); continue; }
+
+                (engageRing.Contains(view) ? innerScratch : outerScratch).Add(view);
+            }
+
+            // ⚠ 두 겹이 위상을 공유하면 안 된다 — 같은 phase면 안쪽과 바깥쪽이 같은 방위에 겹쳐 서서
+            //   두 겹이 한 겹으로 보인다. 바깥에 반 칸 오프셋을 준다.
+            ApplyWanderRing(innerScratch, player, engageDistance, 0f);
+            ApplyWanderRing(outerScratch, player, standoffDistance,
+                            outerScratch.Count > 0 ? 180f / outerScratch.Count : 0f);
+        }
+
+        /// <summary>
+        /// 한 겹을 자기 <paramref name="distance"/>와 자기 <c>count</c>로 궤도에 세운다.
+        /// <b><see cref="EnemyRing.PickOrbitSlot"/>이 이미 인자로 다 받으므로 코어에 새 함수가 없다.</b>
+        /// </summary>
+        private void ApplyWanderRing(List<EnemyView> group, Vector3 player, float distance, float phaseOffset)
+        {
+            int count = Mathf.Max(group.Count, 1);
+
+            for (int i = 0; i < group.Count; i++)
+            {
+                var view = group[i];
 
                 Vector3 slot = EnemyRing.PickOrbitSlot(
-                    player, i, count, standoffDistance, orbitPhase,
+                    player, i, count, distance, orbitPhase + phaseOffset,
                     Center, stageRadius, JitterOf(view, orbitJitter));
 
                 view.SetWander(slot, wanderSpeed);
@@ -990,6 +1219,7 @@ namespace EnemySpace
         private void ReleaseCurrentOpponent()
         {
             currentOpponent = null;
+            engagedOpponents.Clear();
         }
 
         /// <summary>
@@ -1103,7 +1333,7 @@ namespace EnemySpace
         /// <c>EnemyView.EarliestArrival</c>이 막는다(빨리 가서 서고 플레이어를 바라본다).</para>
         /// </summary>
         private DuelPlan BuildDuelPlan(EnemyView opponent, Pattern template, float arriveTime, float playerArriveTime,
-                                       float impactTime)
+                                       float departTime, float impactTime)
         {
             Vector3 player = PlayerPosition;
 
@@ -1125,7 +1355,7 @@ namespace EnemySpace
             {
                 duelAxisOwner = null;
                 return new DuelPlan(player, player + Vector3.forward * distance, arriveTime,
-                                    ResolvePlayerArrival(playerArriveTime, 0f),
+                                    ResolvePlayerArrival(playerArriveTime, 0f, departTime), departTime,
                                     Vector3.forward, impactTime, template);
             }
 
@@ -1141,14 +1371,18 @@ namespace EnemySpace
 
             Vector3 meet = player + toEnemy * playerShare;
             Vector3 playerTarget = meet - dir * (distance * playerShare);
-            playerTarget.y = player.y;
+            // ⚠ 플레이어의 '지금' Y를 쓰면 안 된다 - duelHeightCurve가 띄운 높이가 계획에 실린다.
+            // 그 계획은 교전 자리(EngageSlots.Resolve는 원점 Y를 보존한다)와 기습 자리(DodgeDirector.PlaceAround)로
+            // 그대로 흘러가 적들이 같이 떠오른다. 무대 원 안은 평면이라(CLAUDE.md 13) 지면은 Center.y 하나다.
+            // 플레이어 본인은 이 값을 안 읽는다 - PlayerCombatMover가 자기 Y로 덮는다(이동은 평면에서만).
+            playerTarget.y = Center.y;
 
             // 도착 마감을 실제 거리로 조인다 — 여기서 한 번 조이면 PlayerCombatMover(이동 배속)와
             // CharacterActionPlayer(convergeUntil)가 같은 값을 읽으므로 둘이 어긋날 수가 없다.
             float travel = Vector3.ProjectOnPlane(playerTarget - player, Vector3.up).magnitude;
 
             return new DuelPlan(playerTarget, playerTarget + dir * distance, arriveTime,
-                                ResolvePlayerArrival(playerArriveTime, travel),
+                                ResolvePlayerArrival(playerArriveTime, travel, departTime), departTime,
                                 dir, impactTime, template);
         }
 
@@ -1166,11 +1400,13 @@ namespace EnemySpace
         /// <para><b>⚠ <see cref="playerArriveSlack"/>은 상수여야 한다.</b> 창의 비율로 만들면
         /// "창에 반비례하는 속도"가 그대로 되돌아온다.</para>
         /// </summary>
-        private float ResolvePlayerArrival(float latest, float distance)
+        private float ResolvePlayerArrival(float latest, float distance, float departTime)
         {
             if (cruiseSpeed <= 0f) return latest;
 
-            return Mathf.Min(latest, Time.time + distance / cruiseSpeed + Mathf.Max(playerArriveSlack, 0f));
+            // ⚠ 기준이 지금이 아니라 <b>출발 시각</b>이다. 지금으로 재면 아직 휘두르는 시간까지 이동 시간으로
+            // 세어 도착이 그만큼 이르게 잡히고, 실제 이동 창은 그보다 짧아 cruiseSpeed를 넘어 달린다.
+            return Mathf.Min(latest, departTime + distance / cruiseSpeed + Mathf.Max(playerArriveSlack, 0f));
         }
 
         /// <summary>
@@ -1181,14 +1417,14 @@ namespace EnemySpace
         /// 반면 재접근은 그 규율을 안 거쳐 거리를 <c>failRetreatDistance</c>가 통째로 정하고,
         /// 창이 길면 그 거리가 창 전체로 늘어져 <b>0.9 m/s로 기어간다</b>. 이 경로에만 비율을 건다.</para>
         /// </summary>
-        private float ResolvePlayerArriveTime(float arriveTime, bool reapproach)
+        private float ResolvePlayerArriveTime(float arriveTime, float departTime, bool reapproach)
         {
             if (!reapproach || playerApproachShare >= 1f) return arriveTime;
 
-            float window = arriveTime - Time.time;
+            float window = arriveTime - departTime;
             if (window <= 0f) return arriveTime;
 
-            return Time.time + window * playerApproachShare;
+            return departTime + window * playerApproachShare;
         }
 
         // ── 이벤트 처리 ──────────────────────────────────────────────────────────
@@ -1297,6 +1533,24 @@ namespace EnemySpace
             if (r.template != null && r.template.IsMash)
                 arriveTime = Mathf.Min(arriveTime, r.firstNodeTime);
 
+            // ⚠ 마감을 적 클립만으로 잡으면 안 된다 — Attacker.Player 패턴에는 r.attack이 없어 마감이
+            // 임팩트 그 자체가 되고, 플레이어 베기는 임팩트보다 와인드업만큼 먼저 시작하므로
+            // <b>자기 클립이 도는 내내 미끄러진다</b>(= 애니메이션 재생 도중 다음 적에게 접근).
+            // §6의 "이동은 클립 시작 시각까지 끝난다"가 플레이어 쪽에서는 지켜지지 않고 있었다.
+            //
+            // 바닥은 firstNodeTime이다 — CharacterActionPlayer.pendingScheduleStart와 같은 바닥이며,
+            // 그래야 긴 클립이 '패턴이 시작하기도 전에 도착'이라는 불가능한 마감을 요구하지 않는다.
+            if (r.template != null)
+                arriveTime = Mathf.Min(arriveTime,
+                                       Mathf.Max(r.impactTime - r.template.PlayerSwingLead, r.firstNodeTime));
+
+            // 출발은 직전 애니메이션이 완전히 마무리된 뒤다 — 그 전에 움직이면 휘두르는 채로 미끄러진다.
+            // ⚠ 도착 마감은 못 넘긴다(칼이 맞는 시각이 우선). 여유가 없으면 departTime == arriveTime이 되어
+            // 이동 창이 0이 되고, 그러면 아래 TakeTargetForWindow가 '바로 옆의 적'을 고른다 — 그것이 옳다.
+            float departTime = playerActionPlayer != null
+                ? Mathf.Clamp(playerActionPlayer.ActionSettleTime, Time.time, arriveTime)
+                : Time.time;
+
             // 표적 선택도 '도착 시각의 간격'을 쓴다 — 커브가 그 뒤 간격을 바꿔도
             // 어느 적을 고를지는 붙는 순간의 거리로 정해야 창과 속도감이 맞는다(§11-2).
             float duelDistance = DuelDistanceOf(r.template, arriveTime - r.impactTime);
@@ -1310,7 +1564,7 @@ namespace EnemySpace
             if (currentOpponent == null)
             {
                 var previous = currentOpponent;
-                currentOpponent = TakeTargetForWindow(arriveTime - Time.time, duelDistance);
+                currentOpponent = TakeTargetForWindow(arriveTime - departTime, duelDistance);
                 if (currentOpponent != previous) OnOpponentChanged?.Invoke(previous, currentOpponent);
 
                 // 새 상대 = 새 사슬. 누적은 상대와 수명을 같이한다.
@@ -1321,18 +1575,126 @@ namespace EnemySpace
             var opponent = currentOpponent;
             r.opponent = opponent;
 
+            // 대기 겹을 여기서 한 번 뽑는다 — 패턴당 한 번이어야 경계에 선 둘이 자리를 바꾸지 않는다.
+            RefreshEngageRing();
+
             var plan = BuildDuelPlan(opponent, r.template, arriveTime,
-                                     ResolvePlayerArriveTime(arriveTime, reapproach), r.impactTime);
+                                     ResolvePlayerArriveTime(arriveTime, departTime, reapproach),
+                                     departTime, r.impactTime);
             lastPlan = plan;
             OnDuelScheduled?.Invoke(plan);
 
-            if (opponent != null)
-                AssignEngageClip(opponent, r, plan);
+            AssignEngageFormation(r, plan, arriveTime, duelDistance);
 
             if (r.cue.projectile != null && projectileDirector != null)
             {
                 Vector3 origin = opponent != null ? opponent.RingPosition : Center;
                 projectileDirector.Reserve(r.token, r.cue.projectile, r.startTime, r.impactTime, Vector2.zero, origin);
+            }
+        }
+
+        /// <summary>
+        /// 적을 하나 더 태워도 되는가. <b>처치 보충과 순차 등장이 같은 술어를 쓴다</b> —
+        /// 두 곳에 각자 적으면 총원 초과나 동시 인원 초과가 한쪽에서만 새어 나간다.
+        /// </summary>
+        private bool CanSpawnMore() => spawnedTotal < stageRosterCount && ring.Count < effectiveMaxAlive;
+
+        /// <summary>
+        /// 남은 적의 <b>순차 등장을 연다</b>. <c>ChartPlayer</c>가 곡이 시작되는 순간 부른다.
+        ///
+        /// <para><b>왜 곡 시작인가</b>: <c>PrepareStage</c>는 카운트다운 시작 직전에 불리는데(§5의 프리웜 창)
+        /// 그 3초는 카메라 인트로가 도는 구간이라(§7-2) <b>등장을 아무도 못 본다</b> —
+        /// 곡이 열릴 때는 이미 전부 서 있어 "미리 배치된 형태"로 읽힌다.</para>
+        /// </summary>
+        public void BeginStageEntrance()
+        {
+            entranceOpen = true;
+            nextEntranceAt = Time.time;
+        }
+
+        /// <summary>
+        /// 열려 있으면 <see cref="spawnStagger"/> 간격으로 <b>한 명씩</b> 균열에서 낸다.
+        ///
+        /// <para><b>처치 보충과 같은 경로다</b>(<see cref="SpawnIntoStage"/> + <see cref="CanSpawnMore"/>) —
+        /// 시각만 다르게 쓰는 것이라 인원 불변식이 저절로 따라온다.</para>
+        /// </summary>
+        private void TickEntrance()
+        {
+            if (!entranceOpen || Time.time < nextEntranceAt) return;
+            if (!CanSpawnMore()) return;
+
+            if (SpawnIntoStage() == null) return;   // 풀이 말랐거나 예산이 떨어졌다 — 다음 프레임에 다시 본다
+
+            nextEntranceAt = Time.time + Mathf.Max(spawnStagger, 0f);
+        }
+
+        /// <summary>
+        /// 교전에서 빠진 <b>살아 있는</b> 적을 무대로 되돌린다.
+        ///
+        /// <para><see cref="TakeTargetForWindow"/>가 교전에 들이면서 <c>ring</c>에서 빼 가므로,
+        /// 되돌리지 않으면 <b>어느 목록에도 없는 미아</b>가 된다 — 배회도 이격도 기습 후보도 실루엣도 그를 모른다.</para>
+        ///
+        /// <para>자리를 따로 안 잡는다 — 다음 프레임에 <see cref="TickWander"/>가 궤도 슬롯을 준다
+        /// (기습이 끝난 적을 놓아주는 것과 같은 관용구).</para>
+        /// </summary>
+        private void ReturnToRing(EnemyView view)
+        {
+            if (view == null || ring.Contains(view)) return;
+
+            view.ApplyBackgroundBudget(true);
+            ring.Add(view);
+        }
+
+        /// <summary>
+        /// 이 패턴이 상대하는 적들을 <b>저작된 자리에 세우고</b> 각자 클립을 배정한다.
+        ///
+        /// <para><b>A안(docs/CombatLegibility Step 7)</b>: 플레이어의 임팩트 자리(<c>plan.PlayerPosition</c>)를
+        /// 대표 하나로 정한 뒤, 교전에 든 N명이 <see cref="EngageSlots.Resolve"/>가 준 자리로 <b>걸어간다</b>.
+        /// 예전에는 "이미 그 거리에 서 있는 적"을 골라 왔지만, 그러면 저작한 대형이 저절로 만들어지지 않는다.</para>
+        ///
+        /// <para><b>⚠ 오프셋이 비면 예전과 한 픽셀도 다르지 않다</b> — 폴백 자리가
+        /// <c>plan.PlayerPosition + axis × gap</c>이고 그것이 곧 <c>plan.EnemyPosition</c>이다.</para>
+        ///
+        /// <para><b>인원은 패턴이 든다</b>(<c>Pattern.EngagedCount</c>) — 디렉터는 그 수만큼 채울 뿐이다.</para>
+        /// </summary>
+        private void AssignEngageFormation(Reservation r, DuelPlan plan, float arriveTime, float duelDistance)
+        {
+            // 대표를 목록 맨 앞에 둔다. 사슬에서는 이미 들어 있다.
+            if (currentOpponent != null && !engagedOpponents.Contains(currentOpponent))
+                engagedOpponents.Insert(0, currentOpponent);
+
+            int want = r.template != null ? r.template.EngagedCount : 1;
+
+            // ⚠ 남으면 먼저 놓아준다. 교전에 들 때 ring에서 빠지므로(TakeTargetForWindow) 그냥 목록에서만 지우면
+            //   ring에도 목록에도 없는 <b>미아</b>가 되어 배회·이격·기습 후보·실루엣에서 통째로 사라진다.
+            //   그리고 자리 배정이 인덱스로 도는데 인원이 저작값보다 많으면 범위를 넘어 <b>둘이 한 점에 겹쳐 선다</b>.
+            //   ⚠ 대표(인덱스 0)는 절대 안 놓는다 — want가 최소 1이라 뒤에서 자르면 자동으로 지켜진다.
+            while (engagedOpponents.Count > want)
+            {
+                int last = engagedOpponents.Count - 1;
+                ReturnToRing(engagedOpponents[last]);
+                engagedOpponents.RemoveAt(last);
+            }
+
+            // 모자라면 채운다 — 고르는 규율은 대표와 같다(창에 맞는 거리). 뽑힌 뒤 자기 자리로 걸어간다.
+            while (engagedOpponents.Count < want)
+            {
+                var extra = TakeTargetForWindow(arriveTime - plan.PlayerDepartTime, duelDistance);
+                if (extra == null) break;   // 무대에 더 없다 — 있는 만큼으로 교전한다
+
+                engagedOpponents.Add(extra);
+            }
+
+            float gap = Vector3.ProjectOnPlane(plan.EnemyPosition - plan.PlayerPosition, Vector3.up).magnitude;
+            var offsets = r.template != null ? r.template.EngageOffsets : null;
+
+            for (int i = 0; i < engagedOpponents.Count; i++)
+            {
+                var view = engagedOpponents[i];
+                if (view == null) continue;
+
+                Vector3 slot = EngageSlots.Resolve(offsets, i, plan.PlayerPosition, plan.Axis, gap);
+                AssignEngageClip(view, r, plan, slot);
             }
         }
 
@@ -1346,7 +1708,7 @@ namespace EnemySpace
         /// <para>클립이 없거나 창이 <see cref="minFeintWindow"/>보다 짧으면 <see cref="EnemyView.AssignFeint"/>가
         /// 자리만 잡고 물러나 <b>기본 Idle</b>이 유지된다 — 예전 동작 그대로다.</para>
         /// </summary>
-        private void AssignEngageClip(EnemyView opponent, Reservation r, DuelPlan plan)
+        private void AssignEngageClip(EnemyView opponent, Reservation r, DuelPlan plan, Vector3 duelPosition)
         {
             // 상호 공격 — 적이 견제 대신 진짜 공격을 같이 휘두른다(Pattern.CountersOnFail).
             //
@@ -1356,7 +1718,7 @@ namespace EnemySpace
             if (r.template != null && r.template.CountersOnFail)
             {
                 opponent.AssignAttack(r.template.EnemyAttack, r.impactTime,
-                                      plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+                                      duelPosition, plan.PlayerPosition, maxAttackSpeed);
                 return;
             }
 
@@ -1367,11 +1729,11 @@ namespace EnemySpace
 
             if (feint != null && feint.IsUsable && roomy)
             {
-                opponent.AssignFeint(feint, r.impactTime, plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+                opponent.AssignFeint(feint, r.impactTime, duelPosition, plan.PlayerPosition, maxAttackSpeed);
                 return;
             }
 
-            opponent.AssignAttack(r.attack, r.impactTime, plan.EnemyPosition, plan.PlayerPosition, maxAttackSpeed);
+            opponent.AssignAttack(r.attack, r.impactTime, duelPosition, plan.PlayerPosition, maxAttackSpeed);
         }
 
         /// <summary>가장 오래된 미배정 예약 하나를 배정한다. 예약이 확정될 때마다 불린다.</summary>
@@ -1486,7 +1848,19 @@ namespace EnemySpace
                 // killOnSuccess를 성공하고 사슬 임계를 채웠으면 처치, 아니면 죽지 않고 교전이 이어진다.
                 // 이 분기가 "실패하면 같은 상대와 계속"의 유일한 소유자다 — 아래 배정은 그 결과를 읽기만 한다.
                 if (r.cue.killOnSuccess && playerSucceeded && chainSuccesses >= RequiredHits(chainHits))
-                    KillOpponent(opponent, ResolveDeathSet(r), r.impactTime, r.template?.EnemyDeath); // 안에서 상대 해제
+                {
+                    // 처치는 전원 또는 아무도다(killOnSuccess가 bool로 남은 이유) — 교전에 든 적을 전부 벤다.
+                    // ⚠ 사본으로 돈다: KillOpponent가 끝에서 목록을 비운다(ReleaseCurrentOpponent).
+                    engagedScratch.Clear();
+                    engagedScratch.AddRange(engagedOpponents);
+                    if (!engagedScratch.Contains(opponent)) engagedScratch.Add(opponent);
+
+                    var set = ResolveDeathSet(r);
+                    foreach (var view in engagedScratch)
+                    {
+                        if (view != null) KillOpponent(view, set, r.impactTime, r.template?.EnemyDeath);
+                    }
+                }
                 else
                 {
                     // 물러날 자리는 무대를 아는 쪽이 정한다 — 뷰는 무대 중심도 반경도 모른다.
@@ -1506,6 +1880,19 @@ namespace EnemySpace
 
                     opponent.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, retreatTarget,
                                      reactionClip, r.impactTime, counterLanding);
+
+                    // 나머지 교전 상대도 같은 결과를 겪는다 — 한 획이 셋을 스쳤는데 하나만 젖혀지면 안 된다.
+                    // ⚠ 후퇴 자리는 각자 자기 자리에서 뒤로 잡는다(대표 자리를 공유하면 셋이 한 점으로 모인다).
+                    foreach (var extra in engagedOpponents)
+                    {
+                        if (extra == null || extra == opponent) continue;
+
+                        Vector3 extraTarget = EnemyRing.PickRetreatTarget(
+                            extra.transform.position, -extra.transform.forward, Center, stageRadius, retreat);
+
+                        extra.Resolve(playerSucceeded, AttackerOf(r.template), retreat, retreatDuration, extraTarget,
+                                      reactionClip, r.impactTime, counterLanding);
+                    }
 
                     // 반응 통지 — 판정은 EnemyView.Resolve의 parried 식과 '같은 retreat 값'을 본다.
                     // 다른 값으로 다시 계산하면 애니메이션과 이펙트가 언젠가 어긋난다.
@@ -1690,9 +2077,11 @@ namespace EnemySpace
             chainHits = 0;
             chainSuccesses = 0;
 
-            // 하나 죽었으니 무대의 인원이 하나 준다 — <b>보충하지 않는다</b>(docs/CombatLegibility).
-            // 적 수는 채보의 처치 엔트리 수와 같으므로 마지막 엔트리에서 무대가 정확히 빈다.
-            // 모자라는 경우의 안전망은 TakeTargetForWindow 하나뿐이다.
+            // 하나 죽었으니 하나 보충한다 — 단, <b>총원을 넘기지 않는다</b>(docs/CombatLegibility).
+            // ⚠ 첫 조건이 "잔여 0"을 지키는 전부다: 총원을 다 태우면 보충이 멈춰 인원이 0까지 마르고,
+            //   마무리 실루엣(§14)이 터지는 프레임에 적이 없다. 무리 모델의 무한 보충(사망 1 : 스폰 1)이 아니다.
+            // ⚠ 처치가 동시에 여럿이 되면 이 자리가 N번 불린다 — 조건이 매 호출 재평가되므로 식은 그대로 맞다.
+            if (CanSpawnMore()) SpawnIntoStage();
 
             ReleaseCurrentOpponent();
         }
@@ -1716,7 +2105,12 @@ namespace EnemySpace
 
             // 살아남은 상대(사슬 중간 타격)도 같이 언다. 안 그러면 플레이어만 멈추고 적 리액션만 흐른다.
             // 죽는 중이면 위 순회가 이미 얼렸고 뷰의 hitStopped 가드가 두 번째 호출을 막는다.
+            // ⚠ 교전 중인 적은 전부 얼린다 — 하나만 멈추면 나머지가 그 창 동안 계속 젖혀진다.
             currentOpponent?.ApplyHitStop(duration, 0f, pushBurst);
+            foreach (var view in engagedOpponents)
+            {
+                if (view != null && view != currentOpponent) view.ApplyHitStop(duration, 0f, pushBurst);
+            }
         }
 
         /// <summary>사망 클립이 끝난 예약을 실행한다. 여기서야 적이 실제로 갈라진다.</summary>
@@ -1856,6 +2250,10 @@ namespace EnemySpace
 
             foreach (var e in ring) if (e != null) into.Add(e.transform);
             if (currentOpponent != null) into.Add(currentOpponent.transform);
+            foreach (var view in engagedOpponents)
+            {
+                if (view != null && view != currentOpponent) into.Add(view.transform);
+            }
 
             // 죽는 중이지만 아직 안 갈라진 적 — 화면에는 아직 온전한 몸으로 서 있다.
             foreach (var pending in pendingKills)
@@ -1871,6 +2269,10 @@ namespace EnemySpace
         {
             foreach (var e in ring) e?.Dissolve(dissolveDuration, dissolveMaterial);
             currentOpponent?.Dissolve(dissolveDuration, dissolveMaterial);
+            foreach (var view in engagedOpponents)
+            {
+                if (view != null && view != currentOpponent) view.Dissolve(dissolveDuration, dissolveMaterial);
+            }
         }
 
         /// <summary>소멸 연출까지 전부 끝났는지. 스테이지 종료 신호를 낼 시점 판단에 쓴다.</summary>
@@ -1884,6 +2286,10 @@ namespace EnemySpace
                 }
 
                 if (currentOpponent != null && !currentOpponent.DissolveFinished) return false;
+                foreach (var view in engagedOpponents)
+                {
+                    if (view != null && !view.DissolveFinished) return false;
+                }
 
                 return true;
             }
@@ -1907,6 +2313,7 @@ namespace EnemySpace
             RecycleDebris();
             RecycleCorpses();
             EnforcePieceBudget();
+            TickEntrance();
             TickWander();
         }
 
@@ -1944,7 +2351,19 @@ namespace EnemySpace
             // 통로의 반대편 끝. 상대가 없으면 플레이어 자신 = 캡슐이 원으로 무너진다.
             // ⚠ Destination이 아니라 transform.position이다 — 통로는 '지금 화면에 있는 선'이다.
             Vector3 player = PlayerPosition;
-            PushOut(player, currentOpponent != null ? currentOpponent.transform.position : player);
+
+            // ⚠ 교전이 여럿이면 캡슐도 여럿이다 — 통로마다 한 번씩 민다.
+            //   SeparationPush가 선분 단위라 호출을 N번 하면 되고 새 수학이 0개다.
+            if (engagedOpponents.Count == 0)
+            {
+                PushOut(player, currentOpponent != null ? currentOpponent.transform.position : player);
+                return;
+            }
+
+            foreach (var view in engagedOpponents)
+            {
+                if (view != null) PushOut(player, view.transform.position);
+            }
         }
 
         /// <summary>
@@ -1996,7 +2415,10 @@ namespace EnemySpace
             for (int i = 0; i < ring.Count; i++)
             {
                 var view = ring[i];
-                if (view == null || view == currentOpponent) continue;
+
+                // ⚠ 교전 중인 적은 캡슐의 끝점이지 위반자가 아니다 — 자기 영역에 자기가 걸릴 수 없다.
+                //   여럿이 되면 IsEngaged가 그만큼 더 빠진다(docs/CombatLegibility).
+                if (view == null || IsEngaged(view)) continue;
 
                 // IsIdle 하나로 사망중·공격예약·리액션·이동중이 전부 걸린다. 새 판정을 만들지 않는다.
                 if (!view.IsIdle) continue;
@@ -2025,6 +2447,11 @@ namespace EnemySpace
 
         private void ReleaseEnemy(EnemyView view)
         {
+            // ⚠ 대기 링·교전 목록에서 먼저 뺀다 — 안 빼면 다음 대여가 잘못된 겹으로 나오거나
+            //   이미 죽은 적이 교전 중으로 남는다(§11-8 아웃라인과 같은 함정).
+            engageRing.Remove(view);
+            engagedOpponents.Remove(view);
+
             view.ResetState();
             pool.Release(view.gameObject);
         }

@@ -1,4 +1,4 @@
-using EnemySpace;
+﻿using EnemySpace;
 using PatternSpace;
 using UnityEngine;
 
@@ -100,9 +100,15 @@ public class PlayerCombatMover : MonoBehaviour
     /// </summary>
     private bool ShouldDeferHandover(EnemyDirector.DuelPlan plan)
     {
-        if (!IsCurveDriving()) return false;
+        // 도착 마감은 어느 이유로도 못 넘긴다 — 칼이 맞는 시각이 위치 소유권보다 우선이다.
+        if (Time.time >= plan.PlayerArriveTime) return false;
 
-        return Time.time < plan.PlayerArriveTime;
+        // 직전 액션의 애니메이션이 아직 마무리되지 않았으면 출발하지 않는다.
+        // ⚠ 매 프레임 다시 본다 — 히트스톱이 마무리 시각을 뒤로 밀기 때문이다(ActionSettleTime).
+        if (actionPlayer != null && Time.time < actionPlayer.ActionSettleTime) return true;
+
+        // 그 뒤에도 커브가 임팩트 이후 구간(= 관통)을 그리는 중이면 더 기다린다.
+        return IsCurveDriving();
     }
 
     /// <summary>지금 이 커브가 자기 클립을 타고 구동 중이며 아직 마지막 키에 닿지 않았는가.</summary>
@@ -150,6 +156,12 @@ public class PlayerCombatMover : MonoBehaviour
     private Vector3 curveEnemyPosition;
     private Vector3 curveAxis;       // 플레이어 → 적 단위벡터. 커브는 이 축 위에서만 민다
     private float curveBaseDistance; // 커브가 비어 있을 때 쓰는 상수 폴백(계획이 잡은 간격)
+
+    /// <summary>
+    /// 높이 커브의 기준면(지면) Y. <b>구동 시작에 한 번 캐시한다</b> —
+    /// 매 프레임 현재 Y를 읽으면 <b>자기 출력이 다음 프레임 입력이 되어 높이가 누적된다</b>.
+    /// </summary>
+    private float curveGroundY;
     private float curveImpactTime;   // 이 커브가 속한 패턴의 임팩트 절대시각(= 주인을 대조하는 신분증)
     private bool curveSuspended;     // 구르는 동안만 재워 둔다. 끝나면 축을 다시 잡고 이어받는다
 
@@ -161,7 +173,11 @@ public class PlayerCombatMover : MonoBehaviour
     /// </summary>
     private void BeginCurveDrive(EnemyDirector.DuelPlan plan, Vector3 playerTarget)
     {
-        if (actionPlayer == null || plan.Template == null || !plan.Template.HasDuelDistanceCurve)
+        // 간격·높이 중 하나라도 있으면 구동한다 — 도약만 저작한 패턴(간격은 상수)도 성립해야 한다.
+        bool hasCurve = plan.Template != null &&
+                        (plan.Template.HasDuelDistanceCurve || plan.Template.HasDuelHeightCurve);
+
+        if (actionPlayer == null || !hasCurve)
         {
             curveTemplate = null;
             return;
@@ -180,6 +196,7 @@ public class PlayerCombatMover : MonoBehaviour
         curveAxis = plan.Axis;
         curveImpactTime = plan.ImpactTime;
         curveBaseDistance = Vector3.ProjectOnPlane(plan.EnemyPosition - playerTarget, Vector3.up).magnitude;
+        curveGroundY = transform.position.y;
     }
 
     /// <summary>
@@ -211,7 +228,9 @@ public class PlayerCombatMover : MonoBehaviour
         float gap = curveTemplate.DuelGapAt(relTime, curveBaseDistance);
 
         Vector3 position = curveEnemyPosition - curveAxis * gap;
-        position.y = transform.position.y;
+
+        // 높이는 간격과 <b>같은 시계·다른 축</b>이다. 커브가 없으면 0이라 지면에 붙는다(예전 동작).
+        position.y = curveGroundY + curveTemplate.DuelHeightAt(relTime);
         transform.position = position;
 
         logDriveFrames++;
@@ -370,7 +389,10 @@ public class PlayerCombatMover : MonoBehaviour
 
         float rad = angle * Mathf.Deg2Rad;
         Vector3 position = rollCenter + new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)) * rollRadius;
-        position.y = transform.position.y;
+
+        // ⚠ 구르기는 위치의 주인이므로 높이도 놓는다(주인 순서: 구르기 > 커브 > 수렴).
+        // 안 놓으면 도약 중에 회피하면 <b>공중에 뜬 채로 원을 그린다</b>.
+        position.y = curveTemplate != null ? curveGroundY : transform.position.y;
         transform.position = position;
 
         Vector3 facing = Vector3.ProjectOnPlane(rollCenter - position, Vector3.up);

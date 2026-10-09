@@ -459,6 +459,9 @@ namespace EnemySpace
             wanderSpeed = Mathf.Max(speed, 0f);
         }
 
+        /// <summary>지금 향하는 배회 슬롯. <b>기즈모가 읽는다</b> — 디렉터가 준 자리를 되계산하지 않게 한다.</summary>
+        public Vector3 WanderTarget => wanderTarget;
+
         /// <summary>배회를 멈추고 Idle로 돌린다. 결투 배정 진입점에서 반드시 불러야 보간이 안 싸운다.</summary>
         public void StopWander()
         {

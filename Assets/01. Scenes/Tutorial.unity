@@ -6428,8 +6428,15 @@ MonoBehaviour:
   debugChart: {fileID: 11400000, guid: 20e067469aa0be549951c1c44cd08f9f, type: 2}
   patternHandler: {fileID: 1565592730}
   enemyDirector: {fileID: 1729954864}
+  finale: {fileID: 0}
   countdownDuration: 3
   playOnStart: 0
+  stageMode: 0
+  retryGapBeats: 4
+  rewindToBar: 0
+  fallbackBeatsPerBar: 4
+  outroHold: 1.5
+  outroFade: 0.35
 --- !u!82 &854156977
 AudioSource:
   m_ObjectHideFlags: 0
@@ -18740,19 +18747,15 @@ MonoBehaviour:
   duelAnchor: {fileID: 1923274461}
   viewCamera: {fileID: 330585545}
   projectileDirector: {fileID: 1621256090}
+  playerActionPlayer: {fileID: 6328205791487977059}
   stageRadius: 8
-  ringCount: 6
   minSpacing: 2.5
   minPlayerDistance: 5
   spawnCandidateCount: 24
   separationRadius: 1
-  clusterEnabled: 1
-  clusterSize: 4
-  clusterRadius: 2
-  clusterMoveSpeed: 3
+  spawnMoveSpeed: 3
   spawnStagger: 0.15
-  stagedReturnDuration: 3
-  stagedMaxDistance: 8
+  maxAliveEnemies: 10
   spawnMaxOffset: 6
   riftPoints:
   - {fileID: 1360371991}
@@ -18764,6 +18767,8 @@ MonoBehaviour:
   warpOnPrepareStage: 1
   wanderEnabled: 1
   standoffDistance: 3.5
+  engageDistance: 5
+  engageSlotCount: 3
   wanderSpeed: 1.3
   orbitSpeed: 15
   orbitReverseInterval: {x: 3, y: 7}

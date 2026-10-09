@@ -2632,6 +2632,8 @@ MonoBehaviour:
   minimumSectionDistance: 0.015
   sampleInterval: 0
   linesAlongTrail: 2
+  useCustomIntermediatePoints: 0
+  customIntermediatePoints: []
   fadeAlphaOverLifetime: 1
   alphaOverLifetime:
     serializedVersion: 2
@@ -2659,6 +2661,7 @@ MonoBehaviour:
     m_RotationOrder: 4
   startActive: 0
   clearPreviousTrailOnStart: 1
+  optimizeForMobile: 0
   smoothLowFps: 1
   maximumSmoothedSectionDistance: 0.08
   maxIntermediateSectionsPerFrame: 8
@@ -2672,6 +2675,7 @@ MonoBehaviour:
   sortingOrder: 0
   receiveShadows: 0
   shadowCastingMode: 0
+  lockAutomaticEditorUpdates: 0
   presetPointAEffectInstances: []
   appliedEffectPreset: {fileID: 11400000, guid: d3db3200ec2e18745b6f69e1736207e1, type: 2}
 --- !u!1 &5673568199253478708
@@ -5336,6 +5340,7 @@ MonoBehaviour:
   upperBodyIdleClips:
   - {fileID: 7400000, guid: 822a0587b5524dd419b0930465021ca6, type: 2}
   - {fileID: 7400000, guid: 6c6efaacf48be9e43a6b5d4db993bb81, type: 2}
+  guardIdleClip: {fileID: 0}
   upperBodyBlendDuration: 0.18
   moveSpeed: 3
   reactionHoldDuration: 0.6
@@ -5346,6 +5351,7 @@ MonoBehaviour:
   parrySpeedParam: ParrySpeed
   parrySpeed: 2
   crossFadeDuration: 0.12
+  mashReactionCrossFade: 0.04
   dissolveProperty: _Dissolve
   highlightLayerName: AmbushOutline
 --- !u!114 &8345563982493137149
