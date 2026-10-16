@@ -105,8 +105,14 @@ public class CameraDirector : MonoBehaviour
              "0 이하면 씬의 Brain 값을 그대로 쓴다(예전 동작).\n\n" +
              "⚠ 값은 Awake에서 Brain.DefaultBlend에 써 넣는다. Brain이 런타임 진실의 원천이라는 규율은 그대로다 —\n" +
              "인트로 마무리 블렌드도 같은 값을 읽으므로 둘이 어긋날 수 없다.\n" +
-             "⚠ Brain의 블렌드 Style이 Cut이면 시간은 무시된다(그쪽이 이긴다).")]
+             "⚠ cutBetweenAngles가 켜져 있으면 이 값은 무시된다(Cut은 시간을 안 본다).")]
     [SerializeField] private float angleBlendDuration = 0.4f;
+
+    [Tooltip("앵글 전환을 블렌드 없이 즉시 컷으로 한다. 끄면 angleBlendDuration 초만큼 블렌드한다(예전 동작).\n\n" +
+             "⚠ 인트로 마무리도 같이 컷이 된다 — IntroRoutine이 Brain.DefaultBlend.BlendTime을 읽는데 " +
+             "Cut이면 그 게터가 0을 돌려주기 때문이다. 그래서 스플라인이 카운트다운 전체를 쓰고 " +
+             "끝에서 게임플레이 구도로 컷한다.")]
+    [SerializeField] private bool cutBetweenAngles = true;
 
     [Header("Cue Catalog")]
     [Tooltip("트리거별 쉐이크 설정. 연출 추가 = 여기에 한 줄.")]
@@ -175,6 +181,13 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("프레이밍 가중치의 목표를 이진값 + 히스테리시스로 만든다(두 임계 사이는 현재 상태 유지).\n" +
              "끄면 예전 연속식. 감쇠는 어느 쪽이든 그대로라 전환은 여전히 부드럽다.")]
     [SerializeField] private bool framingHysteresis = true;
+
+    [Tooltip("활성 카메라의 각도를 활성화되는 순간에 고정한다(= 카메라가 플레이어 회전을 따라 돌지 않는다).\n" +
+             "비활성 카메라만 자기 자리(후면·측면)를 계속 추종하고, 활성화되는 순간 그 값에 굳는다.\n" +
+             "플레이어는 RotationComposer·GroupFraming이 계속 화면 중앙에 담는다.\n\n" +
+             "끄면 예전 동작(그룹 회전이 플레이어 yaw를 상시 추종)이다 — " +
+             "cameraTurnDamping·yawCutThreshold는 그때만 쓰인다.")]
+    [SerializeField] private bool lockActiveAngle = true;
 
     [Header("Intro")]
     [Tooltip("카운트다운 시각원. 비우면 인트로 기능만 꺼진다.")]
@@ -299,6 +312,11 @@ public class CameraDirector : MonoBehaviour
 
         // 시작 구도를 확정한다. 씬에 저장된 우선순위가 무엇이든 0번이 이긴다.
         angleSwitcher.Setup();
+
+        // ⚠ Setup 뒤여야 한다 — 오프셋 통로를 거기서 집는다. includeActive가 여기서만 true인 이유는
+        // 0번 카메라도 첫 프레임부터 플레이어 기준 자리에 있어야 하기 때문이다(안 그러면 씬의 base 값이
+        // "플레이어 yaw = 0" 가정으로 읽혀 시작 구도가 플레이어 초기 방향에 따라 어긋난다).
+        if (lockActiveAngle && framingEnabled) angleSwitcher.Aim(PlayerYaw, includeActive: true);
     }
 
     /// <summary>
@@ -338,8 +356,16 @@ public class CameraDirector : MonoBehaviour
         cameraYaw = actionPlayer.transform.eulerAngles.y;
         cameraYawVelocity = 0f;
 
+        // ⚠ 고정 앵글의 전제가 이 한 줄이다. 그룹 회전을 항등에 두면 vcam의 BindingMode = LockToTarget이
+        // 그대로 월드 좌표가 되어(그룹 로컬 == 월드) FollowOffset이 월드 오프셋으로 해석된다
+        // → vcam을 하나도 안 고치고 "회전하지 않는 카메라"가 성립한다. 이후 아무도 이 회전을 쓰지 않는다.
+        if (lockActiveAngle) targetGroup.transform.rotation = Quaternion.identity;
+
         framingEnabled = true;
     }
+
+    /// <summary>고정 앵글의 기준 방향. 비활성 vcam이 이 방향을 기준으로 자기 자리를 잡는다.</summary>
+    private float PlayerYaw => actionPlayer.transform.eulerAngles.y;
 
     /// <summary>
     /// 전환 속도를 <b>Brain에 써 넣는다</b>(읽는 게 아니라). 튜닝은 인스펙터 한 곳에서 하고 싶고,
@@ -347,14 +373,31 @@ public class CameraDirector : MonoBehaviour
     /// <b>인트로 마무리(그 값을 읽는다, §7-2)와 앵글 전환이 서로 다른 시간으로 돈다.</b>
     /// 그래서 여기서 한 번 밀어 넣고, 이후로는 아무도 이 필드를 안 읽는다.
     ///
-    /// <para>0 이하면 씬 값을 존중한다(예전 동작). Style은 건드리지 않는다 —
-    /// <c>Cut</c>이면 시간이 무시되는 것도 씬의 저작 의도다.</para>
+    /// <para>0 이하면 씬 값을 존중한다(예전 동작).</para>
+    ///
+    /// <para><b><see cref="cutBetweenAngles"/>면 Style까지 여기서 정한다.</b> per-vcam 커스텀 블렌드
+    /// (<c>CinemachineBlenderSettings</c>)를 만들지 않는 이유: 전환이 전부 컷이면 그 테이블이 죽은 데이터다.
+    /// <c>Select()</c> 뒤에 <c>brain.ActiveBlend = null</c>로 끊는 방식도 쓰지 않는다 — Brain이 우선순위
+    /// 변화를 알아채는 프레임이 밀려서(인트로가 실측 3프레임을 겪었다, <see cref="IntroCutGuardFrames"/>)
+    /// <b>아직 없는 것을 끊는 no-op</b>이 되고 그 뒤에 생긴 블렌드가 그대로 끝까지 돈다.</para>
     /// </summary>
     private void ApplyBlendDuration()
     {
-        if (angleBlendDuration <= 0f || brain == null) return;
+        if (brain == null) return;
 
         var blend = brain.DefaultBlend;
+
+        // 컷이면 Style이 시간을 무시하므로(BlendTime 게터가 0을 돌려준다) Time은 손대지 않는다 —
+        // 껐을 때 씬의 저작 값으로 그대로 돌아오게 둔다.
+        if (cutBetweenAngles)
+        {
+            blend.Style = CinemachineBlendDefinition.Styles.Cut;
+            brain.DefaultBlend = blend;
+            return;
+        }
+
+        if (angleBlendDuration <= 0f) return;
+
         blend.Time = angleBlendDuration;
         brain.DefaultBlend = blend;
     }
@@ -796,6 +839,11 @@ public class CameraDirector : MonoBehaviour
     ///
     /// <para><c>SmoothDampAngle</c>을 쓰는 이유는 둘이다 — 각도 랩어라운드(359°→1°)를 알아서 처리하고,
     /// 속도를 들고 있어 감쇠 도중 목표가 또 바뀌어도(연속 처치) 이어진다.</para>
+    ///
+    /// <para><b><see cref="lockActiveAngle"/>이면 위 두 단락이 통째로 꺼진다.</b> 궤도의 방향은
+    /// 활성 vcam이 <b>활성화되던 순간</b>에 이미 정해졌고, 여기서 움직이는 것은 <b>비활성 vcam의 자리</b>뿐이다
+    /// (<c>CameraAngleSwitcher.Aim</c>). 가중치·멤버 갱신은 그대로 돈다 — 요구가 "플레이어 중앙 + 상대도 담기"이고
+    /// 그 일은 <c>RotationComposer</c>·<c>GroupFraming</c>이 회전과 무관하게 한다.</para>
     /// </summary>
     private void UpdateFraming()
     {
@@ -807,6 +855,17 @@ public class CameraDirector : MonoBehaviour
 
         opponentWeight = Damp(opponentWeight, opponentTarget, weightDamping);
         ambusherWeight = Damp(ambusherWeight, ambusherTarget * ambusherMaxWeight, ambusherWeightDamping);
+
+        // ⚠ 고정 앵글에서는 yaw를 아예 만들지 않는다 — 궤도의 방향은 '활성화되던 순간'에 이미 정해졌고,
+        // 움직이는 것은 비활성 vcam의 자리뿐이다. 가중치·멤버 갱신은 그대로 돈다(플레이어 중앙 + 상대도 담기).
+        if (lockActiveAngle)
+        {
+            // 블렌드 중에는 멈춘다 — 방금 비활성이 된 카메라가 추종을 재개하면 블렌드 소스가 흐른다.
+            if (brain == null || !brain.IsBlending) angleSwitcher.Aim(PlayerYaw);
+
+            ApplyFraming(opponentTransform, opponentWeight, ambusherTransform, ambusherWeight, cameraYaw);
+            return;
+        }
 
         // yaw만 가져온다. 플레이어는 지금 평면 회전만 하지만, 훗날 피격 리액션 등으로 기울면
         // 회전을 통째로 복사한 궤도가 지면을 뚫거나 하늘로 솟는다.
@@ -888,6 +947,11 @@ public class CameraDirector : MonoBehaviour
         var ambushSlot = targetGroup.Targets[2];
         ambushSlot.Object = ambusher;
         ambushSlot.Weight = ambushWeight;
+
+        // 고정 앵글에서는 회전을 쓰지 않는다 — SetupFraming이 항등으로 한 번 못박아 두고, 그 뒤로는
+        // 아무도 건드리지 않는다. 매 프레임 항등을 다시 쓰는 것과 결과는 같지만,
+        // "회전을 쓰는 곳이 하나"라는 사실을 코드가 말해야 한다.
+        if (lockActiveAngle) return;
 
         targetGroup.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
     }
