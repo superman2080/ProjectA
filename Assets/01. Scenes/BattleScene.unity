@@ -1118,7 +1118,7 @@ GameObject:
   - component: {fileID: 250229438}
   - component: {fileID: 250229444}
   m_Layer: 0
-  m_Name: Cam_RightLow
+  m_Name: Cam_SideRight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1209,7 +1209,7 @@ MonoBehaviour:
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: -7, y: 2, z: -7}
+  FollowOffset: {x: 7, y: 3.5, z: 0}
 --- !u!114 &250229442
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1261,8 +1261,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 250229437}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.026794102, y: 0.6479172, z: -0.022815721, w: 0.76089746}
-  m_LocalPosition: {x: -7, y: 2, z: -20.25}
+  m_LocalRotation: {x: 0.09807658, y: -0.70027214, z: 0.09807658, w: 0.7002721}
+  m_LocalPosition: {x: 7, y: 3.5, z: -13.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1504,8 +1504,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.121329986, y: -0.63034695, z: 0.100612506, w: 0.760144}
-  m_LocalPosition: {x: 2.4590216, y: 1.6503036, z: -13.713116}
+  m_LocalRotation: {x: 0.09807658, y: -0.7002722, z: 0.098076604, w: 0.700272}
+  m_LocalPosition: {x: 3.2732415, y: 1.9834293, z: -13.249999}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1611,19 +1611,19 @@ MonoBehaviour:
   optionAngleSwitch: 1
   optionCameraMotion: 1
   angleSwitcher:
-    switchEnabled: 0
+    switchEnabled: 1
     cameras:
     - {fileID: 690579359}
-    - {fileID: 464872070}
-    - {fileID: 937148017}
     - {fileID: 250229442}
     activePriority: 10
     restingPriority: 0
     switchInterval: 10
+    patternsPerSwitch: 3
     armOnOpponentChange: 1
     minSwitchAngle: 30
     maxSwitchAngle: 120
   angleBlendDuration: 2
+  cutBetweenAngles: 1
   catalog:
   - trigger: 0
     shakeAmplitude: 1.2
@@ -1684,6 +1684,7 @@ MonoBehaviour:
   cameraTurnDamping: 0.45
   yawCutThreshold: 90
   framingHysteresis: 1
+  lockActiveAngle: 1
   chartPlayer: {fileID: 854156976}
   introCamera: {fileID: 1935771832}
   introDolly: {fileID: 1935771831}
@@ -8873,8 +8874,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690579358}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.5422731, y: -0.0000000028762834, z: 0.0000000018563774, w: 0.84020233}
-  m_LocalPosition: {x: 0, y: 5, z: -23.25}
+  m_LocalRotation: {x: 0.35435146, y: 0.00000008046564, z: -0.00000003049165, w: 0.93511236}
+  m_LocalPosition: {x: 0, y: 3.5, z: -20.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -8944,7 +8945,7 @@ MonoBehaviour:
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: 0, y: 5, z: -10}
+  FollowOffset: {x: 0, y: 3.5, z: -7}
 --- !u!114 &690579364
 MonoBehaviour:
   m_ObjectHideFlags: 0
