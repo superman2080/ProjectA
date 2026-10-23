@@ -277,11 +277,16 @@ public class AnimationClipTrimmerWindow : EditorWindow
     {
         lastUpdateTime = EditorApplication.timeSinceStartup; // 창 비활성 후 점프 방지
 
+        // 창 전체가 스크롤된다 — 프리뷰(340px)·타임라인을 고정해 두면 창이 낮을 때 아래 옵션 영역이 0으로 짜부라진다.
+        // 프리뷰 위의 휠은 줌이 먹는다(HandlePreviewInput이 Use한다) — 스크롤은 프리뷰 밖에서 한다.
+        scroll = EditorGUILayout.BeginScrollView(scroll);
+
         DrawInputs();
 
         if (targetPattern == null)
         {
             EditorGUILayout.HelpBox("Pattern을 지정하면 그 패턴의 역할에 맞는 두 배우가 열립니다.", MessageType.Info);
+            EditorGUILayout.EndScrollView();
             return;
         }
 
@@ -289,7 +294,6 @@ public class AnimationClipTrimmerWindow : EditorWindow
         DrawReadouts();
         DrawTimeline();
 
-        scroll = EditorGUILayout.BeginScrollView(scroll);
         DrawActorBlock(player);
         if (feint.slotPath != null) DrawActorBlock(feint); // 시간순: 견제가 사망보다 앞이다
         DrawActorBlock(enemy);
@@ -1123,7 +1127,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
 
     private void DrawPreview()
     {
-        Rect rect = GUILayoutUtility.GetRect(position.width, PreviewHeight, GUILayout.ExpandWidth(true));
+        Rect rect = GUILayoutUtility.GetRect(10f, PreviewHeight, GUILayout.ExpandWidth(true));
 
         if (player.prefab == null && enemy.prefab == null)
         {
@@ -1567,7 +1571,7 @@ public class AnimationClipTrimmerWindow : EditorWindow
                 EditorStyles.boldLabel, GUILayout.Width(260f));
         }
 
-        Rect sliderRect = GUILayoutUtility.GetRect(position.width, 22f);
+        Rect sliderRect = GUILayoutUtility.GetRect(10f, 22f, GUILayout.ExpandWidth(true));
         DrawTimelineMarkers(sliderRect, min, max);
 
         float newT = GUI.HorizontalSlider(sliderRect, t, min, max);
