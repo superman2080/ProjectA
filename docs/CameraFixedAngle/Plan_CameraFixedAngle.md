@@ -691,3 +691,137 @@ private void AimRig(float yaw)
 
 - `docs/CameraSwitch/`는 지우지 않는다 — 폐기된 설계의 기록이다.
 - `angleBlendDuration` · `cutBetweenAngles` 이름 정리(지금은 인트로 전용) — 별개 작업.
+
+---
+
+# 6차 — 결투 사이를 가리는 적을 감춘다 (OccluderCull)
+
+근거: `Research_CameraFixedAngle.md`의 "6차" 절.
+
+## 설계 요약
+
+- 매 프레임 XZ 삼각형 (카메라, 플레이어, 상대)에서 `radius` 안에 든 적의 렌더러를 **`forceRenderingOff`** 로 끈다.
+  `enabled`·레이어·`shadowCastingMode`는 이미 주인이 있어 안 쓴다.
+- 판정은 `EnemyRing`의 순수 함수(테스트됨), 대상 선정은 `EnemyDirector`, 카메라 위치는 `CameraDirector`, 렌더러는 `EnemyView`.
+- 교전 중 · 기습자 · 죽는 중 · 소멸 중 · 균열 등장 중인 적은 **절대 안 감춘다.**
+- 깜빡임은 히스테리시스 + 최소 유지 시간으로 막고, 페이드는 하지 않는다(하드 컷).
+- `EnemyDirector.viewCullEnabled` **하나로 끌 수 있다**(false = 지금 동작, 회귀 0).
+
+---
+
+## - [ ] Step 31 — `EnemyRing.InViewWedge` (순수 함수 + 테스트)
+
+```csharp
+/// 평면(XZ)에서 점 p가 삼각형 (cam, a, b)로부터 radius 이내인가.
+/// a == b면 선분 cam–a로 무너진다(분기 없음 — SeparationPush가 원으로 무너지는 것과 같다).
+public static bool InViewWedge(Vector3 p, Vector3 cam, Vector3 a, Vector3 b, float radius)
+```
+
+- 삼각형 내부면 true, 아니면 세 변까지의 평면 거리 최솟값 ≤ `radius`. Y는 버린다.
+- 테스트(`Enemy/Tests`): 내부 / 상대 너머(선분 a–b 바깥) = false / 변에서 `radius` 경계 / `a == b` 퇴화 / 카메라 뒤.
+
+---
+
+## - [ ] Step 32 — `EnemyView.SetViewCulled` / `CanViewCull`
+
+```csharp
+private bool viewCulled;
+private float viewCullChangedAt;
+
+/// 렌더러를 forceRenderingOff로 감춘다. ⚠ enabled를 쓰지 않는다 — 시체 교체(Kill)·DissolveSwap이 그 채널의 주인이다.
+public void SetViewCulled(bool on)
+
+/// 감춰도 되는 상태인가. ⚠ IsIdle이 아니다 — 이동 중인 적이 정확히 감출 대상이다.
+public bool CanViewCull =>
+    Current != Phase.Dying && !dissolving && !warping && !hasPendingAttack && !highlighted;
+
+public bool IsViewCulled => viewCulled;
+public float ViewCullChangedAt => viewCullChangedAt;
+```
+
+- `SetViewCulled`는 값이 같으면 return, 바뀌면 `renderers` 전부에 `forceRenderingOff = on` + `viewCullChangedAt = Time.time`.
+- **`ResetState`에서 `SetViewCulled(false)`** — 안 하면 다음 대여가 안 보이는 적으로 나온다.
+- `Dissolve`·`MarkDying`·워프 시작·`SetHighlight(true)` 진입점에서 직접 풀지 **않는다** — 그 상태가 되면 다음 `LateUpdate`에 `CanViewCull`이 false라 디렉터가 푼다(진실의 원천 하나). 한 프레임 늦는 것은 안 보인다.
+
+---
+
+## - [ ] Step 33 — `EnemyDirector.TickViewCull`
+
+필드:
+
+```csharp
+[Header("View Cull (docs/CameraFixedAngle 6차)")]
+[Tooltip("카메라에서 볼 때 플레이어와 교전 중인 적 사이(XZ 쐐기)에 선 적을 감춘다. 끄면 예전 동작.")]
+[SerializeField] private bool viewCullEnabled = true;
+[Tooltip("쐐기에서 이 거리(m) 안이면 감춘다. 적 몸 반경 + 여유.")]
+[SerializeField, Min(0f)] private float viewCullRadius = 0.6f;
+[Tooltip("다시 보이게 하려면 radius보다 이만큼 더 멀어져야 한다(히스테리시스).")]
+[SerializeField, Min(0f)] private float viewCullReleaseMargin = 0.4f;
+[Tooltip("한 번 바뀐 상태는 이 시간(초) 동안 유지한다 — 경계를 배회하는 적의 깜빡임 방지.")]
+[SerializeField, Min(0f)] private float viewCullMinHold = 0.25f;
+
+private Vector3? viewOrigin;   // CameraDirector가 넘긴다. null = 판정 안 함(전원 해제)
+public void SetViewOrigin(Vector3? origin) => viewOrigin = origin;
+```
+
+`LateUpdate`: `TickPendingKills(); TickSeparation();` **뒤에** `TickViewCull();` (이격이 민 자리 기준).
+
+`TickViewCull()`:
+- `!viewCullEnabled || viewOrigin == null`이면 `ring`의 감춰진 적을 전부 풀고 return.
+- `ring`의 각 `view`:
+  - `IsEngaged(view) || !view.CanViewCull` → `SetViewCulled(false)`(즉시, 최소 유지 무시 — 안전한 쪽은 기다리지 않는다), continue.
+  - `Time.time - view.ViewCullChangedAt < viewCullMinHold` → continue.
+  - `r = view.IsViewCulled ? viewCullRadius + viewCullReleaseMargin : viewCullRadius`.
+  - 교전 상대마다(`engagedOpponents`, 비면 `currentOpponent`, 그것도 없으면 플레이어 자신) `EnemyRing.InViewWedge(view 위치, origin, PlayerPosition, 상대 위치, r)` 중 하나라도 참이면 감춘다.
+    `TickSeparation`의 통로 루프와 **같은 모양**으로 쓴다.
+- 기즈모(기존 `drawGizmos` 블록): 쐐기 삼각형 + 감춰진 적 표시.
+
+---
+
+## - [ ] Step 34 — `CameraDirector`: 카메라 위치를 넘긴다
+
+`Update` 끝(프레이밍 뒤)에 한 줄:
+
+```csharp
+enemyDirector?.SetViewOrigin(IsGameplayCameraLive ? brain.OutputCamera.transform.position : (Vector3?)null);
+```
+
+- `IsGameplayCameraLive` = `brain != null && brain.OutputCamera != null && ReferenceEquals(brain.ActiveVirtualCamera, gameplayCamera)`.
+  인트로·`CameraShotStep`이 live면 null → 전원 해제. brain이 없으면 null → 조용히 비활성(기존 규율).
+- 히트스톱 잠금 중에는 `Update`가 조기 반환해 **마지막 위치가 유지된다** — 카메라도 그 자리에 굳어 있으므로 맞는 값이다.
+- ⚠ `OnDisable`에서 `SetViewOrigin(null)` — 안 하면 카메라 디렉터가 꺼진 뒤에도 마지막 위치로 계속 감춘다.
+- Cinemachine 타입은 이미 있는 `brain` 필드로만 닿는다.
+
+---
+
+## - [ ] Step 35 — CLAUDE.md
+
+- §7-2 프레이밍 끝에 한 단락: 결투 쐐기를 가리는 적은 `forceRenderingOff`로 감춘다 · 채널 선택 근거(`enabled`·레이어·그림자 모드는 주인이 있다) · 감추지 않는 대상 · 게임플레이 vcam live일 때만.
+- §11-6 "교전 중인 적은 집합이다"의 `IsEngaged` 사용처 목록에 "시야 감춤 면제" 추가.
+- §11-2 이격 단락 끝에 한 줄: 월드 통로는 이격이, **카메라 쐐기는 감춤이** 맡는다(밀지 않는 이유).
+
+---
+
+## - [ ] Step 36 — 검증
+
+- **쐐기 안 배회 적**이 사라지고, 벗어나면 다시 나타나는가. 경계에서 깜빡이지 않는가(`releaseMargin`·`minHold` 조정).
+- **상대 너머(뒤)** 에 선 적은 그대로 보이는가.
+- **현재 상대**는 쐐기 안이어도 절대 안 사라지는가. 처치 → 다음 상대 교체 순간에 새 상대가 즉시 보이는가.
+- **기습**: 쐐기 안에서 튀어나온 기습자가 `Fire()` 순간 보이고 아웃라인이 그려지는가.
+- **곡 끝 `DissolveAll`**: 감춰져 있던 적이 소멸 머티리얼로 보였다가 사라지는가(맨몸 팝이 없어야 한다).
+- **균열 등장**: 쐐기를 가로지르는 워프 줄이 감춰지지 않는가.
+- **풀 재사용**: 감춰진 채 죽거나 반납된 적의 다음 대여가 보이는가.
+- **인트로·`CameraShotStep`** 동안 전원 보이는가.
+- 히트스톱 · 마무리 실루엣에서 이상 없는가.
+- 팝이 거슬리는 정도 — 거슬리면 디더 페이드(범위 밖)로.
+- `viewCullEnabled = false` → 지금 동작(회귀 0).
+
+---
+
+## 6차 범위 밖
+
+- **디더/알파 페이드** — 툰 머티리얼이 불투명이라 머티리얼 교체가 필요하고 `DissolveSwap`과 충돌한다. 하드 컷이 거슬리면 별건.
+- **그림자만 남기기**(`ShadowsOnly`) — `ApplyBackgroundBudget`과 그림자 모드 주인 정리가 먼저다.
+- **시체(`CorpseView`)·절단 조각 감춤** — 다른 오브젝트·풀이고 곧 소멸한다.
+- **배경 프롭 가림** — 적만 대상이다. 프롭은 §13이 무대 원 밖에 둔다.
+- **화면 공간 정밀 판정** — 평면 쐐기로 부족하면 그때 바운즈 투영으로 바꾼다(`InViewWedge` 시그니처 뒤에 숨는다).

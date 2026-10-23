@@ -2405,22 +2405,9 @@ MonoBehaviour:
   framingEnabledOption: 1
   introEnabled: 1
   optionScreenShake: 1
-  optionAngleSwitch: 1
   optionCameraMotion: 1
-  angleSwitcher:
-    switchEnabled: 0
-    cameras:
-    - {fileID: 690579359}
-    - {fileID: 464872070}
-    - {fileID: 937148017}
-    - {fileID: 250229442}
-    activePriority: 10
-    restingPriority: 0
-    switchInterval: 10
-    armOnOpponentChange: 1
-    minSwitchAngle: 30
-    maxSwitchAngle: 120
   angleBlendDuration: 2
+  cutBetweenAngles: 1
   catalog:
   - trigger: 0
     shakeAmplitude: 1.2
@@ -2475,12 +2462,18 @@ MonoBehaviour:
   targetGroup: {fileID: 678172777}
   fullFrameDistance: 3
   dropoffDistance: 6
+  alwaysFrameOpponent: 1
+  frameAtHips: 1
   weightDamping: 0.15
   ambusherMaxWeight: 1
   ambusherWeightDamping: 0.12
   cameraTurnDamping: 0.45
   yawCutThreshold: 90
   framingHysteresis: 1
+  lockActiveAngle: 1
+  rearHalfAngle: 90
+  rearFollowSpeed: 360
+  shoulderYaw: 30
   chartPlayer: {fileID: 854156976}
   introCamera: {fileID: 0}
   introDolly: {fileID: 0}
@@ -20935,7 +20928,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4286578943
   m_fontColor: {r: 1, g: 0, b: 0.5019608, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
