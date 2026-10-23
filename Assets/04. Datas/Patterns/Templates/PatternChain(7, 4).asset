@@ -10,9 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: PatternChain(4)
+  m_Name: PatternChain(7, 4)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
+  - index: 7
   - index: 4
   attacker: 1
   enemyAttack:
@@ -67,12 +68,20 @@ MonoBehaviour:
     extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  retreatDistance: -1
   duelDistanceCurve:
     serializedVersion: 2
     m_Curve: []
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  duelHeightCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  engageOffsets: []
   isMash: 0
   mashTargetHits: 10
   mashStrikes: []

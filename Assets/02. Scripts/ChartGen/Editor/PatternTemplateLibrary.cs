@@ -64,8 +64,10 @@ namespace ChartGen
             // 정작 연타가 요구하는 온셋은 2개(창 시작·끝)라 배정하는 족족 저장이 막힌다.
             if (pattern.IsMash) return;
 
+            // 1노트 패턴은 배정하지 않는다(docs/NoSingleNotePattern). 여기서 빠지면 AvailableNodeCounts·
+            // GetNextTemplate·GetRandomTemplate이 전부 1을 모르게 되어 굽기·재배정·병합이 한꺼번에 막힌다.
             int count = pattern.AllData.Count;
-            if (count <= 0) return;
+            if (count < Pattern.MinNodeCount) return;
 
             if (!templatesByNodeCount.TryGetValue(count, out var list))
                 templatesByNodeCount[count] = list = new List<Pattern>();

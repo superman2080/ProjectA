@@ -38,6 +38,12 @@ namespace ChartGen
             /// 것인가"다</b> — 별도 플래그를 두지 않는다.</para>
             /// </summary>
             public int[] onsetSteps;
+
+            /// <summary>
+            /// 분석이 만든 악구 번호(docs/ChartDensity D14). <b>툴 전용이고 저장하지 않는다.</b>
+            /// '아래와 합치기'가 "쉬는 구간을 가로지른다"를 악구가 다를 때만 경고하게 한다. −1 = 모름(불러온 채보 등) → 시간 임계로 폴백.
+            /// </summary>
+            public int phrase = -1;
         }
 
         /// <summary>cue는 참조 타입이라 그대로 넘기면 에셋과 드래프트가 같은 인스턴스를 공유한다. 반드시 복사한다.</summary>
@@ -66,9 +72,22 @@ namespace ChartGen
         private float bpm = 120f;
         private float beatOffset = 0f;
         private int level = 1;
+        /// <summary>Lv1의 목표 밀도(초당 노트 수). 레벨 사이는 선형 보간이다(docs/ChartDensity).</summary>
+        private float minNps = 0.8f;
+
+        /// <summary>Lv30의 목표 밀도(초당 노트 수).</summary>
+        private float maxNps = 5.0f;
+
+        /// <summary>솎기 구간 길이(마디). 이 구간마다 같은 비율로 솎아 조용한 구간이 통째로 사라지지 않게 한다.</summary>
+        private int thinSegmentBars = 2;
+
+        /// <summary>마지막 분석의 후보 수 / 목표 수. 분석 전에는 -1(미리보기 숨김).</summary>
+        private int lastCandidateCount = -1, lastTargetCount = -1;
+
         private int tier1Max = 10;
         private int tier2Max = 20;
-        private int maxGroupGapSteps = 1;
+        /// <summary>그룹 기준(박). 칸이 아니라 박으로 재야 해상도가 바뀌어도 같은 음악에 같은 기준이 걸린다(docs/ChartDensity D8).</summary>
+        private int maxGroupGapBeats = 1;
 
         private SongChart existingChart;
 
@@ -214,6 +233,15 @@ namespace ChartGen
                     .GroupBy(p => p.AllData.Count).OrderBy(g => g.Key)
                     .Select(g => $"{g.Key}노드×{g.Count()}");
                 EditorGUILayout.LabelField("노드 개수 분포", string.Join("  ", counts));
+
+                // 1노트 패턴은 라이브러리가 등록하지 않는다 — 풀에 남아 있으면 아무 일도 안 하는 칸이다.
+                var singles = patternPool.Where(IsSingleNote).Select(p => p.name).ToList();
+                if (singles.Count > 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"1노트 패턴은 배정에서 제외됩니다: {string.Join(", ", singles)}. 풀에서 빼세요.",
+                        MessageType.Warning);
+                }
             }
 
             EditorGUI.indentLevel--;
@@ -266,18 +294,45 @@ namespace ChartGen
             //   저작자가 해상도를 직접 고르고, level은 SongChart의 표시용 난이도로만 남는다.
             tier1Max = EditorGUILayout.IntField("Tier1 Max (4분음표 상한)", tier1Max);
             tier2Max = EditorGUILayout.IntField("Tier2 Max (8분음표 상한)", tier2Max);
-            maxGroupGapSteps = EditorGUILayout.IntField("최대 그룹 갭(그리드 스텝)", maxGroupGapSteps);
+            maxGroupGapBeats = Mathf.Max(1, EditorGUILayout.IntField("최대 그룹 갭(박)", maxGroupGapBeats));
             EditorGUI.EndChangeCheck();
 
             int subdivision = BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
             EditorGUILayout.LabelField("현재 비트 분할 단위", $"1/{subdivision * 4}음표 (subdivisionsPerBeat = {subdivision})");
+            int gapSteps = OnsetGrouper.GapSteps(subdivision, maxGroupGapBeats);
+            EditorGUILayout.LabelField("그룹 갭 환산", $"= {gapSteps}칸 · {BuildGrid().GridInterval * gapSteps:F2}초");
+
+            // 노트 수는 해상도가 아니라 레벨 → NPS가 정한다. 해상도는 "엇박이 후보가 될 수 있는가"만 정한다(docs/ChartDensity).
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("노트 밀도", EditorStyles.boldLabel);
+            beatsPerBar = Mathf.Max(1, EditorGUILayout.IntField("마디당 박 수", beatsPerBar));
+            minNps = Mathf.Max(0.1f, EditorGUILayout.FloatField("최소 NPS (Lv1)", minNps));
+            maxNps = Mathf.Max(minNps, EditorGUILayout.FloatField("최대 NPS (Lv30)", maxNps));
+            thinSegmentBars = Mathf.Max(1, EditorGUILayout.IntField("솎기 구간(마디)", thinSegmentBars));
+            EditorGUILayout.LabelField("이 레벨 목표", $"{ChartDensity.TargetNps(level, minNps, maxNps):F2} NPS (초당 노트)");
+
+            if (lastCandidateCount >= 0)
+            {
+                EditorGUILayout.LabelField("마지막 분석", $"후보 {lastCandidateCount} → 목표 {lastTargetCount}");
+                if (lastCandidateCount < lastTargetCount)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"후보 {lastCandidateCount} < 목표 {lastTargetCount} — 이 곡은 이 레벨 밀도를 못 채웁니다. " +
+                        "`RMS 임계값`을 낮춰 보세요(툴이 몰래 낮추지 않습니다).", MessageType.Warning);
+                }
+            }
         }
 
         private BeatGrid BuildGrid()
         {
-            // Loop는 저작자가 해상도를 직접 고른다. Linear는 레벨에서 파생시킨다(기존 동작).
+            return new BeatGrid(bpm, beatOffset, CurrentSubdivision());
+        }
+
+        /// <summary>Loop는 저작자가 해상도를 직접 고른다. Linear는 레벨에서 파생시킨다(기존 동작).</summary>
+        private int CurrentSubdivision()
+        {
             int subdivision = IsLoopMode ? stepsPerBeat : BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
-            return new BeatGrid(bpm, beatOffset, Mathf.Max(subdivision, 1));
+            return Mathf.Max(subdivision, 1);
         }
 
         private void DrawActionButtons()
@@ -346,16 +401,38 @@ namespace ChartGen
                 }
             }
 
-            var rawOnsets = OnsetDetector.Detect(mono, clip.frequency, windowSize, rmsThreshold);
+            var rawOnsets = OnsetDetector.DetectWithStrength(mono, clip.frequency, windowSize, rmsThreshold);
             var grid = BuildGrid();
-            var snapped = BeatGrid.Snap(rawOnsets, grid);
-            var groups = OnsetGrouper.Group(snapped, grid, maxGroupGapSteps);
+            int subdivision = BeatGrid.LevelToSubdivision(level, tier1Max, tier2Max);
+
+            // 레벨이 노트 수를 직접 정한다 — 칸당 센 온셋을 남긴 뒤(후보) 목표 개수까지 세기 × 박 위치로 솎는다(docs/ChartDensity).
+            var candidates = BeatGrid.SnapStrongest(rawOnsets, grid);
+            float nps = ChartDensity.TargetNps(level, minNps, maxNps);
+            int target = candidates.Length > 0 ? ChartDensity.TargetCount(nps, candidates[0].Time, candidates[^1].Time) : 0;
+            var snapped = OnsetThinner.Thin(candidates, grid, subdivision, beatsPerBar, target, thinSegmentBars, BeatWeights.Default);
+
+            lastCandidateCount = candidates.Length;
+            lastTargetCount = target;
+
+            // 솎은 뒤 간격으로 묶지 않는다 — 솎기 전 후보로 악구를 정하고 소속으로 모은다(docs/ChartDensity 3차).
+            var phrased = OnsetPhraser.Assemble(candidates, snapped, grid, subdivision, beatsPerBar, maxGroupGapBeats,
+                                                Pattern.MinNodeCount, target, BeatWeights.Default);
+            var groups = phrased.Groups;
 
             var library = PatternTemplateLibrary.From(patternPool);
+            var droppedOnsets = new List<float>();
 
-            foreach (var group in groups)
+            for (int phraseIndex = 0; phraseIndex < groups.Count; phraseIndex++)
             {
-                var chunkSizes = OnsetChunkSplitter.Split(group.Count, library.AvailableNodeCounts);
+                var group = groups[phraseIndex];
+                var chunkSizes = OnsetChunkSplitter.Split(group.Count, library.AvailableNodeCounts, Pattern.MinNodeCount);
+
+                // 쉼표로 고립된 단독 온셋 — 1노트 엔트리를 만들지 않고 버린다(docs/NoSingleNotePattern D3).
+                if (chunkSizes.Count == 0)
+                {
+                    droppedOnsets.AddRange(group);
+                    continue;
+                }
                 int offset = 0;
 
                 foreach (int size in chunkSizes)
@@ -368,6 +445,7 @@ namespace ChartGen
                         template = library.GetNextTemplate(size),
                         onsetTimes = chunkOnsets,
                         exposureDurations = Enumerable.Repeat(defaultExposureDuration, size).ToArray(),
+                        phrase = phraseIndex,
                     };
 
                     if (draft.template == null)
@@ -380,6 +458,16 @@ namespace ChartGen
                     drafts.Add(draft);
                 }
             }
+
+            if (droppedOnsets.Count > 0)
+            {
+                Debug.Log($"[PatternChartWindow] 단독 온셋 {droppedOnsets.Count}개를 버렸습니다(1노트 패턴 없음): " +
+                          string.Join(", ", droppedOnsets.Select(t => $"{t:F2}s")));
+            }
+
+            Debug.Log($"[PatternChartWindow] 레벨 {level} · 목표 {nps:F2} NPS · 후보 {candidates.Length} → 악구 {phrased.CandidatePhrases}개 → " +
+                      $"솎기 {snapped.Length}(구간 {thinSegmentBars}마디) → 보정 +{phrased.Added} −{phrased.Removed} → 최종 {drafts.Sum(d => d.onsetTimes.Length)}" +
+                      (candidates.Length < target ? $" ⚠ 후보가 목표({target})보다 적습니다" : ""));
         }
 
         private void LoadExisting()
@@ -443,6 +531,13 @@ namespace ChartGen
             if (template.IsMash) return 2;
 
             return template.AllData == null ? 0 : template.AllData.Count;
+        }
+
+        /// <summary>연타가 아닌데 노드가 <see cref="Pattern.MinNodeCount"/> 미만인 패턴(docs/NoSingleNotePattern).</summary>
+        private static bool IsSingleNote(Pattern template)
+        {
+            return template != null && !template.IsMash && template.AllData != null
+                   && template.AllData.Count > 0 && template.AllData.Count < Pattern.MinNodeCount;
         }
 
         private void RecomputeSpawnTimes(ChartEntryDraft draft)
@@ -927,11 +1022,13 @@ namespace ChartGen
             // 쪼개기 / 사슬 — 둘 다 이 엔트리를 기준점으로 삼는다.
             EditorGUILayout.BeginHorizontal();
 
-            using (new EditorGUI.DisabledScope(nodeCount < 2))
+            // 두 조각 모두 MinNodeCount 이상이어야 한다 — 1노트 조각을 만들지 않는다(docs/NoSingleNotePattern).
+            int minSplit = Pattern.MinNodeCount, maxSplit = nodeCount - Pattern.MinNodeCount;
+            using (new EditorGUI.DisabledScope(maxSplit < minSplit))
             {
                 GUILayout.Label("앞", EditorStyles.miniLabel, GUILayout.Width(18));
                 if (!splitCounts.TryGetValue(index, out int splitAt)) splitAt = nodeCount / 2;
-                splitAt = Mathf.Clamp(EditorGUILayout.IntField(splitAt, GUILayout.Width(28)), 1, Mathf.Max(nodeCount - 1, 1));
+                splitAt = Mathf.Clamp(EditorGUILayout.IntField(splitAt, GUILayout.Width(28)), minSplit, Mathf.Max(maxSplit, minSplit));
                 splitCounts[index] = splitAt;
 
                 if (GUILayout.Button(new GUIContent("개로 쪼개기", "이 엔트리를 둘로 나눈다. 남은 노드는 뒤에 새 엔트리로 남아 다시 배정할 수 있다."),
@@ -1195,6 +1292,22 @@ namespace ChartGen
                 return;
             }
 
+            // 1노트 패턴은 배정하지 않는다(docs/NoSingleNotePattern).
+            if (IsSingleNote(candidate))
+            {
+                Debug.LogWarning($"[PatternChartWindow] '{candidate.name}'은 노드가 {want}개입니다. " +
+                                 $"연타가 아닌 패턴은 {Pattern.MinNodeCount}개 이상이어야 배정할 수 있습니다.");
+                return;
+            }
+
+            // 쪼갠 뒤 남는 뒤 조각이 1노트가 되는 배정도 막는다 — 그 조각에 배정할 패턴이 없다.
+            if (!candidate.IsMash && have > want && have - want < Pattern.MinNodeCount)
+            {
+                Debug.LogWarning($"[PatternChartWindow] '{candidate.name}'({want}노드)을 이 그룹({have})에 넣으면 " +
+                                 $"뒤에 {have - want}노트 엔트리가 남습니다. '아래와 합치기'로 크기를 맞추거나 다른 패턴을 고르세요.");
+                return;
+            }
+
             if (want > have)
             {
                 string what = candidate.IsMash ? "연타가 요구하는 온셋(창 시작·끝) 2개" : $"노드 개수({want})";
@@ -1263,6 +1376,7 @@ namespace ChartGen
                 onsetTimes = draft.onsetTimes.Skip(firstCount).ToArray(),
                 exposureDurations = draft.exposureDurations.Skip(firstCount).ToArray(),
                 enemyCue = draft.enemyCue, // 마무리(처치 지시)는 뒤 조각이 물려받는다
+                phrase = draft.phrase,     // 같은 악구를 쪼갠 것이다
             };
 
             draft.onsetTimes = draft.onsetTimes.Take(firstCount).ToArray();
@@ -1283,7 +1397,7 @@ namespace ChartGen
         /// <paramref name="index"/> 엔트리와 <b>바로 다음 엔트리를 하나로 합친다</b>(<see cref="SplitDraft"/>의 역).
         /// 노드 수가 달라졌으므로 템플릿은 비워지고, 뒤 엔트리의 cue가 살아남는다(마무리는 언제나 뒤쪽이다).
         ///
-        /// <para><b>원래 그룹 경계는 음악이 정했다</b>(<c>maxGroupGapSteps</c>). 큰 공백을 넘겨 합치면
+        /// <para><b>원래 그룹 경계는 음악이 정했다</b>(<c>maxGroupGapBeats</c>). 큰 공백을 넘겨 합치면
         /// 쉬는 구간을 가로지르는 패턴이 되므로 그때는 경고한다 — 막지는 않는다(의도한 저작일 수 있다).</para>
         /// </summary>
         private void MergeWithNext(int index)
@@ -1294,11 +1408,25 @@ namespace ChartGen
             var tail = drafts[index + 1];
 
             float gap = tail.onsetTimes[0] - head.onsetTimes[^1];
-            float threshold = BuildGrid().GridInterval * (maxGroupGapSteps + 1);
-            if (gap > threshold)
+
+            // 악구를 알면 악구로 판정한다 — 낮은 레벨에서는 같은 악구 안에서도 간격이 갭을 넘는 것이 정상이다(docs/ChartDensity D14).
+            if (head.phrase >= 0 && tail.phrase >= 0)
             {
-                Debug.LogWarning($"[PatternChartWindow] 엔트리 {index}와 {index + 1} 사이 간격이 {gap:F2}초로 " +
-                                 $"그룹 경계({threshold:F2}초)보다 넓습니다. 쉬는 구간을 가로지르는 패턴이 됩니다.");
+                if (head.phrase != tail.phrase)
+                {
+                    Debug.LogWarning($"[PatternChartWindow] 엔트리 {index}와 {index + 1}은 다른 악구입니다(간격 {gap:F2}초). " +
+                                     "쉬는 구간을 가로지르는 패턴이 됩니다.");
+                }
+            }
+            else
+            {
+                var grid = BuildGrid();
+                float threshold = grid.GridInterval * (OnsetGrouper.GapSteps(CurrentSubdivision(), maxGroupGapBeats) + 1);
+                if (gap > threshold)
+                {
+                    Debug.LogWarning($"[PatternChartWindow] 엔트리 {index}와 {index + 1} 사이 간격이 {gap:F2}초로 " +
+                                     $"그룹 경계({threshold:F2}초)보다 넓습니다. 쉬는 구간을 가로지르는 패턴이 됩니다.");
+                }
             }
 
             head.onsetTimes = head.onsetTimes.Concat(tail.onsetTimes).ToArray();

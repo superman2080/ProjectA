@@ -129,6 +129,12 @@ namespace PatternSpace
                  "저장은 Tools/Pattern Effect Tool로 한다.")]
         [SerializeField] private List<PatternEffectCue> effectCues = new List<PatternEffectCue>();
 
+        /// <summary>
+        /// 연타가 아닌 패턴의 최소 노드 수. 1노트 패턴은 "이어 긋기"가 성립하지 않아 없앴다(docs/NoSingleNotePattern).
+        /// 분할기·템플릿 라이브러리·수동 편집·Loop 저작·저장 검증이 전부 이 값을 읽는다 — 여러 곳에 2를 적으면 어긋난다.
+        /// </summary>
+        public const int MinNodeCount = 2;
+
         public IReadOnlyList<PatternData> AllData => patternDatas;
 
         /// <summary>
@@ -547,7 +553,18 @@ namespace PatternSpace
         /// </summary>
         private void ValidateMash()
         {
-            if (!isMash) return;
+            if (!isMash)
+            {
+                // 연타의 "정확히 1칸"과 대칭이다 — 연타가 아니면 노드가 MinNodeCount개 이상이어야 한다.
+                int count = patternDatas != null ? patternDatas.Length : 0;
+                if (count > 0 && count < MinNodeCount)
+                {
+                    Debug.LogError(
+                        $"[Pattern] '{name}'의 노드가 {count}개입니다. 연타가 아닌 패턴은 {MinNodeCount}개 이상이어야 합니다 — " +
+                        "채보 툴이 이 패턴을 배정하지 않습니다.", this);
+                }
+                return;
+            }
 
             int nodeCount = patternDatas != null ? patternDatas.Length : 0;
             if (nodeCount != 1)

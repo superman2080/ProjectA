@@ -49,5 +49,28 @@ namespace ChartGen
             result.Sort();
             return result.ToArray();
         }
+
+        /// <summary>
+        /// <see cref="Snap"/>과 같되 칸당 <b>가장 센</b> 온셋을 남기고 세기를 보존한다(<see cref="Snap"/>은 먼저 온 것을 남긴다).
+        /// 시각은 격자에 맞춰지고 결과는 오름차순이다. 세기가 같으면 먼저 온 것을 남긴다.
+        /// </summary>
+        public static Onset[] SnapStrongest(IReadOnlyList<Onset> onsets, BeatGrid grid)
+        {
+            var best = new Dictionary<int, float>();
+            foreach (var onset in onsets)
+            {
+                int gridIndex = grid.TimeToGridIndex(onset.Time);
+                if (!best.TryGetValue(gridIndex, out float strength) || onset.Strength > strength)
+                    best[gridIndex] = onset.Strength;
+            }
+
+            var indices = new List<int>(best.Keys);
+            indices.Sort();
+
+            var result = new Onset[indices.Count];
+            for (int i = 0; i < indices.Count; i++)
+                result[i] = new Onset(grid.GridIndexToTime(indices[i]), best[indices[i]]);
+            return result;
+        }
     }
 }

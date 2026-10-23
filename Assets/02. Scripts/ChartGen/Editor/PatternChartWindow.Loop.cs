@@ -217,7 +217,8 @@ namespace ChartGen
         {
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("놓을 패턴", GUILayout.Width(60));
-            loopTemplate = (Pattern)EditorGUILayout.ObjectField(loopTemplate, typeof(Pattern), false);
+            var chosen = (Pattern)EditorGUILayout.ObjectField(loopTemplate, typeof(Pattern), false);
+            if (chosen != loopTemplate) SelectLoopTemplate(chosen);
 
             EditorGUILayout.LabelField("노드 간격", GUILayout.Width(56));
             loopNodeGap = Mathf.Max(1, EditorGUILayout.IntField(loopNodeGap, GUILayout.Width(36)));
@@ -240,10 +241,26 @@ namespace ChartGen
             foreach (var p in pool)
             {
                 bool picked = p == loopTemplate;
-                if (GUILayout.Toggle(picked, p.name, EditorStyles.miniButton) && !picked)
-                    loopTemplate = p;
+                using (new EditorGUI.DisabledScope(IsSingleNote(p)))
+                {
+                    if (GUILayout.Toggle(picked, p.name, EditorStyles.miniButton) && !picked)
+                        SelectLoopTemplate(p);
+                }
             }
             EditorGUILayout.EndHorizontal();
+        }
+
+        /// <summary>1노트 패턴은 놓을 패턴으로 고를 수 없다(docs/NoSingleNotePattern) — 선택 자체를 거부한다.</summary>
+        private void SelectLoopTemplate(Pattern candidate)
+        {
+            if (IsSingleNote(candidate))
+            {
+                Debug.LogWarning($"[PatternChartWindow] '{candidate.name}'은 1노트 패턴이라 놓을 수 없습니다. " +
+                                 $"연타가 아닌 패턴은 노드 {Pattern.MinNodeCount}개 이상이어야 합니다.");
+                return;
+            }
+
+            loopTemplate = candidate;
         }
 
         private void DrawLoopRow(Rect row, int bar, int stepsPerBar)
@@ -397,7 +414,7 @@ namespace ChartGen
         /// </summary>
         private void PlaceLoopEntry(int startStep)
         {
-            if (loopTemplate == null) return;
+            if (loopTemplate == null || IsSingleNote(loopTemplate)) return;
 
             int[] steps;
             if (loopTemplate.IsMash)
@@ -632,6 +649,23 @@ namespace ChartGen
             if (drafts.Count == 0)
             {
                 Debug.LogError("[PatternChartWindow] 빈 채보는 저장할 수 없습니다.");
+                return false;
+            }
+
+            // 0) 1노트 엔트리는 두 모드 모두 저장하지 않는다(docs/NoSingleNotePattern).
+            //    기존 채보는 이관 메뉴로 이미 정리됐으므로 Linear에서 막아도 "열어서 못 고친다"가 생기지 않는다.
+            var singles = new List<int>();
+            for (int i = 0; i < drafts.Count; i++)
+            {
+                var d = drafts[i];
+                if (d.template != null && d.template.IsMash) continue;
+                if (d.onsetTimes != null && d.onsetTimes.Length < Pattern.MinNodeCount) singles.Add(i);
+            }
+            if (singles.Count > 0)
+            {
+                Debug.LogError(
+                    $"[PatternChartWindow] 1노트 엔트리가 있습니다: {string.Join(", ", singles)}번. " +
+                    $"연타가 아닌 엔트리는 노트가 {Pattern.MinNodeCount}개 이상이어야 합니다 — '아래와 합치기'로 이웃과 합치거나 지우세요.");
                 return false;
             }
 

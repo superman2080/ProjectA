@@ -40,10 +40,10 @@ MonoBehaviour:
     extraImpactTimes: []
   playerLeadInClips: []
   enemyFeint:
-    clip: {fileID: 7400000, guid: ba3055bd5a8c530479a818ac9969242a, type: 2}
+    clip: {fileID: 0}
     startOffset: 0
-    duration: 0.0008353665
-    impactTime: 0.0008353665
+    duration: 0
+    impactTime: 0
     speed: 1
     extraImpactTimes: []
   enemyDeath:
@@ -69,12 +69,20 @@ MonoBehaviour:
     extraImpactTimes: []
   impactOffset: 0
   duelDistanceOffset: 0
+  retreatDistance: -1
   duelDistanceCurve:
     serializedVersion: 2
     m_Curve: []
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  duelHeightCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  engageOffsets: []
   isMash: 0
   mashTargetHits: 10
   mashStrikes: []

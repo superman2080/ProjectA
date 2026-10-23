@@ -40,10 +40,10 @@ MonoBehaviour:
     extraImpactTimes: []
   playerLeadInClips: []
   enemyFeint:
-    clip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
+    clip: {fileID: 0}
     startOffset: 0
-    duration: 0.4470934
-    impactTime: 0.4470934
+    duration: 0
+    impactTime: 0
     speed: 1
     extraImpactTimes: []
   enemyDeath:

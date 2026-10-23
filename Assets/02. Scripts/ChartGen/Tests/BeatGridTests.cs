@@ -40,6 +40,20 @@ public class BeatGridTests
         Assert.AreEqual(1, snapped.Length);
     }
 
+    [Test]
+    public void SnapStrongest_KeepsStrongerOnsetInSameCell()
+    {
+        var grid = new BeatGrid(120f, 0f, 1); // gridInterval = 0.5
+        var onsets = new[] { new Onset(0.05f, 0.1f), new Onset(0.1f, 0.9f), new Onset(0.52f, 0.3f) };
+
+        var snapped = BeatGrid.SnapStrongest(onsets, grid);
+
+        Assert.AreEqual(2, snapped.Length);
+        Assert.AreEqual(0f, snapped[0].Time, 0.0001f);
+        Assert.AreEqual(0.9f, snapped[0].Strength, 0.0001f);
+        Assert.AreEqual(0.5f, snapped[1].Time, 0.0001f);
+    }
+
     [TestCase(1, 1)]
     [TestCase(10, 1)]
     [TestCase(11, 2)]

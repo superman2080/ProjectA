@@ -10,22 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 657492387170d3c4eb114937ef9a2296, type: 3}
-  m_Name: PatternBlock(4)
+  m_Name: PatternBlock(1, 4)
   m_EditorClassIdentifier: Assembly-CSharp::PatternSpace.Pattern
   patternDatas:
+  - index: 1
   - index: 4
   attacker: 0
   enemyAttack:
     clip: {fileID: 7400000, guid: 1fce615e660122d45b99d8ea2b4f572d, type: 2}
     startOffset: 0
-    duration: 0.980969
+    duration: 0.76294434
     impactTime: 0.3011524
     speed: 1.5
     extraImpactTimes: []
   playerParry:
     clip: {fileID: 7400000, guid: 620f78649addacc41a9e3434cf5a4daf, type: 2}
     startOffset: 0
-    duration: 0.980969
+    duration: 0.80980605
     impactTime: 0.34665996
     speed: 1.5
     extraImpactTimes: []
@@ -70,10 +71,35 @@ MonoBehaviour:
   retreatDistance: 4
   duelDistanceCurve:
     serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: -0.23110664
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  duelHeightCurve:
+    serializedVersion: 2
     m_Curve: []
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  engageOffsets: []
   isMash: 0
   mashTargetHits: 10
   mashStrikes: []

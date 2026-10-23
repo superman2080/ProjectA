@@ -16,6 +16,8 @@ MonoBehaviour:
   level: 10
   bpm: 150
   beatOffset: 0
+  beatsPerBar: 4
+  authoredWith: 0
   patternPool:
   - {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
   - {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
@@ -51,12 +53,14 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
+  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
     onsetTimes:
     - 3.6000001
     - 4
     - 4.4
+    - 4.8
     exposureDurations:
+    - 0.5
     - 0.5
     - 0.5
     - 0.5
@@ -64,16 +68,7 @@ MonoBehaviour:
     - 3.1000001
     - 3.5
     - 3.9
-    enemyCue:
-      killOnSuccess: 1
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
-    onsetTimes:
-    - 4.8
-    exposureDurations:
-    - 1.5
-    spawnTimes:
-    - 3.3000002
+    - 4.3
     enemyCue:
       killOnSuccess: 0
       projectile: {fileID: 0}
@@ -209,25 +204,18 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 0
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
+  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
     onsetTimes:
     - 18
     - 18.4
+    - 18.800001
     exposureDurations:
+    - 0.5
     - 0.5
     - 0.5
     spawnTimes:
     - 17.5
     - 17.9
-    enemyCue:
-      killOnSuccess: 0
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
-    onsetTimes:
-    - 18.800001
-    exposureDurations:
-    - 0.5
-    spawnTimes:
     - 18.300001
     enemyCue:
       killOnSuccess: 1
@@ -258,25 +246,18 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 0
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 0626f65bb3524874284e0d4e45f7cdf4, type: 2}
+  - template: {fileID: 11400000, guid: e4da3a17d49b2124da7e23bdd632c32c, type: 2}
     onsetTimes:
     - 23.6
     - 24
+    - 24.4
     exposureDurations:
+    - 0.5
     - 0.5
     - 0.5
     spawnTimes:
     - 23.1
     - 23.5
-    enemyCue:
-      killOnSuccess: 0
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: c9de0e663628bf74aa907cae2014140b, type: 2}
-    onsetTimes:
-    - 24.4
-    exposureDurations:
-    - 0.5
-    spawnTimes:
     - 23.9
     enemyCue:
       killOnSuccess: 1
@@ -332,13 +313,15 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: 472103f6f1d5843418438abc704fc676, type: 2}
+  - template: {fileID: 11400000, guid: 2099fdb8b4d3c474f80e7cc555ce6cdb, type: 2}
     onsetTimes:
     - 28.800001
     - 29.2
     - 29.6
     - 30
+    - 30.4
     exposureDurations:
+    - 0.5
     - 0.5
     - 0.5
     - 0.5
@@ -348,16 +331,7 @@ MonoBehaviour:
     - 28.7
     - 29.1
     - 29.5
-    enemyCue:
-      killOnSuccess: 1
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
-    onsetTimes:
-    - 30.4
-    exposureDurations:
-    - 1.5
-    spawnTimes:
-    - 28.9
+    - 29.9
     enemyCue:
       killOnSuccess: 0
       projectile: {fileID: 0}
@@ -835,12 +809,14 @@ MonoBehaviour:
     enemyCue:
       killOnSuccess: 1
       projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: f51eb06465bc47846afbf443f8170709, type: 2}
+  - template: {fileID: 11400000, guid: bd28317bd3d89ac44bbf96c576edcc4f, type: 2}
     onsetTimes:
     - 70.8
     - 71.200005
     - 71.6
+    - 72
     exposureDurations:
+    - 0.5
     - 0.5
     - 0.5
     - 0.5
@@ -848,16 +824,7 @@ MonoBehaviour:
     - 70.3
     - 70.700005
     - 71.1
-    enemyCue:
-      killOnSuccess: 1
-      projectile: {fileID: 0}
-  - template: {fileID: 11400000, guid: e08c2b988d67d1f489963854a042d187, type: 2}
-    onsetTimes:
-    - 72
-    exposureDurations:
-    - 1.5
-    spawnTimes:
-    - 70.5
+    - 71.5
     enemyCue:
       killOnSuccess: 0
       projectile: {fileID: 0}
