@@ -33,7 +33,7 @@ namespace SequenceSpace
         [Tooltip("올릴 샷 vcam 슬롯(CinemachineCamera).")]
         [SerializeField] private string cameraSlot;
 
-        [Tooltip("샷이 도는 동안의 우선순위. 게임플레이(CameraAngleSwitcher의 activePriority 10)를 이기고 " +
+        [Tooltip("샷이 도는 동안의 우선순위. 게임플레이 vcam(10)을 이기고 " +
                  "인트로(20)에는 져야 한다.")]
         [SerializeField] private int priority = 15;
 

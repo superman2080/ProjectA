@@ -303,14 +303,16 @@ Assets/
 ### 7-2. 카메라 프레이밍 · 인트로 (CameraDirector)
 `CameraDirector`가 하는 일은 **셋**이고 서로 다른 층에 산다 — **쉐이크**(노이즈 채널) / **프레이밍**(무엇을 담을지) / **인트로**(어느 vcam을 쓸지). 채널이 겹치지 않아 동시에 돌아도 간섭하지 않는다. **Cinemachine 타입은 `ApplyShake`·`ApplyFraming`·`IntroRoutine` 세 이음매에만 등장한다.** **세 기능은 각자 독립적으로 꺼진다** — 배선이 빠진 기능만 조용히 비활성된다.
 
-**프레이밍** — 교전 상대가 있으면 플레이어와 함께, 없으면 플레이어만. **그리고 카메라는 언제나 플레이어 등 뒤에 선다.**
+**프레이밍** — 교전 상대가 있으면 플레이어와 함께, 없으면 플레이어만.
+- **⚠ 카메라는 플레이어 후면 180° 안에 있는 동안 움직이지 않고, 넘으면 넘친 만큼만 따라 돈다**(`CameraDirector.KeepRearHemisphere`). 매 프레임 `DeltaAngle(플레이어 yaw, 리그 yaw)`가 `rearHalfAngle`(90°)를 넘으면 리그 yaw를 그 경계 쪽으로 `rearFollowSpeed`(360°/s, 0 = 제한 없음) 상한으로 옮긴다 — **등 뒤로 되돌리지 않는다**. 리그 yaw는 `AimRig`가 게임플레이 vcam의 `FollowOffset`(씬 값을 yaw만큼 돌린 것)으로 쓰는 값이고(같으면 정뒤), 시작 구도만 `shoulderYaw`(30°)로 비스듬히 선다. `rearHalfAngle = 180`이면 시작 구도에 고정된다. 그래서 사슬 구간·옆으로 바뀐 상대에서는 화면이 안 돌고, 반대편으로 돌아서면 경계(정측면)까지 끌려간다. **⚠ 컷이 아니라 연속 이동이라 `PreviousStateIsValid`를 건드리면 안 된다** — vcam 감쇠가 그 움직임을 부드럽게 만드는데, 끄면 매 프레임 순간이동이 된다. `lockActiveAngle`을 끄면 아래의 예전 추종이다. 상세: `docs/CameraFixedAngle/`
+- **⚠ `GroupFraming.DollyRange.x`는 0이다** — −2였을 때 프레이밍이 거의 항상 그 하한에 붙어 실제 거리가 저작값(`FollowOffset`)보다 2m 짧았다. 거리 노브는 `Cam_ShoulderBack.FollowOffset`(0, 4, −8) 하나다.
 - 씬 구성: `CameraTargetGroup`(`CinemachineTargetGroup`)이 게임플레이 vcam의 `TrackingTarget`, vcam에 `CinemachineGroupFraming`(`SizeAdjustment = DollyOnly` — Zoom이면 원근이 왜곡된다).
 - **그룹은 `RotationMode = Manual`, vcam은 `BindingMode = LockToTarget`.** 이 조합이라 `FollowOffset`이 **그룹 오브젝트의 로컬 축**으로 해석되고, `CameraDirector`가 그룹 회전을 **플레이어 yaw로 몰아** 카메라 궤도가 등 뒤로 따라 돈다. ⚠ `GroupAverage`로 바꾸면 회전이 **멤버 배치에서 파생**돼 구도가 적을 따라 돌고, 상대 가중치 0 구간에서는 정의되지 않아 튄다. (예전 문서의 "반드시 `WorldSpace`" 규칙은 `GroupAverage`를 전제한 오진이라 폐기됐다 — 씬은 처음부터 `Manual`이었고 그래서 증상이 없었다.)
 - **⚠ 카메라는 플레이어의 회전 속도를 복사하지 않는다.** `PlayerCombatMover.turnDuration`은 0.15초 — 캐릭터에는 옳지만 카메라가 따라 하면 상대가 무대 반대편으로 바뀔 때 **화면이 0.15초에 반 바퀴 돈다.** `CameraDirector.cameraTurnDamping`(0.45초)으로 `SmoothDampAngle`(각도 랩어라운드 + 속도 승계) 뒤따르고, **그 지연 자체가 "플레이어가 먼저 돌고 카메라가 따라붙는" 연출**이다.
 - 멤버는 **고정 2칸**(0=플레이어 w=1, 1=상대 w=0~1). 넣었다 뺐다 하면 바운드가 계단식으로 튄다.
-- 그룹 위치는 `GroupCenter`(가중 중심)라 카메라는 엄밀히는 "플레이어 뒤"가 아니라 **"교전 중심의 뒤"**다. 결투 간격이 1m 남짓이라 차이는 0.5m 미만이고, 오히려 상대가 화면 중앙에 잘 남는다.
-- **⚠ 높이 노브가 둘이고 값이 같아야 한다.** 캐릭터 root가 **발바닥**(y=0, 머리끝 1.69)이라 그룹 바운드 중심도 발이다. `RotationComposer.TargetOffset.y`(어디를 **조준**하나)만 올리면 `GroupFraming`이 여전히 **바운드**(=발)를 화면 중앙에 놓아 둘이 싸우고 화면이 발쪽으로 끌려간다 — `GroupFraming`은 조준점을 모른다. **`GroupFraming.CenterOffset.y`를 같은 값으로 맞춘다**(현재 둘 다 1.5 = 머리 높이). 발이 화면 아래로 잘리면 둘을 같이 낮춘다.
-- **"적이 있다/없다"는 이진값이 아니라 거리의 함수다** — `fullFrameDistance`(3m) 이하면 w=1, `dropoffDistance`(6m) 이상이면 w=0. 처치 즉시 승격된 적은 아직 링(6m)에 있어서, 이진값이면 카메라가 확 물러났다 다시 붙는다.
+- 그룹 위치는 `GroupAverage`(가중 평균)이고 상대 가중치가 1이라 **화면 중심 = 플레이어와 상대의 평균 위치**다. `RotationComposer`는 데드존 없이(`DeadZone` 꺼짐, 감쇠 0.2) 그 점을 조준하고, `GroupFraming`(감쇠 0.3, `DollyRange` (0, 8))이 둘을 담을 만큼 물러난다.
+- **⚠ 그룹 멤버는 루트가 아니라 골반 본이다**(`CameraDirector.frameAtHips`, 휴머노이드만 — 아니면 루트). 캐릭터 root가 **발바닥**이라 루트를 걸면 그룹 평균·바운드 중심이 발이 되고, 몸을 담으려면 `RotationComposer.TargetOffset.y`와 `GroupFraming.CenterOffset.y`를 따로 맞춰야 했다 — `GroupFraming`은 조준점을 모르고 바운드 중심을 화면 중앙에 두므로 둘이 어긋나면 싸운다. 골반에 걸면 **두 컴포넌트가 오프셋 0으로 같은 점(두 몸의 평균)을 본다** (`Cam_ShoulderBack`: `TargetOffset` 0 · `CenterOffset` 0 · `FollowOffset` (0, 3.1, −8) — 골반 높이 ≈0.9m만큼 y를 내렸다). 앵커는 대상이 바뀔 때만 다시 찾는다(`SetOpponent`·`SetAmbusher`). ⚠ 거리 판정(`ResolveWeight`)은 여전히 루트로 잰다.
+- **⚠ 현재 상대는 거리와 무관하게 언제나 담는다**(`alwaysFrameOpponent`, 기본 켜짐 — 대시 구간 11m에서도 둘 다 화면 안). 끄면 예전 거리식: `fullFrameDistance`(3m) 이하면 w=1, `dropoffDistance`(6m) 이상이면 w=0. 기습자 칸은 계속 거리식이다.
 - **⚠ 대상을 갈아끼울 때 가중치를 0으로 리셋한다.** 가중치는 연속이지만 **대상 위치는 순간이동**한다(1m의 A → 6m의 B). 이월하면 그 감쇠 시간 동안 그룹이 6m 밖 한 점을 무겁게 껴안아 **카메라가 바깥으로 튄다.**
 
 **인트로** — 곡 시작 전 로우앵글부터 훑고 올라가 게임플레이 구도로 고정.
@@ -377,17 +379,12 @@ Assets/
   - **툴 프리뷰는 소리를 내지 않는다** — `ParticleSystem.Simulate`는 되감기가 되지만 오디오는 안 된다. 스크럽마다 소리가 튀면 저작을 방해한다(타임라인 막대로 시각만 보여 준다).
 - **저장**: `Tools/Pattern Effect Tool` — 패턴 진행 전체 타임라인 + 애니메이션·파티클 동시 프리뷰(`ParticleSystem.Simulate`라 **되감기가 된다**) + 칼날 경로 폴리라인(우클릭으로 그 프레임 시각을 `timeOffset`에 집기). 가이드: `docs/!Guides/Guide_PatternEffectTool.md` / 상세: `docs/PatternEffect/`
 
-### 7-5. 앵글 교체 (CameraAngleSwitcher)
-- **`CameraAngleSwitcher`**(`CameraDirector`가 소유하는 `[Serializable]` 헬퍼): 앵글 vcam 여러 대를 랜덤 교체한다. 우선순위만 갈아끼우고 실제 이동은 Cinemachine 블렌드가 한다.
-- **이 게임이 카메라를 마음껏 바꿔도 되는 구조적 이유**: 루트 Canvas가 **`ScreenSpaceOverlay`**라 패턴인풋·포커스 링·가이드라인이 카메라와 완전히 독립이다. **앵글이 바뀌어도 플레이어가 봐야 할 것은 1픽셀도 안 움직인다.**
-- **⚠ 교체는 세 단계다 — 쿨다운(자격) → 패턴 경계(**예약**) → 카메라 큐 종료(**발사**).** 경계에서 바로 교체하면 안 된다: **패턴 승계(`OnJudgeTargetBegan`)는 임팩트보다 먼저 온다**(완료 = 마지막 노드 입력, 임팩트 = 거기서 `goodWindow` 0.1초 뒤). 그래서 경계에서 쏘면 0.4초 블렌드가 임팩트·히트스톱·쉐이크를 **매번** 덮는다 — 확률 문제가 아니라 구조적으로 고정된 거리다. 큐가 끝난 뒤(마지막 노드 +0.38초쯤) 발사하면 블렌드가 조용한 구간에서 돌고, 예약이 그 패턴에 묶여 있어 음악적 착지점은 유지된다.
-- **앵글 = `FollowOffset` 벡터 하나.** vcam이 `LockToTarget`이고 그룹이 `RotationMode = Manual`이라 오프셋이 그룹 로컬 축으로 해석되고, `CameraDirector`가 그 그룹을 플레이어 yaw로 몬다(§7-2) → **오프셋만 바꾸면 자동으로 플레이어 기준 앵글**이다. 기존 vcam을 복제하고 벡터만 바꾸면 `TargetGroup`·`RotationComposer`·`GroupFraming`을 물려받아 "적과 플레이어를 따라다닌다"가 공짜로 성립한다. **스위처는 앵글이 무엇인지 모른다.**
-- **시작 카메라는 `cameras[0]` 고정**(랜덤 아님). 곡 시작 구도가 매번 같아야 인트로 스플라인 끝점이 어느 구도로 흡수될지 정해지고(§7-2), 리스트 순서가 곧 저작 의도가 된다. `Setup()`이 씬 저장값을 덮고 쿨다운도 여기서 시작한다(시작 직후 즉시 교체 방지).
-- **블렌드는 `BlendHint = SphericalPosition`** — 위치가 LookAt(= `CameraTargetGroup`) 중심의 **구면 위**를 지나 **교전을 축으로 돌아간다**. 기본 직선 보간이면 반대편 앵글로 갈 때 카메라가 무대를 가로질러 대상을 뚫고 지나간다. ⚠ **LookAt이 없으면 조용히 직선으로 떨어진다.** 높이 차가 큰 쌍은 `CylindricalPosition`이 나을 수 있다(씬 값).
-- **⚠ 쉐이크·펀치는 `brain.ActiveVirtualCamera`(live vcam)에 건다.** 특정 vcam을 하드와이어로 잡으면 **다른 앵글이 올라온 순간 타격감 연출이 통째로 사라진다**(화면에 없는 카메라를 흔들게 된다). 휴지값(Perlin 진폭·주파수, 렌즈 FOV)은 **vcam마다 다를 수 있어 대상별로 캐시**하고, 대상이 바뀌면 **이전 vcam을 반드시 휴지값으로 되돌린다**(안 그러면 흔들린 상태로 굳어 다음 등장 때 그 값으로 나온다). Brain/live 조회 실패 시 `gameplayCamera`로 폴백 — 교체를 안 쓰는 씬은 예전과 동일.
-- **활성 우선순위(10)는 인트로(20)보다 낮아야 한다.** 아니면 인트로를 이겨 곡 시작 연출이 안 나온다.
-- `Brain.DefaultBlend`는 **EaseOut 0.4초**. 패턴 주기가 1.38초라 1.0초면 73%를 이동에 쓴다. 인트로가 이 값을 읽지만(§7-2) 줄이면 주행 시간이 늘어 무해하다.
-- 상세: `docs/CameraSwitch/`
+### 7-5. 게임플레이 카메라는 한 대다
+- **게임플레이 vcam은 `Cam_ShoulderBack` 하나**(씬 우선순위 10)이고 `CameraDirector.gameplayCamera`가 가리킨다. 앵글 교체(`CameraAngleSwitcher`)와 측면·보조 vcam은 폐기됐다(설계 기록: `docs/CameraSwitch/` · `docs/CameraFixedAngle/` 5차).
+- **우선순위는 씬이 든다** — 예전에는 스위처가 런타임에 0번을 10으로 올렸다. 10은 인트로(20)·시퀀스 샷(`CameraShotStep`, 15)에 지고 인트로 휴지값(−10)은 이긴다.
+- **카메라를 마음껏 움직여도 되는 구조적 이유**: 루트 Canvas가 **`ScreenSpaceOverlay`**라 패턴인풋·포커스 링·가이드라인이 카메라와 완전히 독립이다. **카메라가 돌아도 플레이어가 봐야 할 것은 1픽셀도 안 움직인다.**
+- **⚠ 쉐이크·펀치는 `brain.ActiveVirtualCamera`(live vcam)에 건다** — 게임플레이 vcam은 한 대지만 인트로·시퀀스 샷이 live일 수 있다. 휴지값(Perlin 진폭·주파수, 렌즈 FOV)은 **대상별로 캐시**하고, 대상이 바뀌면 **이전 vcam을 반드시 휴지값으로 되돌린다**. Brain/live 조회 실패 시 `gameplayCamera`로 폴백.
+- `angleBlendDuration` · `cutBetweenAngles`는 이름이 앵글 교체 시절 것이지만 **인트로 마무리**가 읽는다(§7-2, `Brain.DefaultBlend`) — 지우면 안 된다.
 
 ### 7. 이펙트 시스템 (Effect)
 - **`EffectManager`**: Canvas 이펙트의 유일 관리 지점. `PatternHandler`의 확장 이벤트(판정/라인연결/패턴완성)만 구독해 카탈로그에서 프리팹을 골라 재생. **PatternHandler는 이펙트를 위해 수정하지 않는다(관심사 분리).**

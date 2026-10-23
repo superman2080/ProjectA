@@ -65,8 +65,8 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("적 처치 큐. 비우면 그 트리거만 무연출.")]
     [SerializeField] private EnemySpace.EnemyDirector enemyDirector;
 
-    [Tooltip("쉐이크·펀치의 폴백 대상. 앵글 교체(CameraAngleSwitcher)로 여러 vcam을 쓸 때는 " +
-             "live vcam을 조회해 그쪽에 걸고, 조회가 실패할 때만 이 값을 쓴다.")]
+    [Tooltip("게임플레이 vcam(한 대). 후면 유지 조준이 이 vcam의 FollowOffset을 돌린다.\n" +
+             "쉐이크·펀치는 live vcam(인트로·시퀀스 샷일 수 있다)에 걸고, 조회가 실패할 때만 이 값을 쓴다.")]
     [SerializeField] private CinemachineCamera gameplayCamera;
 
     [Header("Toggles")]
@@ -91,16 +91,10 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("화면 흔들림 + FOV 펀치. 멀미 감수성이 큰 층이라 하나로 묶는다.")]
     [SerializeField] private bool optionScreenShake = true;
 
-    [Tooltip("앵글 랜덤 교체. 끄면 시작 카메라(0번) 구도가 곡 내내 유지된다.")]
-    [SerializeField] private bool optionAngleSwitch = true;
-
     [Tooltip("임팩트 줌 + 카메라 궤도의 플레이어 방향 추종. 끄면 카메라가 돌지 않는다(고정 카메라에 가깝다).")]
     [SerializeField] private bool optionCameraMotion = true;
 
-    [Header("Angle Switch")]
-    [Tooltip("앵글 vcam 랜덤 교체. 0번이 곡 시작 카메라이며, 2대 미만이면 조용히 비활성된다.")]
-    [SerializeField] private CameraAngleSwitcher angleSwitcher = new CameraAngleSwitcher();
-
+    [Header("Blend")]
     [Tooltip("카메라 전환에 걸리는 시간(초). vcam이 바뀔 때 화면이 새 구도로 옮겨가는 속도다 — 작을수록 컷에 가깝다.\n" +
              "0 이하면 씬의 Brain 값을 그대로 쓴다(예전 동작).\n\n" +
              "⚠ 값은 Awake에서 Brain.DefaultBlend에 써 넣는다. Brain이 런타임 진실의 원천이라는 규율은 그대로다 —\n" +
@@ -154,6 +148,16 @@ public class CameraDirector : MonoBehaviour
     [Tooltip("이 거리 이상이면 적을 담지 않는다(가중치 0) — 화면에는 플레이어만 남는다.")]
     [SerializeField] private float dropoffDistance = 6f;
 
+    [Tooltip("현재 상대는 거리와 무관하게 언제나 담는다(가중치 1). 그룹이 GroupAverage라 화면 중심이\n" +
+             "플레이어와 상대의 평균 위치가 된다. 끄면 예전 거리식(fullFrameDistance·dropoffDistance)으로 돌아간다.\n" +
+             "기습자 칸은 이 값과 무관하게 거리식을 쓴다.")]
+    [SerializeField] private bool alwaysFrameOpponent = true;
+
+    [Tooltip("그룹 멤버를 루트(발바닥)가 아니라 골반 본에 건다(휴머노이드만, 아니면 루트).\n" +
+             "그래야 그룹 중심 = 두 몸의 평균 위치가 되어 GroupFraming·RotationComposer가 오프셋 없이 같은 점을 화면 중앙에 둔다.\n" +
+             "끄면 예전처럼 루트 — 몸을 담으려면 CenterOffset·TargetOffset으로 높이를 따로 맞춰야 한다.")]
+    [SerializeField] private bool frameAtHips = true;
+
     [Tooltip("가중치가 목표를 따라가는 시간상수(초). 거리 계산이 튀어도 구도는 부드럽게 따라온다.")]
     [SerializeField] private float weightDamping = 0.35f;
 
@@ -188,6 +192,21 @@ public class CameraDirector : MonoBehaviour
              "끄면 예전 동작(그룹 회전이 플레이어 yaw를 상시 추종)이다 — " +
              "cameraTurnDamping·yawCutThreshold는 그때만 쓰인다.")]
     [SerializeField] private bool lockActiveAngle = true;
+
+    [Tooltip("플레이어 등 방향에서 이 각(도)까지는 앵글을 유지하고, 넘으면 넘친 만큼만 따라 돈다. 90 = 후면 180°.\n" +
+             "낮출수록 일찍 따라 돌고, 경계에 걸린 구도가 정측면에서 비스듬한 뒤로 바뀐다. 180이면 시작 구도에 고정된다.\n" +
+             "lockActiveAngle이 꺼져 있으면 무시된다.")]
+    [Range(0f, 180f)]
+    [SerializeField] private float rearHalfAngle = 90f;
+
+    [Tooltip("경계를 넘었을 때 카메라가 따라 도는 최대 속도(도/초). 0이면 제한 없음(플레이어 회전을 그대로 따른다).\n" +
+             "플레이어는 0.15초에 돌므로 제한이 없으면 카메라도 그만큼 빨리 끌린다.")]
+    [Min(0f)]
+    [SerializeField] private float rearFollowSpeed = 360f;
+
+    [Tooltip("시작 구도에서 카메라를 플레이어 정뒤에서 틀어 서는 각(도). 0이면 정뒤라 플레이어가 상대를 가린다.\n" +
+             "+면 카메라가 플레이어 오른쪽 뒤에 선다. rearHalfAngle보다 크면 시작하자마자 끌려간다.")]
+    [SerializeField] private float shoulderYaw = 30f;
 
     [Header("Intro")]
     [Tooltip("카운트다운 시각원. 비우면 인트로 기능만 꺼진다.")]
@@ -275,6 +294,17 @@ public class CameraDirector : MonoBehaviour
     private Transform opponentTransform;
     private float opponentWeight;
 
+    // 그룹 멤버에 실제로 거는 점(frameAtHips면 골반 본). 대상이 바뀔 때만 다시 찾는다.
+    private Transform opponentAnchor;
+    private Transform ambusherAnchor;
+
+    // 마지막으로 AimRig에 넘긴 yaw. 플레이어 yaw와 같으면 정뒤다.
+    private float rigYaw;
+
+    // 게임플레이 vcam의 오프셋 통로와 씬에 저장된 오프셋(= 리그 yaw 0일 때의 자리). 통로가 없으면 조준만 비활성.
+    private CinemachineFollow gameplayFollow;
+    private Vector3 gameplayBaseOffset;
+
     // 기습자 칸(2번). 상대 칸과 완전히 같은 규율으로 돈다 — 칸은 고정이고 대상만 갈아끼운다.
     private Transform ambusherTransform;
     private float ambusherWeight;
@@ -310,13 +340,12 @@ public class CameraDirector : MonoBehaviour
         SetupFraming();
         SetupIntro();
 
-        // 시작 구도를 확정한다. 씬에 저장된 우선순위가 무엇이든 0번이 이긴다.
-        angleSwitcher.Setup();
+        if (gameplayCamera != null && gameplayCamera.TryGetComponent(out gameplayFollow))
+            gameplayBaseOffset = gameplayFollow.FollowOffset;
 
-        // ⚠ Setup 뒤여야 한다 — 오프셋 통로를 거기서 집는다. includeActive가 여기서만 true인 이유는
-        // 0번 카메라도 첫 프레임부터 플레이어 기준 자리에 있어야 하기 때문이다(안 그러면 씬의 base 값이
-        // "플레이어 yaw = 0" 가정으로 읽혀 시작 구도가 플레이어 초기 방향에 따라 어긋난다).
-        if (lockActiveAngle && framingEnabled) angleSwitcher.Aim(PlayerYaw, includeActive: true);
+        // 첫 프레임부터 플레이어 기준 자리에 선다 — 안 그러면 씬의 오프셋이 "플레이어 yaw = 0" 가정으로 읽혀
+        // 시작 구도가 플레이어 초기 방향에 따라 어긋난다.
+        if (lockActiveAngle && framingEnabled) AimRig(PlayerYaw + shoulderYaw);
     }
 
     /// <summary>
@@ -345,7 +374,7 @@ public class CameraDirector : MonoBehaviour
         }
 
         targetGroup.Targets.Clear();
-        targetGroup.AddMember(actionPlayer.transform, 1f, 1f);
+        targetGroup.AddMember(FramingAnchor(actionPlayer.transform), 1f, 1f);
         targetGroup.AddMember(null, 0f, 1f); // 1번 칸은 자리만 잡아 둔다. 대상은 승격될 때 채운다.
         targetGroup.AddMember(null, 0f, 1f); // 2번 칸 = 기습자. 평소엔 대상 null·가중치 0이라 구도에 영향이 없다.
 
@@ -364,8 +393,38 @@ public class CameraDirector : MonoBehaviour
         framingEnabled = true;
     }
 
-    /// <summary>고정 앵글의 기준 방향. 비활성 vcam이 이 방향을 기준으로 자기 자리를 잡는다.</summary>
+    /// <summary>고정 앵글의 기준 방향. 리그 yaw가 이 방향에서 얼마나 벗어났는지로 후면 유지를 판정한다.</summary>
     private float PlayerYaw => actionPlayer.transform.eulerAngles.y;
+
+    /// <summary>
+    /// 카메라가 플레이어 후면(등 방향 ±<see cref="rearHalfAngle"/>) 안이면 아무것도 안 하고, 넘으면 <b>경계까지만</b>
+    /// 끌어당긴다(<see cref="rearFollowSpeed"/> 상한). 등 뒤로 되돌리지 않는다 — 넘친 만큼만 돈다.
+    ///
+    /// <para>⚠ 컷이 아니라 연속 이동이다. <c>PreviousStateIsValid</c>를 건드리지 않아야 vcam 감쇠가 그 움직임을
+    /// 부드럽게 만든다(건드리면 매 프레임 순간이동이 된다).</para>
+    /// </summary>
+    private void KeepRearHemisphere()
+    {
+        float delta = Mathf.DeltaAngle(PlayerYaw, rigYaw);
+        if (Mathf.Abs(delta) <= rearHalfAngle) return;
+
+        float boundary = PlayerYaw + Mathf.Sign(delta) * rearHalfAngle;
+        rigYaw = rearFollowSpeed > 0f
+            ? Mathf.MoveTowardsAngle(rigYaw, boundary, rearFollowSpeed * Time.deltaTime)
+            : boundary;
+
+        AimRig(rigYaw);
+    }
+
+    /// <summary>
+    /// 게임플레이 vcam을 리그 yaw 방향의 자리에 놓는다. vcam이 <c>LockToTarget</c>이고 그룹 회전이 항등이라
+    /// <c>FollowOffset</c>이 곧 월드 오프셋이다 — 씬 오프셋을 yaw만큼 돌려 쓰면 된다.
+    /// </summary>
+    private void AimRig(float yaw)
+    {
+        rigYaw = yaw;
+        if (gameplayFollow != null) gameplayFollow.FollowOffset = Quaternion.Euler(0f, yaw, 0f) * gameplayBaseOffset;
+    }
 
     /// <summary>
     /// 전환 속도를 <b>Brain에 써 넣는다</b>(읽는 게 아니라). 튜닝은 인스펙터 한 곳에서 하고 싶고,
@@ -517,14 +576,8 @@ public class CameraDirector : MonoBehaviour
     /// </summary>
     private void HandleEnemyKilled(EnemySpace.EnemyView view) => PlayCue(CameraTrigger.EnemyKilled);
 
-    /// <summary>
-    /// 패턴이 넘어가는 순간 — 앵글 교체를 <b>예약</b>한다(발사는 카메라 큐가 끝난 뒤, <see cref="Update"/>에서).
-    /// 이 이벤트는 임팩트보다 먼저 오므로 여기서 바로 교체하면 블렌드가 임팩트·쉐이크를 덮는다.
-    /// </summary>
     private void HandleJudgeTargetBegan(JudgeTargetInfo info)
     {
-        if (optionAngleSwitch) angleSwitcher.OnPatternBoundary();
-
         if (!zoomEnabled || !optionCameraMotion) return;
 
         // 노트가 적은 패턴은 조일 구간 자체가 없다. 진행 중인 줌은 자기 시각대로 마저 끝난다.
@@ -539,20 +592,9 @@ public class CameraDirector : MonoBehaviour
         hasPending = false;
         StopShake();
         StopZoom();
-        angleSwitcher.Reset();
     }
 
-    /// <summary>
-    /// 상대 교체 = <b>플레이어가 무대를 가로지르는 패턴</b>(§11-2·§11-6). 이미 화면이 움직이는 구간이라
-    /// 앵글 교체를 여기에 묶으면 큰 움직임 둘이 하나로 합쳐지고, 사슬 난타 구간은 앵글이 고정돼 쉬는 구간이 생긴다.
-    /// (예전엔 자격이 6초 타이머뿐이라 오히려 난타 한복판에서 갈릴 확률이 더 높았다.)
-    /// </summary>
-    private void HandleOpponentChanged(EnemySpace.EnemyView previous, EnemySpace.EnemyView current)
-    {
-        SetOpponent(current);
-
-        if (optionAngleSwitch) angleSwitcher.OnOpponentChanged();
-    }
+    private void HandleOpponentChanged(EnemySpace.EnemyView previous, EnemySpace.EnemyView current) => SetOpponent(current);
 
     /// <summary>
     /// 슬롯 1의 대상을 갈아끼운다. <b>가중치를 같은 순간에 0으로 떨어뜨린다.</b>
@@ -574,6 +616,7 @@ public class CameraDirector : MonoBehaviour
         if (next == opponentTransform) return;
 
         opponentTransform = next;
+        opponentAnchor = FramingAnchor(next);
         opponentWeight = 0f;
         opponentTarget = 0f;
     }
@@ -594,6 +637,7 @@ public class CameraDirector : MonoBehaviour
         if (next == ambusherTransform) return;
 
         ambusherTransform = next;
+        ambusherAnchor = FramingAnchor(next);
         ambusherWeight = 0f;
         ambusherTarget = 0f;
     }
@@ -629,9 +673,6 @@ public class CameraDirector : MonoBehaviour
         UpdatePunch();
         UpdateZoom();
         UpdateFraming();
-
-        // 예약된 앵글 교체는 큐가 전부 끝난 뒤에야 발사된다 — 블렌드가 임팩트·쉐이크를 덮지 않게.
-        if (optionAngleSwitch) angleSwitcher.Tick(IsCuePlaying);
     }
 
     // ── 히트스톱 락 ──────────────────────────────────────────────────────────
@@ -813,12 +854,6 @@ public class CameraDirector : MonoBehaviour
         ApplyLens();
     }
 
-    /// <summary>
-    /// 줌이 <b>화면에 보이는 중</b>인가. 예약만 돼 있고 아직 조이기 전이면 false다 —
-    /// <c>hasZoom</c>을 그대로 쓰면 예약 구간까지 잠겨 앵글 교체가 발사될 창이 사라진다
-    /// (패턴 간격 0.4초 &lt; 리드타임 + 줌아웃).
-    /// </summary>
-    private bool IsZoomActive => hasZoom && Time.time >= zoomRampStart;
 
     // ── 프레이밍 ─────────────────────────────────────────────────────────────
 
@@ -840,9 +875,8 @@ public class CameraDirector : MonoBehaviour
     /// <para><c>SmoothDampAngle</c>을 쓰는 이유는 둘이다 — 각도 랩어라운드(359°→1°)를 알아서 처리하고,
     /// 속도를 들고 있어 감쇠 도중 목표가 또 바뀌어도(연속 처치) 이어진다.</para>
     ///
-    /// <para><b><see cref="lockActiveAngle"/>이면 위 두 단락이 통째로 꺼진다.</b> 궤도의 방향은
-    /// 활성 vcam이 <b>활성화되던 순간</b>에 이미 정해졌고, 여기서 움직이는 것은 <b>비활성 vcam의 자리</b>뿐이다
-    /// (<c>CameraAngleSwitcher.Aim</c>). 가중치·멤버 갱신은 그대로 돈다 — 요구가 "플레이어 중앙 + 상대도 담기"이고
+    /// <para><b><see cref="lockActiveAngle"/>이면 위 두 단락이 통째로 꺼진다.</b> 궤도의 방향은 리그 yaw가 정하고
+    /// 그것은 후면 반구를 벗어날 때만 움직인다(<see cref="KeepRearHemisphere"/>). 가중치·멤버 갱신은 그대로 돈다 — 요구가 "둘 다 담기 + 중점 중앙"이고
     /// 그 일은 <c>RotationComposer</c>·<c>GroupFraming</c>이 회전과 무관하게 한다.</para>
     /// </summary>
     private void UpdateFraming()
@@ -850,20 +884,21 @@ public class CameraDirector : MonoBehaviour
         if (!framingEnabled) return;
 
         // ⚠ 계산식(ResolveWeight)은 공유하고 <b>시간상수만</b> 갈린다 — 두 칸이 어긋날 수 없다는 §7-2 규율은 그대로다.
-        opponentTarget = ResolveWeight(opponentTransform, opponentTarget);
+        opponentTarget = alwaysFrameOpponent
+            ? (opponentTransform != null && opponentTransform.gameObject.activeInHierarchy ? 1f : 0f)
+            : ResolveWeight(opponentTransform, opponentTarget);
         ambusherTarget = ResolveWeight(ambusherTransform, ambusherTarget);
 
         opponentWeight = Damp(opponentWeight, opponentTarget, weightDamping);
         ambusherWeight = Damp(ambusherWeight, ambusherTarget * ambusherMaxWeight, ambusherWeightDamping);
 
-        // ⚠ 고정 앵글에서는 yaw를 아예 만들지 않는다 — 궤도의 방향은 '활성화되던 순간'에 이미 정해졌고,
-        // 움직이는 것은 비활성 vcam의 자리뿐이다. 가중치·멤버 갱신은 그대로 돈다(플레이어 중앙 + 상대도 담기).
+        // ⚠ 고정 앵글에서는 그룹 회전(cameraYaw)을 만들지 않는다 — 궤도의 방향은 리그 yaw가 정하고,
+        // 그것은 후면 반구를 벗어날 때만 움직인다. 가중치·멤버 갱신은 그대로 돈다(둘 다 담기 + 중점 중앙).
         if (lockActiveAngle)
         {
-            // 블렌드 중에는 멈춘다 — 방금 비활성이 된 카메라가 추종을 재개하면 블렌드 소스가 흐른다.
-            if (brain == null || !brain.IsBlending) angleSwitcher.Aim(PlayerYaw);
+            KeepRearHemisphere();
 
-            ApplyFraming(opponentTransform, opponentWeight, ambusherTransform, ambusherWeight, cameraYaw);
+            ApplyFraming(opponentAnchor, opponentWeight, ambusherAnchor, ambusherWeight, cameraYaw);
             return;
         }
 
@@ -878,9 +913,6 @@ public class CameraDirector : MonoBehaviour
         {
             cameraYaw = targetYaw;
             cameraYawVelocity = 0f;
-
-            // 컷 자체를 샷 전환으로 읽히게 한다. 발사는 여느 때처럼 카메라 큐가 끝난 뒤다.
-            if (optionAngleSwitch) angleSwitcher.Arm();
         }
         else
         {
@@ -889,7 +921,7 @@ public class CameraDirector : MonoBehaviour
                 : targetYaw;
         }
 
-        ApplyFraming(opponentTransform, opponentWeight, ambusherTransform, ambusherWeight, cameraYaw);
+        ApplyFraming(opponentAnchor, opponentWeight, ambusherAnchor, ambusherWeight, cameraYaw);
     }
 
     /// <summary>
@@ -916,6 +948,16 @@ public class CameraDirector : MonoBehaviour
         if (distance >= dropoffDistance) return 0f;
 
         return current; // 두 임계 사이 = 지금 상태 유지
+    }
+
+    /// <summary>그룹 멤버에 걸 점 — <see cref="frameAtHips"/>면 휴머노이드의 골반 본, 아니면(또는 못 찾으면) 루트.</summary>
+    private Transform FramingAnchor(Transform root)
+    {
+        if (root == null || !frameAtHips) return root;
+
+        var animator = root.GetComponentInChildren<Animator>();
+        var hips = animator != null && animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+        return hips != null ? hips : root;
     }
 
     private static float Damp(float current, float target, float damping) =>
@@ -1061,15 +1103,14 @@ public class CameraDirector : MonoBehaviour
     /// <summary>
     /// 쉐이크·펀치를 걸 <b>지금 화면에 나오는 vcam</b>을 찾는다.
     ///
-    /// <para>앵글 교체(<c>CameraAngleSwitcher</c>)를 쓰면 live vcam이 곡 도중 바뀐다. 예전처럼 특정 vcam을
-    /// 하드와이어로 잡고 있으면 <b>다른 앵글이 올라온 순간 타격감 연출이 통째로 사라진다</b> —
+    /// <para>게임플레이 vcam은 한 대지만 인트로·시퀀스 샷(<c>CameraShotStep</c>)이 live일 수 있다. 특정 vcam을
+    /// 하드와이어로 잡고 있으면 <b>다른 vcam이 올라온 순간 타격감 연출이 사라진다</b> —
     /// 화면에 안 나오는 카메라를 흔들고 있기 때문이다.</para>
     ///
     /// <para><b>대상이 바뀌면 이전 vcam을 반드시 휴지값으로 되돌린다.</b> 안 그러면 흔들리던 상태로 굳은 채
     /// 대기열에 남았다가 다음에 올라올 때 그 값으로 등장한다.</para>
     ///
-    /// <para>Brain이 없거나 live를 못 찾으면 <see cref="gameplayCamera"/>로 폴백한다 — 앵글 교체를 안 쓰는
-    /// 씬에서는 예전과 완전히 같은 동작이다.</para>
+    /// <para>Brain이 없거나 live를 못 찾으면 <see cref="gameplayCamera"/>로 폴백한다.</para>
     /// </summary>
     private CinemachineCamera ResolveEffectCamera()
     {
@@ -1126,11 +1167,6 @@ public class CameraDirector : MonoBehaviour
         cam.Lens = lens;
     }
 
-    /// <summary>
-    /// 진행 중인 카메라 큐가 있는가. 앵글 교체가 <b>쉐이크·펀치·줌이 끝난 뒤에</b> 발사되도록 판단 근거를 준다.
-    /// 블렌드(0.4초)가 줌 램프와 겹치면 화면이 뭉개진다.
-    /// </summary>
-    public bool IsCuePlaying => shakeDuration > 0f || punchDuration > 0f || IsZoomActive;
 
     // ── 인트로 ──────────────────────────────────────────────────────────────
 

@@ -321,3 +321,373 @@ lockActiveAngle: 1
   지금은 넣지 않는다. 필요해지면 `Aim`에 활성 포함 + 큰 시간상수로 한 줄.
 - `cameraTurnDamping`·`yawCutThreshold` 제거 — 예전 경로가 살아 있어야 회귀 0이다. 분기 밖에 둔다.
 - 씬 `RotationComposer.TargetOffset.y` 표류(1.5 / 0 / 2.5) 정리 — 독립 작업.
+
+---
+
+# 2차 — 결투 축 기준 고정 (A안)
+
+근거: `Research_CameraFixedAngle.md`의 "2차" 절.
+
+## 설계 요약
+
+**각도의 기준을 플레이어 yaw에서 결투 축(`DuelPlan.Axis`)으로 바꾼다.** 결투 하나가 이어지는 동안 화면이 돌지 않는다는
+1차의 성질은 그대로 두고, **다시 설 시점과 방향을 상대의 위치가 정한다.**
+
+| | 1차 | 2차(A안) |
+|---|---|---|
+| 각도의 기준 | 활성화 순간의 플레이어 yaw | **결투 축 yaw + `shoulderYaw`** |
+| 바뀌는 시점 | 패턴 3개마다 | **축이 `reaimAngle` 넘게 바뀔 때**(상대 교체·관통) |
+| 전환 | vcam 둘(후면↔측면) 사이 컷 | **같은 vcam 순간이동**(`PreviousStateIsValid = false`) |
+| 발사 규율 | 예약 → 카메라 큐 종료 후 | **같음** |
+
+전부 `CameraDirector.aimAlongDuelAxis` **하나로 끌 수 있다**(false = 1차 동작). `lockActiveAngle`이 여전히 상위 스위치다.
+
+---
+
+## - [x] Step 11 — 실제 거리 늘리기 (선행 · 씬 값)
+
+이미 반영했다(Research 2차 표). **씬 저장은 사용자가 한다** — 반영 전에 씬에 저장 안 된 변경이 있었다.
+
+- `Cam_ShoulderBack.FollowOffset` (0, 3.5, −7) → **(0, 4, −8)** · `Cam_SideRight` (7, 3.5, 0) → **(8, 4, 0)**
+- 두 vcam의 `GroupFraming.DollyRange.x` −2 → **0** — 실제 거리 ≈5.8m → **≈8.9m**
+- ⚠ 2차에서 `baseOffset`(축 로컬 '정뒤')은 `Cam_ShoulderBack`의 값 그대로다. 거리 노브는 계속 그 vcam의 `FollowOffset` 하나다.
+
+---
+
+## - [x] Step 12 — `CameraAngleSwitcher`: 활성 조준이 곧 컷이 되게
+
+`Aim(float yaw, bool includeActive)`에서 `includeActive`일 때 **활성 vcam의 감쇠를 한 번 건너뛴다**:
+
+```csharp
+if (includeActive && currentIndex >= 0 && cameras[currentIndex] != null)
+    cameras[currentIndex].PreviousStateIsValid = false;
+```
+
+- 이 한 줄이 "같은 vcam의 순간이동 = 컷"의 실체다(`Select`가 이미 쓰는 줄과 같은 근거).
+  없으면 `PositionDamping`(2, 0.4, 2)이 새 자리까지 **2초 가까이 플레이어 주위를 미끄러진다.**
+- 기존 호출자(`Awake`의 1회 조준)에도 무해하다 — 그때는 원래 첫 프레임이라 감쇠할 이전 상태가 없다.
+
+`ActiveCamera` 게터 하나(`currentIndex`의 vcam, 없으면 null) — Step 13의 "인트로 중인가" 판정용.
+
+새 메서드는 만들지 않는다. 파라미터 이름만 `playerYaw` → `yaw`로 바꾼다(이제 플레이어 yaw만 들어오는 게 아니다).
+
+---
+
+## - [x] Step 13 — `CameraDirector`: 결투 계획을 듣고 조준을 예약한다
+
+새 필드(`[Header("Framing")]`, `lockActiveAngle` 바로 아래):
+
+```csharp
+[Tooltip("고정 각도의 기준을 플레이어 yaw가 아니라 결투 축(플레이어 → 상대)으로 잡는다.\n" +
+         "축이 reaimAngle 넘게 바뀔 때만(상대 교체·관통) 컷으로 다시 서고, 결투가 이어지는 동안은 움직이지 않는다.\n" +
+         "끄면 1차 동작(활성화 순간의 플레이어 yaw에 고정 + 앵글 교체). lockActiveAngle이 꺼져 있으면 무시된다.")]
+[SerializeField] private bool aimAlongDuelAxis = true;
+
+[Tooltip("결투 축에서 카메라를 틀어 서는 각(도). 0이면 정뒤라 플레이어가 상대를 가린다.\n+면 카메라가 플레이어 오른쪽 뒤에 선다.")]
+[SerializeField] private float shoulderYaw = 30f;
+
+[Tooltip("결투 축이 이 각(도)보다 크게 바뀌어야 다시 조준한다. 작으면 상대가 바뀔 때마다 컷이 나고, 크면 상대가 옆으로 빠져도 안 따라간다.")]
+[SerializeField] private float reaimAngle = 45f;
+```
+
+상태(값 타입 셋, 새 개념 없음):
+
+```csharp
+private float lockedAxisYaw = float.NaN;   // 지금 카메라가 기준으로 삼는 축. NaN = 아직 계획을 못 받았다
+private float pendingAxisYaw;
+private bool reaimPending;
+```
+
+① **구독**: 이미 `enemyDirector.OnOpponentChanged`를 거는 자리(`:430`/`:451`)에 `OnDuelScheduled`를 같이 건다/푼다.
+
+② **`HandleDuelScheduled(DuelPlan plan)`**:
+
+```csharp
+if (!lockActiveAngle || !aimAlongDuelAxis || !framingEnabled) return;
+if (plan.Axis.sqrMagnitude < 1e-6f) return;                        // 축이 없다(디버그 경로)
+
+float yaw = Mathf.Atan2(plan.Axis.x, plan.Axis.z) * Mathf.Rad2Deg;
+if (!float.IsNaN(lockedAxisYaw) && Mathf.Abs(Mathf.DeltaAngle(lockedAxisYaw, yaw)) <= reaimAngle) return;
+
+pendingAxisYaw = yaw;
+lockedAxisYaw = yaw;   // ⚠ 예약 시점에 갱신한다 — 발사 전에 같은 축의 계획이 또 와도 두 번 예약하지 않게
+
+if (!IsGameplayCameraLive) ApplyReaim();   // 화면에 없다(인트로 중) → 즉시. 안 보인다.
+else reaimPending = true;                 // 화면에 있다 → 예약, 발사는 ③
+```
+
+- `IsGameplayCameraLive` = `brain != null && ReferenceEquals(brain.ActiveVirtualCamera, angleSwitcher.ActiveCamera)`.
+  brain이 없으면 false → 즉시 조준(배선이 빠지면 조용히 단순해지는 기존 규율).
+- **근거**: 첫 계획은 카운트다운 중에 온다(Research 함정 2). 그때 기다리면 인트로가 엉뚱한 구도로 착지한다.
+
+③ **발사**: `Update`의 `angleSwitcher.Tick(IsCuePlaying)` 바로 아래:
+
+```csharp
+if (reaimPending && !IsCuePlaying) ApplyReaim();
+```
+
+- `optionAngleSwitch`로 묶지 않는다 — 앵글 교체 옵션이 아니라 고정 각도의 일부다.
+- 히트스톱 잠금 중에는 `Update`가 조기 반환하므로 발사가 잠금 뒤로 밀린다(1차와 같은 의도된 동작).
+
+④ **`ApplyReaim()`**: `reaimPending = false; angleSwitcher.Aim(pendingAxisYaw + shoulderYaw, includeActive: true);`
+
+⑤ **`UpdateFraming`의 고정 분기**: `aimAlongDuelAxis`면 `Aim(PlayerYaw)`를 부르지 않는다(비활성 추종이 필요 없다).
+   `Awake`의 `Aim(PlayerYaw, includeActive: true)`는 **그대로 둔다** — 첫 계획 전의 폴백이다.
+
+⑥ **`HandleAllCleared`**: `reaimPending = false; lockedAxisYaw = float.NaN;` — 다음 곡의 첫 계획이 무조건 조준하게.
+
+---
+
+## - [x] Step 14 — 씬
+
+- `angleSwitcher.switchEnabled` → **0**. A안에서는 교체가 없다(전환은 Step 13의 재조준이 한다).
+  `Setup`은 `switchEnabled`를 안 보므로 0번(`Cam_ShoulderBack`)은 여전히 활성으로 선다. `cameras` 배열은 그대로 둔다(B·C안 복귀 경로).
+- 새 필드 셋은 기본값 그대로.
+
+---
+
+## - [x] Step 15 — CLAUDE.md §7-2 · §7-5 갱신
+
+- §7-2: "카메라는 언제나 플레이어 등 뒤에 선다" → **결투 축의 비스듬한 뒤에 서고 축이 크게 바뀔 때만 다시 선다.**
+  `GroupFraming.DollyRange.x = 0`의 근거(하한에 붙어 실제 거리가 2m 짧았다) 한 줄.
+- §7-5: 앵글 교체는 `aimAlongDuelAxis`가 꺼졌을 때만 쓰인다는 한 줄.
+
+---
+
+## - [ ] Step 16 — 검증
+
+- **상대가 무대 반대편으로 바뀐다**: 대시가 시작될 즈음 **한 번** 컷하고, 새 상대가 플레이어 너머에 보이는가.
+- **사슬(같은 상대 연속)**: 컷이 **한 번도** 안 나는가.
+- **상대가 바뀌었지만 같은 방향**(축 차이 < 45°): 컷이 안 나는가.
+- **관통 패턴**(`DuelCurveEndsBehind`): 다음 패턴 앞에서 반대편으로 컷하는가. 좌우가 뒤집히는 게 거슬리는지 본다(Research 함정 4).
+- **컷이 임팩트·쉐이크·펀치·줌 위에 안 떨어지는가**(예약 → 큐 종료 후).
+- **컷 직후 미끄러짐이 없는가** — 있으면 Step 12의 `PreviousStateIsValid`가 빠진 것이다.
+- **인트로 → 첫 패턴**: 인트로가 이미 축 기준 구도로 착지하는가(엉뚱한 방향에서 한 번 더 컷하면 Step 13 ②의 즉시 조준이 안 된 것이다).
+- **기습**: 기습자가 화면 밖에서 와도 우하단 닷지 포인트로 회피가 되는가(Research 함정 5).
+- **무대 끝에서 바깥쪽 상대**: confiner 클램프로 화면이 도는 양이 견딜 만한가. 아니면 Step 11의 거리를 줄인다.
+- `shoulderYaw` 0 / 30 / 45를 바꿔 보며 가림과 속도감을 본다.
+- `aimAlongDuelAxis = false`면 1차 동작, `lockActiveAngle = false`면 예전 추종인지(회귀 0).
+
+---
+
+## 2차 범위 밖
+
+- **기습자를 위한 재조준** — 입력 단서가 화면 고정이라 지금은 필요 없다. 필요해지면 `SetAmbusher`에서 같은 예약을 건다.
+- **`Cam_SideRight` 활용(B안)** · **교체 주기 조정(C안)** — A안이 거슬리면 돌아갈 경로로 코드·씬 오브젝트를 남겨 둔다.
+- **`TargetOffset.y` 2.5 / 1.5 정리** — 같은 vcam만 쓰므로 컷에서 튀지 않는다. 독립 작업으로 남긴다.
+- **1차 Step 9 검증** — 2차가 그 상당 부분을 대체한다. 1차 고유 항목(`lockActiveAngle = false` 회귀)은 Step 16에 흡수했다.
+
+---
+
+# 3차 — 플레이어 후면 180° 유지, 넘친 만큼만 회전 (2차 재조준 교체)
+
+근거: `Research_CameraFixedAngle.md`의 "3차" 절.
+
+## 설계 요약
+
+- 매 프레임 `delta = DeltaAngle(플레이어 yaw, 리그 yaw)`. `|delta| <= rearHalfAngle`(90)이면 **아무것도 안 한다.**
+- 넘으면 리그 yaw를 `플레이어 yaw + sign(delta) × rearHalfAngle`(**경계**) 쪽으로 `rearFollowSpeed`(도/초) 상한으로 옮긴다 — 넘친 만큼만 회전. 컷이 아니라 연속이고 vcam 감쇠가 한 번 더 부드럽게 한다.
+- **인스펙터 노브**: 각도 `rearHalfAngle`(90, `[Range(0,180)]`) · 속도 `rearFollowSpeed`(360°/s, 0 = 제한 없음) · 시작 각 `shoulderYaw`(30).
+- 2차의 결투 축 경로(`OnDuelScheduled` 구독 · `reaimAngle` · 예약/발사 · 인트로 즉시 조준)와 Step 12의 컷 줄은 **지운다**.
+
+---
+
+## - [x] Step 17 — `CameraAngleSwitcher`: 2차 Step 12 되돌리기
+
+- `Aim`의 `PreviousStateIsValid = false` 두 줄과 주석 삭제 — 남기면 매 프레임 클램프가 순간이동이 된다.
+- `ActiveCamera` 게터 삭제(쓰는 곳이 없어진다).
+- 파라미터 이름 `yaw`는 그대로 둔다(여전히 플레이어 yaw만 들어오는 게 아니다).
+
+---
+
+## - [x] Step 18 — `CameraDirector`: 조건 교체
+
+필드:
+- `aimAlongDuelAxis` → **`keepRearHemisphere`**. (2차 코드는 씬에 저장된 적이 없어 `FormerlySerializedAs`가 필요 없다 — 2차 변경을 HEAD로 되돌리고 그 위에 얹었다.) 툴팁: "카메라가 플레이어 후면 rearHalfAngle×2 안에 있으면 앵글을 유지하고, 넘으면 넘친 만큼만 따라 돈다. 끄면 1차 동작."
+- `reaimAngle` 삭제 → **`rearHalfAngle = 90f`**(툴팁: "플레이어 등 방향에서 이 각(도)까지는 앵글을 유지한다. 90 = 후면 180°").
+- `shoulderYaw`(30) 유지 — **시작 구도에만** 쓰인다.
+- **`rearFollowSpeed = 360f`**(`[Min(0)]`, 도/초, 0 = 제한 없음) — 함정 1의 스윙 속도 노브. 범위 밖에서 이리로 올렸다.
+
+상태: `lockedAxisYaw`·`pendingAxisYaw`·`reaimPending` 삭제 → **`rigYaw`** 하나(마지막으로 `Aim`에 넘긴 yaw).
+
+① `Awake`의 첫 조준: `keepRearHemisphere`면 `rigYaw = PlayerYaw + shoulderYaw`로 `Aim(rigYaw, includeActive: true)`. 아니면 예전대로 `Aim(PlayerYaw, includeActive: true)`.
+
+② `UpdateFraming`의 고정 분기(`lockActiveAngle`)에서, 2차의 `!aimAlongDuelAxis` 조건 줄을 이렇게 바꾼다:
+
+```csharp
+if (keepRearHemisphere)
+{
+    float delta = Mathf.DeltaAngle(PlayerYaw, rigYaw);
+    if (Mathf.Abs(delta) > rearHalfAngle)
+    {
+        float boundary = PlayerYaw + Mathf.Sign(delta) * rearHalfAngle;   // 경계에 걸린 채 끌려간다
+        rigYaw = rearFollowSpeed > 0f
+            ? Mathf.MoveTowardsAngle(rigYaw, boundary, rearFollowSpeed * Time.deltaTime)
+            : boundary;
+        angleSwitcher.Aim(rigYaw, includeActive: true);
+    }
+}
+else if (brain == null || !brain.IsBlending) angleSwitcher.Aim(PlayerYaw);
+```
+
+- `UpdateFraming` 안이라 `framingEnabled`·히트스톱 잠금(조기 반환)을 그대로 따른다 — 잠금 중엔 클램프도 언다.
+- 블렌드 가드가 필요 없다 — 교체가 꺼져 있어 블렌드가 없고, 인트로 → 게임플레이 블렌드 중에 목적지가 조금 움직이는 것은 블렌드가 흡수한다.
+
+③ 삭제: `HandleDuelScheduled`, `IsGameplayCameraLive`, `ApplyReaim`, `OnDuelScheduled` 구독/해제 두 줄, `Update`의 재조준 발사 줄, `HandleAllCleared`의 리셋 두 줄.
+   (`rigYaw`는 화면의 사실이라 곡이 끝나도 리셋할 것이 없다.)
+
+---
+
+## - [x] Step 19 — CLAUDE.md §7-2 갱신
+
+2차에서 넣은 "결투 축의 비스듬한 뒤" 단락을 교체: **후면 180° 안이면 유지, 넘으면 넘친 만큼만 연속으로 끌려간다(컷 없음)**, 감쇠가 부드럽게 만든다, `PreviousStateIsValid`를 걸면 안 되는 이유 한 줄. §7-5 한 줄은 그대로.
+
+---
+
+## - [ ] Step 20 — 검증
+
+- **사슬(같은 상대)**: 카메라가 안 움직인다.
+- **상대가 옆으로 바뀜(< 90°)**: 안 움직이고 상대가 화면에 담기는가.
+- **상대가 뒤쪽으로 바뀜**: 플레이어가 도는 만큼 카메라가 경계(정측면)까지 끌려가는가. 스윙 속도는 `rearFollowSpeed`로 맞춘다(함정 1).
+- **관통 패턴**: 지나치는 동안 유지 → 돌아서면 끌려간다.
+- **임팩트 직전 끌림**(함정 2)이 타격감을 해치는가.
+- **구르기**: 경계 밖일 때만 같이 돈다.
+- **인트로 → 첫 패턴**: 시작 구도(등 뒤 + `shoulderYaw`)로 착지하는가.
+- `keepRearHemisphere = false` → 1차 동작, `lockActiveAngle = false` → 예전 추종(회귀 0).
+
+---
+
+## 3차 범위 밖
+
+- **경계에서 안쪽으로 되돌아오기**(정측면에 오래 머무는 것을 피하기) — 요구가 "넘친 만큼만"이라 넣지 않는다.
+- 2차 Step 16 검증 — Step 20으로 대체.
+
+---
+
+# 4차 — 현재 상대와 플레이어를 언제나 담고, 둘의 평균 위치를 화면 중앙에
+
+요구: 카메라 안에 현재 상대와 플레이어가 모두 들어오고, 둘의 평균 위치가 화면 가운데.
+
+## 조사 (플레이 모드 실측, 오토플레이)
+
+변경 전 한 샘플: 거리 11.2m 대시 중 플레이어 뷰포트 x = −0.07, 상대 x = 1.65 — **둘 다 화면 밖**, 중점 (0.74, 0.35).
+원인 넷:
+1. 상대 가중치가 거리식이라 6m 밖이면 0 — 그룹에서 빠진다(이 샘플은 교체 직후 감쇠 중이라 0.66).
+2. `RotationComposer` 데드존(0.1) + 감쇠 0.5, `GroupFraming` 감쇠 1 — 빠른 대시에서 조준이 뒤처진다.
+3. 높이 오프셋 둘이 따로 논다 — `TargetOffset.y` 2.5, `CenterOffset` (0, −0.75). 멤버가 발바닥이라 둘로 몸 높이를 흉내 내고 있었다.
+4. `DollyRange.y` 4 — 넓게 벌어지면 다 못 물러난다.
+
+그룹은 이미 `GroupAverage`(가중 평균)라 **가중치가 둘 다 1이면 그룹 위치가 곧 평균 위치**다. 고칠 것은 위 넷뿐이다.
+
+## - [x] Step 21 — 상대 가중치를 언제나 1로 (`alwaysFrameOpponent`, 기본 켜짐)
+
+`UpdateFraming`에서 상대 칸만 거리식을 건너뛴다. 교체 순간의 0 리셋 + `weightDamping` 감쇠는 그대로 — 새 상대는 0.35초에 걸쳐 들어온다.
+기습자 칸은 계속 거리식.
+
+## - [x] Step 22 — 멤버를 골반 본에 (`frameAtHips`, 기본 켜짐)
+
+`FramingAnchor(root)` = 휴머노이드 `Animator.GetBoneTransform(Hips)`, 없으면 루트. 플레이어는 `SetupFraming`, 상대·기습자는 `SetOpponent`·`SetAmbusher`에서 한 번 찾아 캐시한다.
+그룹 평균 = 바운드 중심 = 두 몸의 평균이 되어 높이 오프셋이 전부 0이 된다(원인 3이 통째로 사라진다).
+
+## - [x] Step 23 — 씬 값 (`Cam_ShoulderBack`)
+
+| | 전 | 후 |
+|---|---|---|
+| `RotationComposer.TargetOffset` | (0, 2.5, 0) | **0** |
+| `RotationComposer` 데드존 · 감쇠 | 켜짐 0.1 · 0.5 | **꺼짐 · 0.2** |
+| `GroupFraming.CenterOffset` | (0, −0.75) | **0** |
+| `GroupFraming.Damping` · `DollyRange` | 1 · (0, 4) | **0.3 · (0, 8)** |
+| `CinemachineFollow.FollowOffset` | (0, 4, −8) | **(0, 3.1, −8)** — 그룹이 골반 높이(≈0.9m)로 올라간 만큼 내렸다 |
+
+`Cam_SideRight` 등 나머지 vcam은 교체가 꺼져 있어 손대지 않았다(교체를 다시 켜면 같은 값으로 맞춘다).
+
+## - [x] Step 24 — CLAUDE.md §7-2 갱신
+
+## - [ ] Step 25 — 검증
+
+변경 후 실측(오토플레이): 거리 1.1~4.6m 구간 중점 뷰포트 (0.48~0.52, 0.51~0.56), 플레이어·상대 모두 x 0.29~0.70 안.
+- 남은 확인: **10m 넘는 대시 구간**에서 둘 다 담기는가(이번 샘플에는 그 구간이 안 잡혔다). 모자라면 `DollyRange.y`를 더 늘리거나 `FramingSize`를 낮춘다.
+- 근접 구간에서 카메라 거리가 5m대로 줄어드는 순간이 있다 — `Deoccluder`(Default 레이어 · PullCameraForward)나 `Confiner3D`(무대 가장자리)가 당기는 것으로 보인다. 거슬리면 따로 본다.
+- 골반 본의 애니메이션 흔들림이 화면 흔들림으로 보이는가(감쇠 0.2/0.3이 흡수하는지).
+
+---
+
+# 5차 — 게임플레이 카메라 한 대 (교차 폐기)
+
+결정: **게임플레이 vcam은 `Cam_ShoulderBack` 한 대뿐이다.** 앵글 교체(1차)도, 2차 이후 "되돌아갈 경로"로 남겨 둔 측면 카메라·교체 코드도 폐기한다.
+
+## 조사
+
+- 교체 코드는 `CameraAngleSwitcher.cs`(303줄) 하나에 모여 있고, 바깥에서 부르는 곳은 `CameraDirector` 9곳 —
+  `Setup`(`Awake`) · `Aim`(`Awake`·`KeepRearHemisphere`·`UpdateFraming`) · `OnPatternBoundary` · `Reset` · `OnOpponentChanged` · `Tick` · `Arm`(예전 추종 경로의 큰 회전 컷).
+  그 밖의 참조는 `CameraShotStep.priority` 툴팁의 문구 하나뿐이다.
+- 한 대일 때 스위처가 실제로 하는 일은 둘뿐이다 — ① 0번 vcam 우선순위를 10으로 올리기 ② `FollowOffset = Euler(0, yaw, 0) × baseOffset` 쓰기.
+  ①은 씬 값 하나로, ②는 `CameraDirector`에 몇 줄로 대체된다. `CameraDirector`에는 이미 `gameplayCamera`(= `Cam_ShoulderBack`) 참조가 있다(쉐이크 폴백용).
+- 씬의 게임플레이 vcam은 넷이다: `Cam_ShoulderBack` · `Cam_SideRight`(스위처 1번) · `Cam_NearLowRight` · `Cam_FarShoulderRight`(아무 데서도 안 쓰임). **우선순위가 전부 0**이다 — 스위처의 `Setup`이 런타임에 0번을 10으로 올려 왔다. 스위처를 지우면 그 일을 씬이 해야 한다.
+- `keepRearHemisphere = false`(1차 동작 = 활성화 순간에 고정 + 비활성 vcam만 추종)는 **한 대에서는 뜻이 없다** — 비활성 vcam이 없어 "곡 내내 시작 구도 고정"이 된다. 같은 결과를 `rearHalfAngle = 180`이 낸다.
+- `angleBlendDuration` · `cutBetweenAngles`는 이름과 달리 **인트로 마무리**가 읽는다(§7-2, `Brain.DefaultBlend`). 지우지 않는다.
+
+## - [x] Step 26 — `CameraDirector`: 스위처를 걷어내고 조준을 흡수한다
+
+추가(값 둘, 메서드 하나):
+
+```csharp
+private CinemachineFollow gameplayFollow;   // Awake에서 gameplayCamera로부터 집는다. 없으면 조준만 비활성
+private Vector3 gameplayBaseOffset;         // 씬에 저장된 FollowOffset = 리그 yaw 0일 때의 자리
+
+private void AimRig(float yaw)
+{
+    rigYaw = yaw;
+    if (gameplayFollow != null) gameplayFollow.FollowOffset = Quaternion.Euler(0f, yaw, 0f) * gameplayBaseOffset;
+}
+```
+
+- `Awake`: `angleSwitcher.Setup()` + 첫 `Aim` → `gameplayFollow`·`gameplayBaseOffset` 캐시 후 `AimRig(PlayerYaw + shoulderYaw)`(조건 `lockActiveAngle && framingEnabled` 그대로).
+- `KeepRearHemisphere`의 `angleSwitcher.Aim(rigYaw, includeActive: true)` → `AimRig(...)`.
+- `UpdateFraming`: `if (keepRearHemisphere) … else Aim(PlayerYaw)` → `KeepRearHemisphere()` 한 줄.
+
+삭제:
+- 필드 `angleSwitcher` · `optionAngleSwitch` · `keepRearHemisphere`(한 대에서 뜻이 없다 — 고정하고 싶으면 `rearHalfAngle = 180`) 와 툴팁.
+- 호출 `OnPatternBoundary`(`HandleJudgeTargetBegan`) · `Reset`(`HandleAllCleared`) · `OnOpponentChanged`(`HandleOpponentChanged`) · `Tick`(`Update`) · `Arm`(예전 추종 경로).
+  ⚠ `Arm`이 빠져도 예전 추종 경로의 큰 회전 컷(`yawCutThreshold`)은 그대로다 — `Arm`은 그 컷에 "다른 앵글로 착지"를 얹던 것뿐이다.
+- 각 호출 주변의 스위처 설명 주석.
+
+남기는 것: `angleBlendDuration` · `cutBetweenAngles`(인트로 마무리), `brain.ActiveVirtualCamera` 기반 쉐이크·펀치 대상 선택(인트로·`CameraShotStep` 샷이 live일 수 있다), `rearHalfAngle` · `rearFollowSpeed` · `shoulderYaw`.
+
+## - [x] Step 27 — `CameraAngleSwitcher.cs`(+ `.meta`) 삭제
+
+`CameraShotStep.priority` 툴팁의 "CameraAngleSwitcher의 activePriority 10" → "게임플레이 vcam(10)".
+
+## - [x] Step 28 — 씬
+
+- `Cam_ShoulderBack.Priority` 0 → **10**(스위처 `activePriority`였던 값 — 인트로 20·`CameraShotStep` 15에 지고 나머지는 이긴다). 인트로 휴지값 −10과의 관계는 그대로.
+- `Cam_SideRight` · `Cam_NearLowRight` · `Cam_FarShoulderRight` **GameObject 삭제**. 삭제 전에 씬 안 참조(시퀀스 슬롯·다른 컴포넌트)가 없는지 확인한다.
+- `CameraDirector`의 `angleSwitcher` 직렬화 데이터는 필드 삭제로 자동 소멸.
+
+## - [x] Step 29 — CLAUDE.md
+
+- **§7-5 삭제** → 그 자리에 "게임플레이 vcam은 한 대(`Cam_ShoulderBack`, 우선순위 10)"와, 남는 두 규칙만 옮긴다:
+  ① `ScreenSpaceOverlay`라 카메라가 움직여도 판정 단서가 안 움직인다(§12-1이 참조), ② 쉐이크·펀치는 live vcam에 건다(인트로·샷 vcam이 live일 수 있다).
+  §7-2 · §12-1에서 §7-5를 가리키는 참조를 고친다.
+- **§7-2**: `keepRearHemisphere` 언급 삭제("끄면 1차 동작" 문장 → `rearHalfAngle = 180`이면 시작 구도 고정), 조준이 `CameraDirector.AimRig`라는 것.
+- 폴더 구조 `Camera/`: 변경 없음(스위처가 원래 안 실려 있다).
+
+## - [ ] Step 30 — 검증
+
+- 컴파일 · 곡 시작 시 `Cam_ShoulderBack`이 live인가(인트로 → 게임플레이 착지).
+- 4차 Step 25 · 3차 Step 20 항목이 그대로 성립하는가(후면 180° 유지, 넘친 만큼 회전, 둘 다 담기, 중점 중앙).
+- 쉐이크·펀치·줌이 여전히 화면에 나는가.
+- `lockActiveAngle = false` → 예전 추종(큰 회전에서 컷만 나고 앵글 착지는 없다).
+- `CameraShotStep` 샷(우선순위 15)이 게임플레이를 이기는가.
+
+### 구현 메모
+
+- `IsCuePlaying` · `IsZoomActive`는 스위처 발사 판단 전용이라 같이 지웠다(다른 사용처 0).
+- `gameplayCamera` 툴팁·`ResolveEffectCamera` 주석에서 앵글 교체 언급을 걷어냈다.
+- 씬: 세 vcam은 부모 `Camera`의 자식 목록 외에 참조가 없었다. `Cam_ShoulderBack` 우선순위 10, 4차 값(`FollowOffset` (0, 3.1, −8) 등) 유지 확인.
+- **Step 30 미완** — 이번 세션에서 에디터가 플레이 모드 첫 프레임 뒤 진행하지 않아(MCP 자동 틱 문제로 추정) 실행 검증을 못 했다. 컴파일은 통과. 후면 유지 로직 자체는 4차에서 실측했고, 바뀐 것은 오프셋을 쓰는 통로(`angleSwitcher.Aim` → `AimRig`)뿐이다.
+
+## 5차 범위 밖
+
+- `docs/CameraSwitch/`는 지우지 않는다 — 폐기된 설계의 기록이다.
+- `angleBlendDuration` · `cutBetweenAngles` 이름 정리(지금은 인트로 전용) — 별개 작업.
